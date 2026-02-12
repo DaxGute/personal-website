@@ -152,25 +152,25 @@
 			id: 'experiences',
 			kicker: 'Jobs and Internships',
 			title: 'Experiences',
-			body: 'These are honestly the most impressive parts of my resume.'
+			body: 'These are the roles that defined my professional growth.'
 		},
 		{
 			id: 'education',
 			kicker: 'Coursework and Focus Areas',
 			title: 'Education',
-			body: 'Coursework and focus areas.'
+			body: 'What I’m building expertise in.'
 		},
 		{
 			id: 'projects',
-			kicker: 'Projects',
+			kicker: 'Applied Expertise',
 			title: 'Projects',
-			body: 'Pick a project to see details (description, highlights, tech, and links).'
+			body: 'Pick a project to see details.'
 		},
 		{
 			id: 'awards',
-			kicker: 'Recognition',
+			kicker: 'Honors and Accomplishments',
 			title: 'Awards',
-			body: 'Add awards, honors, scholarships, and notable recognition here.'
+			body: 'For my dedication, I have been recognized with the following awards.'
 		},
 		{
 			id: 'interests',
@@ -732,6 +732,7 @@
 								title={panel.title}
 								body={panel.body}
 								awards={awards}
+								repeatFactor={1}
 							/>
 						{/if}
 
@@ -1056,7 +1057,7 @@
 		width: 100%;
 		height: 100%;
 		/* keep the Interests copy comfortably lower in the slide */
-		padding: clamp(70px, 10vh, 110px) 18px 24px;
+		padding: clamp(110px, 14vh, 170px) 18px 24px;
 		border: 0;
 		background: transparent;
 		backdrop-filter: none;
@@ -1150,7 +1151,7 @@
 	@media (max-width: 720px) {
 		#interests.panel .panel-inner {
 			text-align: center;
-			padding-top: clamp(50px, 8vh, 90px);
+			padding-top: clamp(90px, 12vh, 140px);
 		}
 		.interests-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));

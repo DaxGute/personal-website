@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import signature from '$lib/assets/signature.svg';
 
 	export let linkedinHref: string;
 	export let githubHref: string;
@@ -52,19 +53,7 @@
 		onclick={toggle}
 	>
 		<span class="icon-swap" aria-hidden="true">
-			<svg
-				class="swap-icon swap-mail"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			>
-				<!-- @ icon -->
-				<circle cx="12" cy="12" r="4"></circle>
-				<path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"></path>
-			</svg>
+			<img class="swap-icon swap-mail" src={signature} alt="" aria-hidden="true" />
 
 			<svg
 				class="swap-icon swap-x"
@@ -136,6 +125,10 @@
 	.contact-menu {
 		position: relative;
 		pointer-events: auto;
+		/* Scale the entire control (button + fanout bubbles) */
+		--contact-scale: 1.35;
+		transform: scale(var(--contact-scale));
+		transform-origin: top right;
 	}
 
 	/* Match existing button look (the parent page defines these classes too). */
@@ -167,21 +160,26 @@
 
 	.icon-swap {
 		position: relative;
-		width: 18px;
-		height: 18px;
+		width: 28px;
+		height: 28px;
 		display: block;
 	}
 
 	.swap-icon {
 		position: absolute;
 		inset: 0;
-		width: 18px;
-		height: 18px;
+		width: 28px;
+		height: 28px;
 		display: block;
 		transform-origin: 50% 50%;
 		transition:
 			transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
 			opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	}
+
+	/* Ensure the signature image scales nicely */
+	.swap-icon.swap-mail {
+		object-fit: contain;
 	}
 
 	/* Closed state */

@@ -1,5 +1,6 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
+	import signature from '$lib/assets/signature.svg';
+	import signatureFavicon from '$lib/assets/signature-favicon.svg';
 
 	let { children } = $props();
 
@@ -7,7 +8,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" href={signatureFavicon} />
+	<title>DG CV</title>
 </svelte:head>
 
 <div class="mobile-gate" role="status" aria-live="polite">
