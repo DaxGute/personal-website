@@ -115,7 +115,7 @@
 		},
 		{
 			id: 'education',
-			kicker: 'Education',
+			kicker: 'Coursework and Focus Areas',
 			title: 'Education',
 			body: 'Coursework and focus areas.'
 		},
@@ -325,10 +325,10 @@
 				const eduEnd = panelOffsets[Math.min(eduIdx + 1, panelOffsets.length - 1)] ?? eduStart;
 				const denom = eduEnd - eduStart;
 				// Make the swap happen early in the slide (smaller = earlier).
-				const swapDistance = denom * 0.18;
+				const swapDistance = denom * 0.08;
 				educationT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
 				// Flip stacking slightly before midpoint so the handoff feels earlier.
-				educationSwap = educationT > 0.38;
+				educationSwap = educationT > 0.22;
 			} else {
 				educationT = 0;
 				educationSwap = false;
@@ -497,9 +497,10 @@
 							{#each educations.slice(0, 2) as edu (edu.school)}
 								<article class="education-card">
 									<div class="experience-header">
-										<p class="experience-role">
-											{edu.school}, {edu.location} — {edu.degree}
-										</p>
+										<div class="experience-meta">
+											<p class="experience-company">{edu.school}</p>
+											<p class="experience-sub">{edu.degree} · {edu.location}</p>
+										</div>
 										<p class="experience-dates">{abbreviateMonths(edu.dates)}</p>
 									</div>
 									<div class="education-details">
@@ -759,6 +760,8 @@
 		position: relative;
 		width: min(560px, 100%);
 		margin: 18px auto 0;
+		top: -100px;
+		left: 30px;
 		min-height: 210px;
 		perspective: 900px;
 		/* 0..1 from scroll (set on #education.panel) */
