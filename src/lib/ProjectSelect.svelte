@@ -377,8 +377,10 @@
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
 		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
 		padding: 14px 14px;
+		/* Fixed height, and never scrollable: clip overflow instead */
 		height: var(--selector-h);
-		overflow: auto;
+		overflow: hidden; /* fallback */
+		overflow: clip;
 	}
 
 	.desc-title {

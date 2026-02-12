@@ -6,6 +6,7 @@
 	import InfoCard from '$lib/InfoCard.svelte';
 	import AwardsArc from '$lib/AwardsArc.svelte';
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
+	import Polaroid from '$lib/Polaroid.svelte';
 	import type { Project } from '$lib/projects';
 
 	type Panel = {
@@ -167,10 +168,10 @@
 			body: 'Add awards, honors, scholarships, and notable recognition here.'
 		},
 		{
-			id: 'skills',
-			kicker: 'Toolbox',
-			title: 'Skills',
-			body: 'Add your skills, technologies, and strengths here.'
+			id: 'interests',
+			kicker: 'Hobbies and extracurriculars',
+			title: 'Interests',
+			body: 'What do I get up to in my spare time'
 		}
 	];
 
@@ -206,6 +207,16 @@
 			tech: ['React', 'Node.js'],
 			links: [{ label: 'GitHub', href: 'https://github.com/' }]
 		}
+	];
+
+	const interests: { caption: string }[] = [
+		{
+			caption: 'PADI Certified Diver'
+		},
+		{ caption: 'Skiing' },
+		{ caption: 'Chess' },
+		{ caption: 'Table Tennis' },
+		{ caption: 'Billiards' }
 	];
 
 	let scroller: HTMLElement | null = null;
@@ -689,7 +700,39 @@
 							/>
 						{/if}
 
-					{#if panel.id !== 'experiences' && panel.id !== 'education' && panel.id !== 'projects' && panel.id !== 'awards'}
+						{#if panel.id === 'interests'}
+							<div class="interests-content" aria-label="Interests">
+								<div class="interest-ski" aria-label="Skiing">
+									<Polaroid src={null} caption={interests[1]?.caption ?? 'Skiing'} />
+								</div>
+
+								<div class="interest-chess" aria-label="Chess">
+									<Polaroid src={null} caption={interests[2]?.caption ?? 'Chess'} />
+								</div>
+
+								<div class="interest-padi" aria-label="PADI Certified Diver">
+									<Polaroid src={null} caption={interests[0]?.caption ?? 'PADI Certified Diver'} />
+								</div>
+
+								<div class="interest-tt" aria-label="Table Tennis">
+									<Polaroid src={null} caption={interests[3]?.caption ?? 'Table Tennis'} />
+								</div>
+
+								<div class="interest-billiards" aria-label="Billiards">
+									<Polaroid src={null} caption={interests[4]?.caption ?? 'Billiards'} />
+								</div>
+
+								{#if interests.length > 5}
+									<div class="interests-grid" aria-label="Interests grid">
+										{#each interests.slice(5) as item (item.caption)}
+											<Polaroid src={null} caption={item.caption} />
+										{/each}
+									</div>
+								{/if}
+							</div>
+						{/if}
+
+					{#if panel.id !== 'experiences' && panel.id !== 'education' && panel.id !== 'projects' && panel.id !== 'awards' && panel.id !== 'interests'}
 							<div class="card">
 								<p class="card-title">Edit me:</p>
 								<p class="card-body">
@@ -941,6 +984,164 @@
 		backdrop-filter: none;
 		box-shadow: none;
 		padding: 0;
+	}
+
+	/* Interests slide: no outer glass box */
+	#interests.panel .panel-inner {
+		border: 0;
+		background: transparent;
+		backdrop-filter: none;
+		box-shadow: none;
+		padding: 0;
+	}
+
+	/* Interests slide: right-align and anchor to the right edge */
+	#interests.panel {
+		place-items: start end;
+	}
+
+	#interests.panel .panel-inner {
+		text-align: right;
+		transform: translateY(-80px);
+		/* give the 5-up grid room, while staying anchored to the right edge */
+		width: min(980px, 100%);
+	}
+
+	.interests-content {
+		position: relative;
+		/* reserve space for the two “floating” corner polaroids */
+		padding-top: 190px;
+		padding-bottom: 140px;
+		/* shared upward nudge for selected floating cards */
+		--float-up: 180px;
+		--tt-shift-x: 90px;
+		--tt-to-billiards-gap: 40px;
+		/* NOTE: polaroids are width 260px and scaled to 0.6 => ~156px visual width */
+		--float-card-w-scaled: 156px;
+	}
+
+	.interest-ski {
+		position: absolute;
+		top: calc(0px - var(--float-up));
+		left: 0;
+		transform: scale(0.6) rotate(-3deg);
+		transform-origin: top left;
+		width: 260px;
+		z-index: 2;
+	}
+
+	.interest-chess {
+		position: absolute;
+		top: calc(0px - var(--float-up) + 10px);
+		left: 50%;
+		transform: translateX(-50%) scale(0.6) rotate(2deg);
+		transform-origin: top center;
+		width: 260px;
+		z-index: 2;
+	}
+
+	.interest-padi {
+		position: absolute;
+		top: 0;
+		right: 200px;
+		transform: scale(0.6) rotate(5deg);
+		transform-origin: top right;
+		width: 260px;
+		z-index: 2;
+	}
+
+	.interest-tt {
+		position: absolute;
+		bottom: var(--float-up);
+		left: var(--tt-shift-x);
+		transform: scale(0.6) rotate(1deg);
+		transform-origin: bottom left;
+		width: 260px;
+		z-index: 2;
+	}
+
+	.interest-billiards {
+		position: absolute;
+		bottom: 190px;
+		left: calc(var(--tt-shift-x) + var(--float-card-w-scaled) + var(--tt-to-billiards-gap));
+		transform: scale(0.6) rotate(0deg);
+		transform-origin: bottom left;
+		width: 260px;
+		z-index: 2;
+	}
+
+	.interests-grid {
+		margin-top: 18px;
+		display: grid;
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+		gap: clamp(12px, 2vw, 18px);
+		align-items: stretch;
+	}
+
+	@media (max-width: 1100px) {
+		.interests-grid {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+
+	@media (max-width: 720px) {
+		/* stop hard-right anchoring when we stack */
+		#interests.panel {
+			place-items: start center;
+		}
+		#interests.panel .panel-inner {
+			text-align: center;
+			transform: translateY(-40px);
+		}
+		.interests-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.interests-content {
+			padding-top: 0;
+			padding-bottom: 0;
+		}
+
+		.interest-ski {
+			position: static;
+			width: auto;
+			transform: none;
+			margin-bottom: 12px;
+		}
+
+		.interest-chess {
+			position: static;
+			width: auto;
+			transform: none;
+			margin-bottom: 12px;
+		}
+
+		.interest-padi {
+			position: static;
+			width: auto;
+			transform: none;
+			margin-bottom: 12px;
+		}
+
+		.interest-tt {
+			position: static;
+			width: auto;
+			transform: none;
+			margin-bottom: 12px;
+		}
+
+		.interest-billiards {
+			position: static;
+			width: auto;
+			transform: none;
+			margin-bottom: 12px;
+		}
+	}
+
+	@media (max-width: 460px) {
+		.interests-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* Awards slide: center content block in the middle of the panel */
