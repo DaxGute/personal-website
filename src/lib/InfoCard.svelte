@@ -8,37 +8,85 @@
 	export let items: string[] = [];
 </script>
 
-<div class="experience-header">
-	<div class="experience-meta">
-		<p class="experience-company">{heading}</p>
-		<p class="experience-sub" class:wrap-sub={variant === 'award'}>{subheading}</p>
+<div class="info-card" data-variant={variant}>
+	<div class="experience-header">
+		<div class="experience-meta">
+			<p class="experience-company">{heading}</p>
+			<p class="experience-sub" class:wrap-sub={variant === 'award'}>{subheading}</p>
+		</div>
+		{#if dates}
+			<p class="experience-dates">{dates}</p>
+		{/if}
 	</div>
-	{#if dates}
-		<p class="experience-dates">{dates}</p>
+
+	{#if variant === 'experience'}
+		<ul class="experience-highlights">
+			{#each items as item}
+				<li>{item}</li>
+			{/each}
+		</ul>
+	{:else if variant === 'education'}
+		<div class="education-details">
+			{#each items as item}
+				<p>{item}</p>
+			{/each}
+		</div>
+	{:else}
+		<div class="award-details">
+			{#each items as item}
+				<p>{item}</p>
+			{/each}
+		</div>
 	{/if}
 </div>
 
-{#if variant === 'experience'}
-	<ul class="experience-highlights">
-		{#each items as item}
-			<li>{item}</li>
-		{/each}
-	</ul>
-{:else if variant === 'education'}
-	<div class="education-details">
-		{#each items as item}
-			<p>{item}</p>
-		{/each}
-	</div>
-{:else}
-	<div class="award-details">
-		{#each items as item}
-			<p>{item}</p>
-		{/each}
-	</div>
-{/if}
-
 <style>
+	/* Glass surface (apply to every InfoCard) */
+	.info-card {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+		border-radius: 16px;
+		border: 1px solid rgba(11, 18, 32, 0.18);
+		background:
+			linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(34, 211, 238, 0.1)),
+			/* keep enough transparency so the backdrop blur is actually visible */
+			rgba(255, 255, 255, 0.36);
+		backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(1.45);
+		-webkit-backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(1.45);
+		backface-visibility: hidden;
+		box-shadow: 0 22px 70px rgba(11, 18, 32, 0.16);
+		padding: 14px 14px;
+		transition:
+			transform 160ms ease,
+			box-shadow 160ms ease,
+			border-color 160ms ease,
+			background 160ms ease;
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.info-card:hover {
+			transform: translateY(-6px) scale(1.02);
+			border-color: rgba(11, 18, 32, 0.22);
+			background:
+				linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.14)),
+				rgba(255, 255, 255, 0.46);
+			box-shadow: 0 28px 84px rgba(11, 18, 32, 0.18);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.info-card {
+			transition: none;
+		}
+		@media (hover: hover) and (pointer: fine) {
+			.info-card:hover {
+				transform: none;
+			}
+		}
+	}
+
 	.experience-header {
 		display: flex;
 		align-items: flex-start;

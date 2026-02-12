@@ -196,7 +196,7 @@
 		{
 			id: 'project-2',
 			name: 'ConfCap',
-			blurb: 'Designed and Built a Conference Bounty App from the Group Up',
+			blurb: 'Designed and Built a Conference Bounty App from Ground Up',
 			description:
 				'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations.'
 		}
@@ -219,7 +219,8 @@
 	let panelOffsets: number[] = [];
 	let progressIndex = 0;
 	let experiencesT = 0; // 0..1 progress across the Experiences panel
-	let educationT = 0; // 0..1 progress for the Education carousel swap (early in the slide)
+	let educationT = 0; // 0..1 progress for Education card rotation (enter -> exit visibility)
+	let educationFadeT = 0; // 0..1 progress for Education fade (kept early in the slide)
 	let educationSwap = false;
 	let panelW = 0;
 
@@ -429,7 +430,7 @@
 		scrollAnim = null;
 	}
 
-	function smoothScrollTo(left: number, durationMs = 750) {
+	function smoothScrollTo(left: number, durationMs?: number) {
 		if (!scroller) return;
 		cancelScrollAnim();
 
@@ -441,10 +442,17 @@
 		const startLeft = scroller.scrollLeft;
 		const delta = left - startLeft;
 		const start = performance.now();
+		const dist = Math.abs(delta);
+		const dur =
+			durationMs ??
+			// Slow, distance-aware duration so the nav feels consistent across jumps.
+			// (Tune these values to taste.)
+			clamp(1000 + dist * 0.35, 1100, 2600);
 
 		const tick = (now: number) => {
-			const t = Math.min(1, (now - start) / durationMs);
-			scroller!.scrollLeft = startLeft + delta * easeOutCubic(t);
+			const t = Math.min(1, (now - start) / dur);
+			// Use an ease-in-out so it doesn't "snap" at the beginning.
+			scroller!.scrollLeft = startLeft + delta * easeInOutPow(t, 3);
 			if (t < 1) scrollAnim = requestAnimationFrame(tick);
 			else scrollAnim = null;
 		};
@@ -532,18 +540,34 @@
 			if (eduIdx !== -1 && panelOffsets[eduIdx] != null) {
 				const eduStart = panelOffsets[eduIdx];
 				const eduEnd = panelOffsets[Math.min(eduIdx + 1, panelOffsets.length - 1)] ?? eduStart;
+
+				// Drive rotation for the entire time the Education panel is visible:
+				// from when its left edge first enters the viewport (x = eduStart - panelW)
+				// until its right edge leaves the viewport (x = eduStart + panelW).
+				//
+				// That gives a slower, "rotates with scroll the whole time it's on-screen" feel.
+				const w = panelW || window.innerWidth;
+				const visibleStart = eduStart - w;
+				const visibleEnd = eduStart + w;
+				const span = visibleEnd - visibleStart;
+				const eduLinearT = span <= 0 ? 0 : clamp01((x - visibleStart) / span);
+				educationT = eduLinearT;
+
+				// Keep fade + stacking swap on the previous (early) timing so the cards
+				// don't stay semi-transparent for the whole panel duration.
 				const denom = eduEnd - eduStart;
-				// Make the swap happen early in the slide (smaller = earlier).
-				// Longer rotation: extend the scroll span of the swap.
-				// Original was 0.08; was bumped to 0.12; now 0.18 for more time "on either side".
+				// Swap timing (stacking order) stays the same as before.
 				const swapDistance = denom * 0.18;
-				const eduLinearT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
-				// Stronger ease-in-out so the cards spend more time rotating near the start/end.
-				educationT = easeInOutPow(eduLinearT, 5);
-				// Keep the stacking flip tied to scroll position (not eased time) so the trigger stays put.
-				educationSwap = eduLinearT > 0.22;
+				const swapLinearT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
+				educationSwap = swapLinearT > 0.22;
+
+				// Fade earlier than the swap by using a shorter distance.
+				const fadeDistance = denom * 0.11;
+				const fadeLinearT = fadeDistance <= 0 ? 1 : clamp01((x - eduStart) / fadeDistance);
+				educationFadeT = easeInOutPow(fadeLinearT, 5);
 			} else {
 				educationT = 0;
+				educationFadeT = 0;
 				educationSwap = false;
 			}
 
@@ -647,7 +671,7 @@
 					panel.id === 'experiences'
 						? `--exp-t:${experiencesT};`
 						: panel.id === 'education'
-							? `--edu-t:${educationT};`
+							? `--edu-t:${educationT};--edu-fade-t:${educationFadeT};`
 							: undefined
 				}
 			>
@@ -701,7 +725,10 @@
 								aria-label="Education carousel"
 							>
 								{#each educations.slice(0, 2) as edu (edu.school)}
-									<article class="education-card">
+									<article
+										class="education-card"
+										class:is-stanford={edu.school === 'Stanford University'}
+									>
 										<InfoCard
 											variant="education"
 											heading={edu.school}
@@ -1204,51 +1231,68 @@
 	/* Education: 2-card diagonal carousel */
 	.education-carousel {
 		position: relative;
-		width: min(560px, 100%);
+		isolation: isolate;
+		/* Keep cards square while staying responsive */
+		--edu-card-size: clamp(260px, 46vw, 420px);
+		width: min(var(--edu-card-size), 100%);
+		aspect-ratio: 1 / 1;
 		margin: 18px auto 0;
 		top: -100px;
 		left: 70px;
-		min-height: 210px;
 		perspective: 900px;
 		/* 0..1 from scroll (set on #education.panel) */
 		--t: var(--edu-t, 0);
+		/* independent fade progress (kept early) */
+		--fade: var(--edu-fade-t, 0);
 	}
 
 	.education-card {
 		position: absolute;
 		inset: 0;
 		margin: 0;
-		border-radius: 16px;
-		border: 1px solid rgba(11, 18, 32, 0.14);
-		/* Match the other InfoCard "glass" surfaces */
-		background:
-			linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.08)),
-			rgba(255, 255, 255, 0.28);
-		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
-		padding: 14px 14px;
-		transform-origin: 40% 25%;
-		/* Avoid `filter:` on the card itself; it can suppress backdrop-filter in some browsers. */
-		will-change: transform, opacity;
+		--x-nudge: 0px;
+		/* inert wrapper: keep it out of compositing */
+		transform: none;
+		opacity: 1;
+		will-change: auto;
+	}
+
+	/* Nudge Stanford card further right */
+	.education-card.is-stanford {
+		--x-nudge: 80px;
 	}
 
 	/* card 1: front -> back as --t goes 0 -> 1 */
 	.education-card:nth-child(1) {
 		z-index: 2;
-		transform: translate3d(calc(34px * var(--t)), calc(22px * var(--t)), 0)
-			rotate(calc(-7deg + (16deg * var(--t))))
-			scale(calc(1 - (0.03 * var(--t))));
-		opacity: calc(1 - (0.65 * var(--t)));
 	}
 
 	/* card 2: back -> front as --t goes 0 -> 1 */
 	.education-card:nth-child(2) {
 		z-index: 1;
-		transform: translate3d(calc(34px * (1 - var(--t))), calc(22px * (1 - var(--t))), 0)
-			rotate(calc(9deg - (16deg * var(--t))))
-			scale(calc(0.97 + (0.03 * var(--t))));
-		opacity: calc(0.35 + (0.65 * var(--t)));
+	}
+
+	/* Apply carousel transforms to the blur element itself (InfoCard root) */
+	.education-card:nth-child(1) :global(.info-card) {
+		transform: translate(calc((34px * var(--t)) + var(--x-nudge)), calc(22px * var(--t)))
+			rotate(calc(-14deg + (40deg * var(--t))))
+			scale(calc(1 - (0.03 * var(--t))))
+			translateZ(0);
+		opacity: calc(1 - (0.65 * var(--fade)));
+		will-change: transform, opacity;
+		transform-origin: 40% 25%;
+		transform-style: preserve-3d;
+	}
+
+	.education-card:nth-child(2) :global(.info-card) {
+		transform: translate(calc((34px * (1 - var(--t))) + var(--x-nudge)), calc(22px * (1 - var(--t))))
+			rotate(calc(16deg - (40deg * var(--t))))
+			scale(calc(0.97 + (0.03 * var(--t))))
+			translateZ(0);
+		opacity: calc(0.35 + (0.65 * var(--fade)));
+		will-change: transform, opacity;
+		transform-origin: 40% 25%;
+		transform-style: preserve-3d;
 	}
 
 	/* hard swap stacking so the “front” card is actually on top */
@@ -1261,7 +1305,9 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.education-carousel {
-			min-height: unset;
+			/* In reduced motion we show both cards at once; don't constrain the container. */
+			width: min(560px, 100%);
+			aspect-ratio: auto;
 			perspective: none;
 			display: grid;
 			gap: 16px;
@@ -1270,21 +1316,9 @@
 
 		.education-card {
 			position: relative;
+			aspect-ratio: 1 / 1;
 			transform: none;
 			opacity: 1;
-			filter: none;
-		}
-	}
-
-	@media (hover: hover) and (pointer: fine) {
-		.education-card:hover {
-			border-color: rgba(11, 18, 32, 0.18);
-			background:
-				linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.14)),
-				rgba(255, 255, 255, 0.34);
-			backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(1.35);
-			-webkit-backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(1.35);
-			box-shadow: 0 26px 70px rgba(11, 18, 32, 0.16);
 		}
 	}
 
@@ -1304,53 +1338,13 @@
 		--t: clamp(0, calc(var(--exp-t, 1) + (var(--t-shift, 0) * var(--exp-t, 1))), 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
-		--hover-y: 0px;
-
-		border-radius: 16px;
-		border: 1px solid rgba(11, 18, 32, 0.14);
-		background:
-			linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.08)),
-			rgba(255, 255, 255, 0.28);
-		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
-		padding: 14px 14px;
 		width: 100%;
-		transform: translate3d(
-			calc(var(--spread-x) * (1 - var(--t))),
-			calc((var(--spread-y) * (1 - var(--t))) + var(--hover-y)),
-			0
-		);
-		transition:
-			transform 160ms ease,
-			box-shadow 160ms ease,
-			border-color 160ms ease,
-			background 160ms ease;
-	}
-
-	/* Hover interaction (avoid on touch devices) */
-	@media (hover: hover) and (pointer: fine) {
-		.experience-item:hover {
-			--hover-y: -3px;
-			border-color: rgba(11, 18, 32, 0.18);
-			background:
-				linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.14)),
-				rgba(255, 255, 255, 0.34);
-			backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(1.35);
-			-webkit-backdrop-filter: blur(calc(var(--glass-blur) + 2px)) saturate(1.35);
-			box-shadow: 0 26px 70px rgba(11, 18, 32, 0.16);
-		}
+		/* Use 2D transforms to keep backdrop-filter reliable on some browsers. */
+		transform: translate(calc(var(--spread-x) * (1 - var(--t))), calc(var(--spread-y) * (1 - var(--t))));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.experience-item {
-			transition: none;
-		}
-		@media (hover: hover) and (pointer: fine) {
-			.experience-item:hover {
-				transform: none;
-			}
-		}
+		/* (hover + motion handled inside InfoCard) */
 	}
 
 	@media (min-width: 720px) {

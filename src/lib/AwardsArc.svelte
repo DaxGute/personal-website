@@ -232,37 +232,13 @@
 	.award-card-surface {
 		width: min(360px, 42vw);
 		position: relative;
-		overflow: hidden;
-		border-radius: 16px;
-		border: 1px solid rgba(11, 18, 32, 0.18);
-		background:
-			linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(34, 211, 238, 0.10)),
-			/* keep enough transparency so the backdrop blur is actually visible */
-			rgba(255, 255, 255, 0.36);
-		backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(1.45);
-		-webkit-backdrop-filter: blur(calc(var(--glass-blur) + 8px)) saturate(1.45);
-		backface-visibility: hidden;
-		box-shadow: 0 22px 70px rgba(11, 18, 32, 0.16);
-		padding: 14px 14px;
+		/* surface styling now lives in InfoCard */
 		opacity: 1;
-		transition:
-			transform 160ms ease,
-			box-shadow 160ms ease,
-			border-color 160ms ease,
-			background 160ms ease;
 	}
 
 	@media (hover: hover) and (pointer: fine) {
 		.award-item:hover {
 			z-index: 20;
-		}
-		.award-item:hover .award-card-surface {
-			transform: translateY(-6px) scale(1.02);
-			border-color: rgba(11, 18, 32, 0.22);
-			background:
-				linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.14)),
-				rgba(255, 255, 255, 0.46);
-			box-shadow: 0 28px 84px rgba(11, 18, 32, 0.18);
 		}
 	}
 
