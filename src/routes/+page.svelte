@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import ContactFanout from '$lib/ContactFanout.svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
+	import AwardsArc from '$lib/AwardsArc.svelte';
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
 	import type { Project } from '$lib/projects';
 
@@ -104,6 +105,35 @@
 		}
 	];
 
+	type AwardItem = {
+		heading: string;
+		subheading: string;
+		items: string[];
+	};
+
+	const awards: AwardItem[] = [
+		{
+			heading: 'Oracle Java 8 SE Programmer',
+			subheading: 'Certification',
+			items: ['Certified Professional', 'Proficiency in Java']
+		},
+		{
+			heading: 'International Youth Leader of the Year',
+			subheading: 'Recognition',
+			items: ['Honored by the IRC for founding Kid By Kid']
+		},
+		{
+			heading: 'Daily Point of Light Honoree',
+			subheading: 'National recognition',
+			items: ['National recognition for volunteer leadership']
+		},
+		{
+			heading: 'National Merit Scholarship Finalist',
+			subheading: 'Academic honor',
+			items: ['Top 1% of 1.5M PSAT/NMSQT takers worldwide']
+		}
+	];
+
 	const panels: Panel[] = [
 		{
 			id: 'greeting',
@@ -195,6 +225,8 @@
 	let ribbonHeight = 1;
 	let ribbonLen = 0;
 	let ribbonPathAnimated: SVGPathElement | null = null;
+	let ribbonPanelIds: string[] = [];
+
 
 	// Contact links
 	const linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
@@ -209,49 +241,163 @@
 		return Math.max(0, Math.min(1, n));
 	}
 
-	function buildRibbonPathRightToLeft(panelOffsetsPx: number[], panelW: number, h: number) {
+	function hash32(str: string) {
+		// FNV-1a (32-bit)
+		let h = 2166136261;
+		for (let i = 0; i < str.length; i++) {
+			h ^= str.charCodeAt(i);
+			h = Math.imul(h, 16777619);
+		}
+		return h >>> 0;
+	}
+
+	function rand01(seed: number) {
+		// xorshift32 -> [0, 1)
+		let x = seed >>> 0;
+		x ^= x << 13;
+		x ^= x >>> 17;
+		x ^= x << 5;
+		return ((x >>> 0) & 0xffffffff) / 4294967296;
+	}
+
+	function clamp(n: number, min: number, max: number) {
+		return Math.max(min, Math.min(max, n));
+	}
+
+	function buildRibbonPathRightToLeft(panelOffsetsPx: number[], panelIds: string[], panelW: number, h: number) {
 		if (panelOffsetsPx.length === 0) return '';
 		const totalW = panelOffsetsPx[panelOffsetsPx.length - 1] + panelW;
 
-		// Ellipse loop approximation constant for cubic Béziers.
-		const k = 0.5522847498;
-		const rx = Math.max(80, panelW * 0.18);
-		const ry = Math.max(70, h * 0.18);
+		// “Cursive” ribbon: generate multiple swoopy control points per panel, then
+		// convert them to a smooth spline (Catmull–Rom -> cubic Béziers).
+		type Pt = { x: number; y: number };
+		const TAU = Math.PI * 2;
 
-		const startX = totalW + 140;
-		const startY = h * 0.28;
-		let d = `M ${startX} ${startY}`;
-		let curX = startX;
-		let curY = startY;
+		const clampY = (y: number) => clamp(y, h * 0.10, h * 0.90);
 
+		const pushLoop = (
+			pts: Pt[],
+			cx: number,
+			cy: number,
+			rx: number,
+			ry: number,
+			tiltRad: number,
+			dir: 1 | -1,
+			seed: number
+		) => {
+			// Near-full loop (avoid closing exactly on the start point to prevent a cusp).
+			const steps = 24;
+			const start = rand01(seed ^ 0x68e31da4) * TAU;
+			const sweep = TAU * (0.985 + 0.01 * rand01(seed ^ 0xb5297a4d));
+			const ct = Math.cos(tiltRad);
+			const st = Math.sin(tiltRad);
+
+			for (let s = 0; s < steps; s++) {
+				const t = steps <= 1 ? 0 : s / (steps - 1);
+				const a = start + dir * sweep * t;
+				const x = Math.cos(a) * rx;
+				const y = Math.sin(a) * ry;
+				const xr = x * ct - y * st;
+				const yr = x * st + y * ct;
+				pts.push({ x: cx + xr, y: clampY(cy + yr) });
+			}
+		};
+
+		const points: Pt[] = [];
+		points.push({ x: totalW + 180, y: clampY(h * 0.34) });
+
+		// Build points from right -> left (matches scroll direction).
 		for (let i = panelOffsetsPx.length - 1; i >= 0; i--) {
-			const panelStart = panelOffsetsPx[i];
-			const cx = panelStart + panelW * 0.55;
-			const cy = h * (i % 2 === 0 ? 0.32 : 0.72);
+			const panelStart = panelOffsetsPx[i] ?? 0;
+			const id = panelIds[i] ?? `panel-${i}`;
+			const seed = hash32(id);
 
-			// Approach the loop start (right-most point of ellipse).
-			const loopStartX = cx + rx;
-			const loopStartY = cy;
-			d += ` C ${curX - panelW * 0.25} ${curY}, ${loopStartX + panelW * 0.06} ${loopStartY}, ${loopStartX} ${loopStartY}`;
-			curX = loopStartX;
-			curY = loopStartY;
+			const rA = rand01(seed ^ 0x9e3779b9);
+			const rB = rand01(seed ^ 0x85ebca6b);
+			const rC = rand01(seed ^ 0xc2b2ae35);
+			const rD = rand01(seed ^ 0x27d4eb2f);
 
-			// One full loop (4 cubics) around (cx, cy).
-			d += ` C ${cx + rx} ${cy - ry * k}, ${cx + rx * k} ${cy - ry}, ${cx} ${cy - ry}`;
-			d += ` C ${cx - rx * k} ${cy - ry}, ${cx - rx} ${cy - ry * k}, ${cx - rx} ${cy}`;
-			d += ` C ${cx - rx} ${cy + ry * k}, ${cx - rx * k} ${cy + ry}, ${cx} ${cy + ry}`;
-			d += ` C ${cx + rx * k} ${cy + ry}, ${cx + rx} ${cy + ry * k}, ${cx + rx} ${cy}`;
+			// Big vertical movement (huge swoops), alternating per panel.
+			const dir = i % 2 === 0 ? 1 : -1;
+			const baseY = clampY(h * (0.52 + (rA - 0.5) * 0.14));
+			const amp = h * clamp(0.22 + 0.16 * rB, 0.18, 0.42);
 
-			// Exit towards the next panel with a smooth curve.
-			const nextX = panelStart - panelW * 0.35;
-			const nextY = h * (i % 2 === 0 ? 0.62 : 0.38);
-			d += ` C ${cx + rx * 0.75} ${cy + (nextY - cy) * 0.45}, ${nextX + panelW * 0.15} ${nextY}, ${nextX} ${nextY}`;
-			curX = nextX;
-			curY = nextY;
+			// Slight horizontal jitter so each slide is distinct.
+			const jx = (rC - 0.5) * panelW * 0.05;
+
+			const x1 = panelStart + panelW * (0.86 + (rD - 0.5) * 0.06) + jx;
+			const x2 = panelStart + panelW * (0.66 + (rC - 0.5) * 0.08) + jx;
+			const x3 = panelStart + panelW * (0.40 + (rB - 0.5) * 0.06) + jx;
+			const x4 = panelStart + panelW * (0.20 + (rA - 0.5) * 0.05) + jx;
+
+			// “Handwriting” feel: downstroke -> upstroke -> downstroke -> flick.
+			const y1 = clampY(baseY + dir * amp * (0.22 + 0.18 * rD));
+			const y2 = clampY(baseY - dir * amp * (1.05 + 0.15 * rC));
+			const y3 = clampY(baseY + dir * amp * (0.95 + 0.10 * rB));
+			const y4 = clampY(baseY + dir * amp * (0.08 + 0.20 * rA));
+
+			points.push({ x: x1, y: y1 });
+			points.push({ x: x2, y: y2 });
+			// Add 1–2 cursive loops per panel so the stroke actually loops around itself.
+			const loops = 1 + Math.floor(rand01(seed ^ 0x1f123bb5) * 2);
+			for (let l = 0; l < loops; l++) {
+				const ls = seed ^ ((l + 1) * 0x5bd1e995);
+				const lr1 = rand01(ls ^ 0x6c2e2c6f);
+				const lr2 = rand01(ls ^ 0xbb67ae85);
+				const lr3 = rand01(ls ^ 0x9b05688c);
+
+				const cx = panelStart + panelW * (0.58 - l * 0.13 + (lr1 - 0.5) * 0.05) + jx;
+				const cy = clampY(baseY + dir * amp * (0.12 + 0.22 * lr2) * (l % 2 === 0 ? 1 : -1));
+				const rx = clamp(panelW * (0.09 + 0.07 * lr2), 44, panelW * 0.22);
+				const ry = clamp(h * (0.10 + 0.10 * lr1), 36, h * 0.26);
+				const tilt = (lr3 - 0.5) * 1.0;
+				const loopDir: 1 | -1 = rand01(ls ^ 0x27d4eb2d) > 0.5 ? 1 : -1;
+
+				const sizeBoost = clamp(0.95 + (amp / h) * 0.40, 0.95, 1.28);
+				pushLoop(points, cx, cy, rx * sizeBoost, ry * sizeBoost, tilt, loopDir, ls ^ 0x2e1b2138);
+			}
+			points.push({ x: x3, y: y3 });
+			points.push({ x: x4, y: y4 });
 		}
 
-		// Tail off-screen to the left.
-		d += ` C ${-120} ${h * 0.18}, ${-160} ${h * 0.86}, ${-220} ${h * 0.72}`;
+		points.push({ x: -260, y: clampY(h * 0.66) });
+
+		// Use a centripetal Catmull–Rom conversion (smoother for uneven point spacing),
+		// and slightly damp tangents to reduce “snappiness” near loop stitching.
+		const alpha = 0.5;
+		const tangScale = 0.72;
+		const dist = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
+		const tInc = (a: Pt, b: Pt) => Math.pow(dist(a, b), alpha);
+		let d = `M ${points[0]!.x} ${points[0]!.y}`;
+
+		for (let i = 0; i < points.length - 1; i++) {
+			const p0 = points[i - 1] ?? points[i]!;
+			const p1 = points[i]!;
+			const p2 = points[i + 1]!;
+			const p3 = points[i + 2] ?? p2;
+
+			const t0 = 0;
+			const t1 = t0 + tInc(p0, p1);
+			const t2 = t1 + tInc(p1, p2);
+			const t3 = t2 + tInc(p2, p3);
+
+			const dt = t2 - t1;
+			const denom1 = t2 - t0;
+			const denom2 = t3 - t1;
+
+			const m1x = denom1 > 1e-6 ? ((p2.x - p0.x) / denom1) * tangScale : 0;
+			const m1y = denom1 > 1e-6 ? ((p2.y - p0.y) / denom1) * tangScale : 0;
+			const m2x = denom2 > 1e-6 ? ((p3.x - p1.x) / denom2) * tangScale : 0;
+			const m2y = denom2 > 1e-6 ? ((p3.y - p1.y) / denom2) * tangScale : 0;
+
+			const c1x = p1.x + (m1x * dt) / 3;
+			const c1y = p1.y + (m1y * dt) / 3;
+			const c2x = p2.x - (m2x * dt) / 3;
+			const c2y = p2.y - (m2y * dt) / 3;
+
+			d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
+		}
+
 		return d;
 	}
 
@@ -310,6 +456,7 @@
 		const measure = () => {
 			if (!scroller) return;
 			panelOffsets = panelEls.map((el) => el.offsetLeft);
+			ribbonPanelIds = panelEls.map((el) => el.id);
 
 			panelW = scroller.clientWidth || window.innerWidth;
 			const h = scroller.clientHeight || window.innerHeight;
@@ -317,7 +464,7 @@
 
 			ribbonWidth = Math.max(1, totalW);
 			ribbonHeight = Math.max(1, h);
-			ribbonD = buildRibbonPathRightToLeft(panelOffsets, panelW, h);
+			ribbonD = buildRibbonPathRightToLeft(panelOffsets, ribbonPanelIds, panelW, h);
 
 			// Recompute path length after DOM updates.
 			requestAnimationFrame(() => {
@@ -418,6 +565,7 @@
 			cancelScrollAnim();
 		};
 	});
+
 </script>
 
 <div class="stage">
@@ -487,12 +635,14 @@
 							</div>
 						{/if}
 
-						{#if panel.kicker}
-							<p class="kicker">{panel.kicker}</p>
-						{/if}
-						<h1 class="title">{panel.title}</h1>
+						{#if panel.id !== 'awards'}
+							{#if panel.kicker}
+								<p class="kicker">{panel.kicker}</p>
+							{/if}
+							<h1 class="title">{panel.title}</h1>
 
-						<p class="body">{panel.body}</p>
+							<p class="body">{panel.body}</p>
+						{/if}
 
 						{#if panel.id === 'experiences'}
 							<ul class="experience-list" aria-label="Jobs and internships list">
@@ -530,7 +680,16 @@
 							</div>
 						{/if}
 
-					{#if panel.id !== 'experiences' && panel.id !== 'education' && panel.id !== 'projects'}
+						{#if panel.id === 'awards'}
+							<AwardsArc
+								kicker={panel.kicker}
+								title={panel.title}
+								body={panel.body}
+								awards={awards}
+							/>
+						{/if}
+
+					{#if panel.id !== 'experiences' && panel.id !== 'education' && panel.id !== 'projects' && panel.id !== 'awards'}
 							<div class="card">
 								<p class="card-title">Edit me:</p>
 								<p class="card-body">
@@ -611,17 +770,21 @@
 	.ribbon-base {
 		fill: none;
 		stroke: rgba(11, 18, 32, 0.22);
-		stroke-width: 3;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+		stroke-width: 4;
+		stroke-linecap: butt;
+		stroke-linejoin: miter;
+		stroke-miterlimit: 10;
+		shape-rendering: geometricPrecision;
 	}
 
 	.ribbon-anim {
 		fill: none;
 		stroke: url(#ribbonStroke);
-		stroke-width: 4;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+		stroke-width: 6;
+		stroke-linecap: butt;
+		stroke-linejoin: miter;
+		stroke-miterlimit: 10;
+		shape-rendering: geometricPrecision;
 		filter: drop-shadow(0 8px 18px rgba(11, 18, 32, 0.16));
 	}
 
@@ -728,6 +891,11 @@
 	}
 
 	/* Projects: move the whole glass box up via a bottom offset (instead of changing slide padding). */
+	#projects.panel {
+		/* Lift Projects above other panel content/decoration layers (but keep below chrome/dots at z=10). */
+		z-index: 6;
+	}
+
 	#projects.panel .panel-inner {
 		--projects-lift: 130px;
 		bottom: var(--projects-lift);
@@ -764,6 +932,20 @@
 		backdrop-filter: none;
 		box-shadow: none;
 		padding: 28px;
+	}
+
+	/* Awards slide: no outer glass box */
+	#awards.panel .panel-inner {
+		border: 0;
+		background: transparent;
+		backdrop-filter: none;
+		box-shadow: none;
+		padding: 0;
+	}
+
+	/* Awards slide: center content block in the middle of the panel */
+	#awards.panel {
+		place-items: center;
 	}
 
 	.kicker {
