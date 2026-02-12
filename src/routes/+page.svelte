@@ -195,21 +195,10 @@
 		},
 		{
 			id: 'project-2',
-			name: 'Project Two',
-			blurb: 'Another short summary.',
+			name: 'ConfCap',
+			blurb: 'Designed and Built a Conference Bounty App from the Group Up',
 			description:
-				'Describe this project. Keep it impact-focused: what changed, what improved, what you learned.',
-			highlights: ['Highlight A', 'Highlight B'],
-			tech: ['Python', 'Pandas', 'Scikit-learn'],
-			links: [{ label: 'Writeup', href: 'https://example.com' }]
-		},
-		{
-			id: 'project-3',
-			name: 'Project Three',
-			blurb: 'Third project summary.',
-			description: 'Description for the third project.',
-			tech: ['React', 'Node.js'],
-			links: [{ label: 'GitHub', href: 'https://github.com/' }]
+				'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations.'
 		}
 	];
 
