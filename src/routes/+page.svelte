@@ -460,6 +460,14 @@
 	onMount(() => {
 		if (!scroller) return;
 
+		// Prevent the browser from restoring a previous horizontal scroll position on reload.
+		// (Some browsers restore after initial JS runs, so we also force-reset via rAF below.)
+		try {
+			if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+		} catch {
+			// ignore
+		}
+
 		panelEls = panels
 			.map((p) => document.getElementById(p.id))
 			.filter((el): el is HTMLElement => el instanceof HTMLElement);
@@ -561,6 +569,13 @@
 		};
 
 		measure();
+		// Always start on the title (first) panel.
+		// Use scrollTo(...behavior:'auto') to avoid smooth scrolling, and re-apply after rAF/timeout
+		// in case the browser restores scroll position after mount.
+		const resetToTitle = () => scroller?.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+		resetToTitle();
+		requestAnimationFrame(resetToTitle);
+		setTimeout(resetToTitle, 50);
 		updateProgress();
 
 		scroller.addEventListener('wheel', wheel, { passive: false });
