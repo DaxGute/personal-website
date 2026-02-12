@@ -121,7 +121,7 @@
 		{
 			heading: 'Oracle Java 8 SE Programmer',
 			subheading: 'Certification',
-			items: ['Certified Professional', 'Proficiency in Java']
+			items: ['Certified Professional for Proficiency in Java']
 		},
 		{
 			heading: 'International Youth Leader of the Year',
@@ -136,7 +136,7 @@
 		{
 			heading: 'National Merit Scholarship Finalist',
 			subheading: 'Academic honor',
-			items: ['Top 1% of 1.5M PSAT/NMSQT takers worldwide']
+			items: ['Top 1% of 1.5M PSAT/NMSQT takers globally']
 		}
 	];
 
@@ -183,15 +183,14 @@
 	const projects: Project[] = [
 		{
 			id: 'project-1',
-			name: 'Project One',
-			blurb: 'One-line summary of what this does.',
+			name: 'Kid By Kid',
+			blurb: 'Paired Hundreds of Tutors and Learners through 13,000+ Hours of 1-on-1 Tutoring',
 			description:
-				'Longer description goes here. Explain the problem, your approach, and the impact in 2–4 sentences.',
-			highlights: ['Key result or metric', 'What you built / shipped', 'Interesting technical challenge'],
-			tech: ['SvelteKit', 'TypeScript', 'Vite'],
+				'Through free online one-on-one tutoring, Kid By Kid Middle and High School student Mentors work with under-served Elementary and Middle School-aged immigrant, refugee, and ESL Learners to provide life-changing academic opportunity, and support.',
+			highlights: ['13,000+ hours of 1-on-1 tutoring', 'Hundreds of tutor/learner matches', 'Free online tutoring for underserved students'],
+			tech: ['Nonprofit leadership', 'Program design', 'Volunteer operations'],
 			links: [
-				{ label: 'GitHub', href: 'https://github.com/' },
-				{ label: 'Live', href: 'https://example.com' }
+				{ label: 'Website', href: 'https://kidbykid.org' }
 			]
 		},
 		{
@@ -1219,7 +1218,7 @@
 		width: min(560px, 100%);
 		margin: 18px auto 0;
 		top: -100px;
-		left: 30px;
+		left: 70px;
 		min-height: 210px;
 		perspective: 900px;
 		/* 0..1 from scroll (set on #education.panel) */
@@ -1232,6 +1231,7 @@
 		margin: 0;
 		border-radius: 16px;
 		border: 1px solid rgba(11, 18, 32, 0.14);
+		/* Match the other InfoCard "glass" surfaces */
 		background:
 			linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.08)),
 			rgba(255, 255, 255, 0.28);
@@ -1240,7 +1240,8 @@
 		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
 		padding: 14px 14px;
 		transform-origin: 40% 25%;
-		will-change: transform, opacity, filter;
+		/* Avoid `filter:` on the card itself; it can suppress backdrop-filter in some browsers. */
+		will-change: transform, opacity;
 	}
 
 	/* card 1: front -> back as --t goes 0 -> 1 */
@@ -1250,7 +1251,6 @@
 			rotate(calc(-7deg + (16deg * var(--t))))
 			scale(calc(1 - (0.03 * var(--t))));
 		opacity: calc(1 - (0.65 * var(--t)));
-		filter: blur(calc(0.4px * var(--t))) saturate(calc(1 - (0.05 * var(--t))));
 	}
 
 	/* card 2: back -> front as --t goes 0 -> 1 */
@@ -1260,8 +1260,6 @@
 			rotate(calc(9deg - (16deg * var(--t))))
 			scale(calc(0.97 + (0.03 * var(--t))));
 		opacity: calc(0.35 + (0.65 * var(--t)));
-		filter: blur(calc(0.4px * (1 - var(--t))))
-			saturate(calc(0.95 + (0.05 * var(--t))));
 	}
 
 	/* hard swap stacking so the “front” card is actually on top */
@@ -1385,7 +1383,9 @@
 			--spread-y: -80px;
 			/* Lift it above the Experiences title */
 			top: -90px;
-			right: 0;
+			/* Always finish next to Castle Creek (which is anchored at left: 0) */
+			left: calc(min(420px, 42vw) + 100px);
+			right: auto;
 			z-index: 5;
 		}
 
@@ -1394,7 +1394,7 @@
 			/* Castle Creek should start animating slightly earlier than the others */
 			--t-shift: 0.18;
 			/* Keep this non-negative so it can't visually bleed into the previous slide */
-			--spread-x: 220px;
+			--spread-x: 0px;
 			--spread-y: 120px;
 			top: 0;
 			left: 0;
@@ -1408,7 +1408,9 @@
 			--spread-y: 140px;
 			/* Move it up: slightly below Castle Creek's height, while keeping Benevolent's right alignment */
 			top: 44px;
-			right: 60px;
+			/* Always finish next to Castle Creek (which is anchored at left: 0) */
+			left: calc(min(420px, 42vw) + 28px);
+			right: auto;
 			bottom: auto;
 		}
 	}

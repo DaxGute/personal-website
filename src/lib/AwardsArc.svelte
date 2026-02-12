@@ -230,7 +230,7 @@
 	}
 
 	.award-card-surface {
-		width: min(320px, 42vw);
+		width: min(360px, 42vw);
 		position: relative;
 		overflow: hidden;
 		border-radius: 16px;
@@ -304,7 +304,7 @@
 			opacity: 1;
 		}
 		.award-card-surface {
-			width: min(520px, 92vw);
+			width: min(540px, 92vw);
 			margin-inline: auto;
 		}
 	}

@@ -197,6 +197,9 @@
 	}
 
 	$: active = projects.find((p) => p.id === activeId) ?? null;
+	$: websiteLink =
+		active?.links?.find((l) => (l.label ?? '').trim().toLowerCase() === 'website') ?? null;
+	$: otherLinks = active?.links?.filter((l) => l !== websiteLink) ?? [];
 
 	function selectByIndex(idx: number) {
 		if (projects.length === 0) return;
@@ -326,6 +329,14 @@
 
 			<p class="desc-body">{active.description}</p>
 
+			{#if websiteLink}
+				<p class="desc-website">
+					<a class="desc-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
+						Website.
+					</a>
+				</p>
+			{/if}
+
 			{#if active.highlights?.length}
 				<ul class="desc-list" aria-label="Project highlights">
 					{#each active.highlights as h (h)}
@@ -342,9 +353,9 @@
 				</div>
 			{/if}
 
-			{#if active.links?.length}
+			{#if otherLinks.length}
 				<div class="links" aria-label="Project links">
-					{#each active.links as link (link.href)}
+					{#each otherLinks as link (link.href)}
 						<a class="link" href={link.href} target="_blank" rel="noreferrer">
 							{link.label}
 						</a>
@@ -400,6 +411,22 @@
 		margin: 0 0 10px;
 		color: var(--muted);
 		line-height: 1.6;
+	}
+
+	.desc-website {
+		margin: 0 0 10px;
+		color: var(--muted);
+		line-height: 1.6;
+	}
+
+	.desc-website-link {
+		color: rgba(11, 18, 32, 0.86);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.desc-website-link:hover {
+		text-decoration-thickness: 2px;
 	}
 
 	.desc-list {
