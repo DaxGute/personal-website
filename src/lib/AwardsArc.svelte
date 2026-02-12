@@ -14,13 +14,18 @@
 	export let awards: Award[] = [];
 
 	// Tuning knobs
-	export let durationMs = 26000; // slower overall
+	// Overall orbit speed (keep this stable).
+	export let durationMs = 26000;
 	// Wider visible window => multiple awards can be "in the air" at the same time.
 	export let windowStart = 0.1; // visible arc window start (0..1)
 	export let windowEnd = 0.55; // visible arc window end (0..1)
-	export let slowAtTip = 0.55; // 0..1, higher = slower at the tip (must be < 1)
+	// Repeat the awards list to tighten pacing while keeping spacing constant (no end-of-loop pause).
+	// Example: 2 => a 4-award list becomes 8 orbiting cards (same order, repeats seamlessly).
+	export let repeatFactor = 2;
+	// Higher = more slowdown at the tip (u≈0.5). Lower = faster at the top of the arc.
+	export let slowAtTip = 0.08; // 0..1 (must be < 1)
 	export let peakY = 0.0; // as fraction of container height (negative => above top)
-	export let baseY = 1.05; // as fraction of container height
+	export let baseY = 1.4; // as fraction of container height
 	// Make the card exist slightly offscreen while visible (so it "appears before it enters")
 	export let startX = -0.18; // as fraction of container width
 	export let endX = 1.18; // as fraction of container width
@@ -28,6 +33,12 @@
 	let orbitEl: HTMLElement | null = null;
 	let awardEls: (HTMLElement | null)[] = [];
 	let raf: number | null = null;
+
+	$: safeRepeatFactor = Math.max(1, Math.min(6, Math.floor(repeatFactor || 1)));
+	$: displayAwards = Array.from(
+		{ length: awards.length * safeRepeatFactor },
+		(_, i) => awards[i % awards.length]!
+	);
 
 	function clamp(n: number, min: number, max: number) {
 		return Math.max(min, Math.min(max, n));
@@ -75,6 +86,7 @@
 
 			for (let i = 0; i < n; i++) {
 				const el = els[i];
+				// Even spacing across the whole cycle => seamless restart after the last card.
 				const phase = (tCycle + i / n) % 1;
 
 				// Hide outside the arc window; only appear "when it's their time".
@@ -138,7 +150,7 @@
 	</div>
 
 	<ul class="awards-ring" aria-label="Awards list">
-		{#each awards as award, i (award.heading)}
+		{#each displayAwards as award, i (`${award.heading}-${i}`)}
 			<li class="award-item" bind:this={awardEls[i]}>
 				<div class="award-card-surface">
 					<InfoCard

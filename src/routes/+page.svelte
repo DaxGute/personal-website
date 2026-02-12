@@ -8,6 +8,11 @@
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
 	import Polaroid from '$lib/Polaroid.svelte';
 	import type { Project } from '$lib/projects';
+	import chessPhoto from '$lib/assets/chess.jpg';
+	import billiardsPhoto from '$lib/assets/billiards.png';
+	import skiingPhoto from '$lib/assets/skiing.jpg';
+	import scubaPhoto from '$lib/assets/scuba.jpg';
+	import tableTennisPhoto from '$lib/assets/table_tennis.jpg';
 
 	type Panel = {
 		id: string;
@@ -226,7 +231,7 @@
 	let panelOffsets: number[] = [];
 	let progressIndex = 0;
 	let experiencesT = 0; // 0..1 progress across the Experiences panel
-	let educationT = 0; // 0..1 progress for the Education carousel swap (first 25% of the slide)
+	let educationT = 0; // 0..1 progress for the Education carousel swap (early in the slide)
 	let educationSwap = false;
 	let panelW = 0;
 
@@ -250,6 +255,15 @@
 
 	function clamp01(n: number) {
 		return Math.max(0, Math.min(1, n));
+	}
+
+	function easeInOutPow(t: number, power = 0.5) {
+		// Ease-in-out with adjustable "tail" length.
+		// Higher `power` = slower near the start/end, faster in the middle.
+		const x = clamp01(t);
+		if (x === 0 || x === 1) return x;
+		if (x < 0.5) return 0.5 * Math.pow(2 * x, power);
+		return 1 - 0.5 * Math.pow(2 * (1 - x), power);
 	}
 
 	function hash32(str: string) {
@@ -517,23 +531,29 @@
 				const expStart = panelOffsets[expIdx];
 				const expEnd = panelOffsets[Math.min(expIdx + 1, panelOffsets.length - 1)] ?? expStart;
 				const denom = expEnd - expStart;
-				const shiftPx = (panelW || denom || window.innerWidth) * 0.5;
+				// Start the Experiences animation earlier (before the slide is fully reached).
+				// The panel is clipped (see CSS) so the cards won't visually bleed into the previous slide.
+				const shiftPx = (panelW || denom || window.innerWidth) * 0.78;
 				const start = expStart - shiftPx;
 				const end = expEnd - shiftPx;
 				experiencesT = end === start ? 1 : clamp01((x - start) / (end - start));
 			}
 
-			// Education carousel: swap over the first quarter of the slide scroll distance.
+			// Education carousel: swap early in the slide scroll distance.
 			const eduIdx = panels.findIndex((p) => p.id === 'education');
 			if (eduIdx !== -1 && panelOffsets[eduIdx] != null) {
 				const eduStart = panelOffsets[eduIdx];
 				const eduEnd = panelOffsets[Math.min(eduIdx + 1, panelOffsets.length - 1)] ?? eduStart;
 				const denom = eduEnd - eduStart;
 				// Make the swap happen early in the slide (smaller = earlier).
-				const swapDistance = denom * 0.08;
-				educationT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
-				// Flip stacking slightly before midpoint so the handoff feels earlier.
-				educationSwap = educationT > 0.22;
+				// Longer rotation: extend the scroll span of the swap.
+				// Original was 0.08; was bumped to 0.12; now 0.18 for more time "on either side".
+				const swapDistance = denom * 0.18;
+				const eduLinearT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
+				// Stronger ease-in-out so the cards spend more time rotating near the start/end.
+				educationT = easeInOutPow(eduLinearT, 5);
+				// Keep the stacking flip tied to scroll position (not eased time) so the trigger stays put.
+				educationSwap = eduLinearT > 0.22;
 			} else {
 				educationT = 0;
 				educationSwap = false;
@@ -718,23 +738,37 @@
 						{#if panel.id === 'interests'}
 							<div class="interests-content" aria-label="Interests">
 								<div class="interest-ski" aria-label="Skiing">
-									<Polaroid src={null} caption={interests[1]?.caption ?? 'Skiing'} />
+									<Polaroid src={skiingPhoto} alt="Skiing" caption={interests[1]?.caption ?? 'Skiing'} />
 								</div>
 
 								<div class="interest-chess" aria-label="Chess">
-									<Polaroid src={null} caption={interests[2]?.caption ?? 'Chess'} />
+									<Polaroid src={chessPhoto} alt="Chess" caption={interests[2]?.caption ?? 'Chess'} />
 								</div>
 
 								<div class="interest-padi" aria-label="PADI Certified Diver">
-									<Polaroid src={null} caption={interests[0]?.caption ?? 'PADI Certified Diver'} />
+									<Polaroid
+										src={scubaPhoto}
+										alt="PADI Certified Diver"
+										revealRootMargin="0px -15% 0px -15%"
+										revealThreshold={0}
+										caption={interests[0]?.caption ?? 'PADI Certified Diver'}
+									/>
 								</div>
 
 								<div class="interest-tt" aria-label="Table Tennis">
-									<Polaroid src={null} caption={interests[3]?.caption ?? 'Table Tennis'} />
+									<Polaroid
+										src={tableTennisPhoto}
+										alt="Table Tennis"
+										caption={interests[3]?.caption ?? 'Table Tennis'}
+									/>
 								</div>
 
 								<div class="interest-billiards" aria-label="Billiards">
-									<Polaroid src={null} caption={interests[4]?.caption ?? 'Billiards'} />
+									<Polaroid
+										src={billiardsPhoto}
+										alt="Billiards"
+										caption={interests[4]?.caption ?? 'Billiards'}
+									/>
 								</div>
 
 								{#if interests.length > 5}
@@ -1012,76 +1046,90 @@
 
 	/* Interests slide: right-align and anchor to the right edge */
 	#interests.panel {
-		place-items: start end;
+		place-items: stretch;
 	}
 
 	#interests.panel .panel-inner {
+		/* Fill the entire slide for absolute positioning */
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		/* keep the Interests copy comfortably lower in the slide */
+		padding: clamp(70px, 10vh, 110px) 18px 24px;
+		border: 0;
+		background: transparent;
+		backdrop-filter: none;
+		box-shadow: none;
 		text-align: right;
-		transform: translateY(-80px);
-		/* give the 5-up grid room, while staying anchored to the right edge */
-		width: min(980px, 100%);
+		transform: none;
 	}
 
 	.interests-content {
+		/* take up the entire slide */
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+
+		/* size should be a percent (with min/max guardrails) */
+		--float-card-w: clamp(180px, 22%, 260px);
+	}
+
+	/* Keep slide copy above the floating polaroids */
+	#interests.panel .kicker,
+	#interests.panel .title,
+	#interests.panel .body {
 		position: relative;
-		/* reserve space for the two “floating” corner polaroids */
-		padding-top: 190px;
-		padding-bottom: 140px;
-		/* shared upward nudge for selected floating cards */
-		--float-up: 180px;
-		--tt-shift-x: 90px;
-		--tt-to-billiards-gap: 40px;
-		/* NOTE: polaroids are width 260px and scaled to 0.6 => ~156px visual width */
-		--float-card-w-scaled: 156px;
+		z-index: 5;
 	}
 
 	.interest-ski {
 		position: absolute;
-		top: calc(0px - var(--float-up));
-		left: 0;
-		transform: scale(0.6) rotate(-3deg);
+		top: 5%;
+		right: 80%;
+		width: var(--float-card-w);
+		transform: rotate(-3deg);
 		transform-origin: top left;
-		width: 260px;
 		z-index: 2;
 	}
 
 	.interest-chess {
 		position: absolute;
-		top: calc(0px - var(--float-up) + 10px);
-		left: 50%;
-		transform: translateX(-50%) scale(0.6) rotate(2deg);
+		top: 7%;
+		right: 50%;
+		width: var(--float-card-w);
+		transform: rotate(2deg);
 		transform-origin: top center;
-		width: 260px;
 		z-index: 2;
 	}
 
 	.interest-padi {
 		position: absolute;
-		top: 0;
-		right: 200px;
-		transform: scale(0.6) rotate(5deg);
+		top: 35%;
+		right: 5%;
+		width: var(--float-card-w);
+		transform: rotate(5deg);
 		transform-origin: top right;
-		width: 260px;
 		z-index: 2;
 	}
 
 	.interest-tt {
 		position: absolute;
-		bottom: var(--float-up);
-		left: var(--tt-shift-x);
-		transform: scale(0.6) rotate(1deg);
+		top: 38%;
+		right: 65%;
+		width: var(--float-card-w);
+		transform: rotate(1deg);
 		transform-origin: bottom left;
-		width: 260px;
 		z-index: 2;
 	}
 
 	.interest-billiards {
 		position: absolute;
-		bottom: 190px;
-		left: calc(var(--tt-shift-x) + var(--float-card-w-scaled) + var(--tt-to-billiards-gap));
-		transform: scale(0.6) rotate(0deg);
+		top: 33%;
+		right: 35%;
+		width: var(--float-card-w);
+		transform: rotate(0deg);
 		transform-origin: bottom left;
-		width: 260px;
 		z-index: 2;
 	}
 
@@ -1100,56 +1148,12 @@
 	}
 
 	@media (max-width: 720px) {
-		/* stop hard-right anchoring when we stack */
-		#interests.panel {
-			place-items: start center;
-		}
 		#interests.panel .panel-inner {
 			text-align: center;
-			transform: translateY(-40px);
+			padding-top: clamp(50px, 8vh, 90px);
 		}
 		.interests-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
-
-		.interests-content {
-			padding-top: 0;
-			padding-bottom: 0;
-		}
-
-		.interest-ski {
-			position: static;
-			width: auto;
-			transform: none;
-			margin-bottom: 12px;
-		}
-
-		.interest-chess {
-			position: static;
-			width: auto;
-			transform: none;
-			margin-bottom: 12px;
-		}
-
-		.interest-padi {
-			position: static;
-			width: auto;
-			transform: none;
-			margin-bottom: 12px;
-		}
-
-		.interest-tt {
-			position: static;
-			width: auto;
-			transform: none;
-			margin-bottom: 12px;
-		}
-
-		.interest-billiards {
-			position: static;
-			width: auto;
-			transform: none;
-			margin-bottom: 12px;
 		}
 	}
 
@@ -1306,8 +1310,10 @@
 	}
 
 	.experience-item {
-		/* Scroll-driven "fan-in" (0 = entering, 1 = leaving) */
-		--t: var(--exp-t, 1);
+		/* Scroll-driven "fan-in" (0..1 progress across the slide) */
+		/* Per-card offset lets one card animate slightly earlier/later. */
+		/* Multiply shift by --exp-t so nothing protrudes before the slide starts animating. */
+		--t: clamp(0, calc(var(--exp-t, 1) + (var(--t-shift, 0) * var(--exp-t, 1))), 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
 		--hover-y: 0px;
@@ -1384,7 +1390,10 @@
 
 		/* Castle Creek — middle */
 		#experiences .experience-item:nth-child(2) {
-			--spread-x: -220px;
+			/* Castle Creek should start animating slightly earlier than the others */
+			--t-shift: 0.18;
+			/* Keep this non-negative so it can't visually bleed into the previous slide */
+			--spread-x: 220px;
 			--spread-y: 120px;
 			top: 0;
 			left: 0;

@@ -5,6 +5,10 @@
 	export let alt = '';
 	export let caption: string;
 	export let loading: 'lazy' | 'eager' = 'lazy';
+	// IntersectionObserver tuning (used for reveal animation timing).
+	// "Earlier" reveal = less-negative root margins (wider in-view band) and/or lower threshold.
+	export let revealRootMargin = '0px -35% 0px -35%';
+	export let revealThreshold = 0.01;
 
 	let rootEl: HTMLElement | null = null;
 	let revealed = false;
@@ -37,8 +41,8 @@
 			{
 				// The page scrolls horizontally; delay reveal until the item has slid far enough into view.
 				// Negative LEFT/RIGHT margins create a "center band" (here: middle ~30% of viewport width).
-				rootMargin: '0px -35% 0px -35%',
-				threshold: 0.01
+				rootMargin: revealRootMargin,
+				threshold: revealThreshold
 			}
 		);
 
