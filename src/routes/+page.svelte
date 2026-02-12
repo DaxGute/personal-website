@@ -261,8 +261,8 @@
 		ribbonPathAnimated.style.strokeDashoffset = `${ribbonLen * (1 - p)}`;
 	}
 
-	function easeInOutQuint(t: number) {
-		return t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
+	function easeOutCubic(t: number) {
+		return 1 - Math.pow(1 - t, 3);
 	}
 
 	function cancelScrollAnim() {
@@ -270,7 +270,7 @@
 		scrollAnim = null;
 	}
 
-	function smoothScrollTo(left: number, durationMs = 650) {
+	function smoothScrollTo(left: number, durationMs = 750) {
 		if (!scroller) return;
 		cancelScrollAnim();
 
@@ -285,7 +285,7 @@
 
 		const tick = (now: number) => {
 			const t = Math.min(1, (now - start) / durationMs);
-			scroller!.scrollLeft = startLeft + delta * easeInOutQuint(t);
+			scroller!.scrollLeft = startLeft + delta * easeOutCubic(t);
 			if (t < 1) scrollAnim = requestAnimationFrame(tick);
 			else scrollAnim = null;
 		};
@@ -374,7 +374,10 @@
 			}
 
 			// Keep the ribbon visible across all slides.
-			setRibbonDrawProgress(1);
+			// NOTE: avoid writing to strokeDashoffset on every scroll frame — the ribbon
+			// has a drop-shadow filter and can be expensive to repaint, which makes
+			// slide-to-slide motion feel “stuck”/janky. We already set it to fully drawn
+			// after measuring in `measure()`.
 		};
 
 		let ticking = false;
@@ -679,9 +682,10 @@
 		--a: clamp(0.12, calc(0.88 - var(--dist) * 0.48), 0.88);
 		background: rgb(11 18 32 / var(--a));
 		transform: scale(clamp(0.88, calc(1.32 - var(--dist) * 0.22), 1.32));
-		transition:
-			transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			background 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+		/* These values are driven continuously by scroll position; transitions here can
+		   “stutter” because they restart every scroll frame. Let them track directly. */
+		transition: none;
+		will-change: transform;
 	}
 
 	.dot-btn:hover .nav-dot {

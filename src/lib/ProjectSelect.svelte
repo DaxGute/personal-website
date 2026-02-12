@@ -7,13 +7,26 @@
 
 	let activeId: string | null = initialId ?? projects[0]?.id ?? null;
 	let listboxEl: HTMLDivElement | null = null;
+	let scrollbarEl: HTMLDivElement | null = null;
 	let scrollRaf = 0;
 	let resizeObs: ResizeObserver | null = null;
 	let intersectObs: IntersectionObserver | null = null;
+	let wheelAccum = 0;
+	let wheelResetTimer: ReturnType<typeof setTimeout> | null = null;
+	let isDraggingScrollbar = false;
+	let dragStartY = 0;
+	let dragStartScrollTop = 0;
+
+	let scrollbarThumbTop = 0;
+	let scrollbarThumbHeight = 16;
 
 	function getOptionEls(): HTMLButtonElement[] {
 		if (!listboxEl) return [];
 		return Array.from(listboxEl.querySelectorAll<HTMLButtonElement>('button.opt[data-id]'));
+	}
+
+	function getOptionElById(id: string): HTMLButtonElement | undefined {
+		return getOptionEls().find((el) => el.dataset.id === id);
 	}
 
 	function updateActiveFromCenter() {
@@ -45,14 +58,136 @@
 		scrollRaf = requestAnimationFrame(() => {
 			scrollRaf = 0;
 			updateActiveFromCenter();
+			updateScrollbarThumb();
 		});
 	}
 
-	async function scrollIdToCenter(id: string) {
-		// Wait for DOM to exist.
+	function updateScrollbarThumb() {
+		if (!listboxEl) return;
+
+		const { scrollTop, scrollHeight, clientHeight } = listboxEl;
+		if (scrollHeight <= clientHeight) {
+			scrollbarThumbHeight = 0;
+			scrollbarThumbTop = 0;
+			return;
+		}
+
+		// Track spans the visual overlay scrollbar height with a small inset to match CSS.
+		// (Don't use listbox clientHeight here; borders/positioning can make it slightly different,
+		// which shows up as uneven top vs bottom padding.)
+		const inset = 5;
+		const visualTrackHeight = scrollbarEl?.clientHeight ?? clientHeight;
+		const trackHeight = Math.max(0, visualTrackHeight - inset * 2);
+		const minThumb = 18;
+		const h = Math.max(minThumb, (clientHeight / scrollHeight) * trackHeight);
+		const maxTop = trackHeight - h;
+		const t = (scrollTop / (scrollHeight - clientHeight)) * maxTop;
+
+		scrollbarThumbHeight = h;
+		scrollbarThumbTop = inset + (Number.isFinite(t) ? t : 0);
+	}
+
+	function onScrollbarPointerDown(e: PointerEvent) {
+		if (!listboxEl) return;
+		if (scrollbarThumbHeight <= 0) return;
+
+		e.preventDefault();
+		e.stopPropagation();
+
+		const inset = 5;
+		const track = e.currentTarget as HTMLElement;
+		const rect = track.getBoundingClientRect();
+		const y = e.clientY - rect.top;
+
+		// Jump so thumb centers on click, then start drag.
+		const desiredTop = y - scrollbarThumbHeight / 2;
+		const maxTop = rect.height - inset * 2 - scrollbarThumbHeight;
+		const clampedTop = Math.max(inset, Math.min(inset + maxTop, desiredTop));
+
+		const ratio = maxTop > 0 ? (clampedTop - inset) / maxTop : 0;
+		listboxEl.scrollTop = ratio * (listboxEl.scrollHeight - listboxEl.clientHeight);
+
+		isDraggingScrollbar = true;
+		dragStartY = e.clientY;
+		dragStartScrollTop = listboxEl.scrollTop;
+		track.setPointerCapture(e.pointerId);
+		requestUpdateActiveFromCenter();
+	}
+
+	function onScrollbarPointerMove(e: PointerEvent) {
+		if (!isDraggingScrollbar) return;
+		if (!listboxEl) return;
+		if (scrollbarThumbHeight <= 0) return;
+
+		e.preventDefault();
+
+		const inset = 5;
+		const track = e.currentTarget as HTMLElement;
+		const rect = track.getBoundingClientRect();
+		const trackHeight = rect.height - inset * 2;
+		const maxTop = trackHeight - scrollbarThumbHeight;
+		if (maxTop <= 0) return;
+
+		const dy = e.clientY - dragStartY;
+		const scrollRange = listboxEl.scrollHeight - listboxEl.clientHeight;
+		const scrollDelta = (dy / maxTop) * scrollRange;
+
+		listboxEl.scrollTop = dragStartScrollTop + scrollDelta;
+		requestUpdateActiveFromCenter();
+	}
+
+	function onScrollbarPointerUp(e: PointerEvent) {
+		if (!isDraggingScrollbar) return;
+		isDraggingScrollbar = false;
+		try {
+			(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+		} catch {
+			// ignore
+		}
+	}
+
+	function getSlotStepPx(): number {
+		if (!listboxEl) return 56;
+		const raw = getComputedStyle(listboxEl).getPropertyValue('--slot-h').trim();
+		const n = Number.parseFloat(raw);
+		return Number.isFinite(n) && n > 0 ? n : 56;
+	}
+
+	function onReelWheel(e: WheelEvent) {
+		// Make the reel feel like a slot machine: one "tick" per wheel gesture.
+		// Also: always consume the wheel event while hovering the reel so the page
+		// doesn't sideways-scroll on trackpads (deltaX) or scroll-chain away.
+		if (!listboxEl) return;
+		if (projects.length <= 1) return;
+
+		e.preventDefault();
+		e.stopPropagation();
+
+		// Trackpads often send diagonal gestures (deltaX + deltaY). Use the dominant axis.
+		const dominantDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+		wheelAccum += dominantDelta;
+
+		const threshold = 24; // small enough to work on trackpads, big enough to ignore noise
+		if (Math.abs(wheelAccum) < threshold) return;
+
+		const dir = wheelAccum > 0 ? 1 : -1;
+		wheelAccum = 0;
+
+		const step = getSlotStepPx();
+		listboxEl.scrollBy({ top: dir * step, behavior: 'smooth' });
+		requestUpdateActiveFromCenter();
+
+		if (wheelResetTimer) clearTimeout(wheelResetTimer);
+		wheelResetTimer = setTimeout(() => {
+			wheelAccum = 0;
+		}, 120);
+	}
+
+	async function scrollIdToCenter(id: string, behavior: ScrollBehavior = 'smooth') {
+		// Wait for DOM to exist/layout to settle.
 		await tick();
-		const el = listboxEl?.querySelector<HTMLButtonElement>(`button.opt[data-id="${CSS.escape(id)}"]`);
-		el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		const el = getOptionElById(id);
+		el?.scrollIntoView({ block: 'center', behavior });
 	}
 
 	$: {
@@ -93,8 +228,15 @@
 	}
 
 	onMount(() => {
-		// Set initial selection based on what's visually centered (after first paint).
-		void tick().then(requestUpdateActiveFromCenter);
+		// Slot-machine behavior:
+		// - spin the reel (scroll) and always select the option in the center window.
+		// - on mount, center initialId (if provided) without animation.
+		void tick().then(async () => {
+			if (initialId && projects.some((p) => p.id === initialId)) {
+				await scrollIdToCenter(initialId, 'auto');
+			}
+			requestUpdateActiveFromCenter();
+		});
 
 		if (typeof ResizeObserver !== 'undefined') {
 			resizeObs = new ResizeObserver(() => requestUpdateActiveFromCenter());
@@ -125,11 +267,17 @@
 		resizeObs = null;
 		intersectObs?.disconnect();
 		intersectObs = null;
+		if (wheelResetTimer) clearTimeout(wheelResetTimer);
+		wheelResetTimer = null;
 	});
 </script>
 
 <div class="wrap" aria-label="Project selector">
-	<div class="list">
+	<div class="reel" aria-label="Project slot reel">
+		<div class="reel-window" aria-hidden="true"></div>
+		<div class="reel-shade reel-shade--top" aria-hidden="true"></div>
+		<div class="reel-shade reel-shade--bottom" aria-hidden="true"></div>
+
 		<div
 			class="listbox"
 			bind:this={listboxEl}
@@ -138,6 +286,7 @@
 			tabindex="0"
 			onkeydown={onListKeyDown}
 			onscroll={requestUpdateActiveFromCenter}
+			onwheel={onReelWheel}
 		>
 			{#each projects as p (p.id)}
 				<button
@@ -146,15 +295,27 @@
 					data-id={p.id}
 					role="option"
 					aria-selected={p.id === activeId ? 'true' : 'false'}
-					onclick={() => {
-						void scrollIdToCenter(p.id);
-						requestUpdateActiveFromCenter();
-					}}
+					onclick={() => void scrollIdToCenter(p.id)}
 				>
 					<span class="opt-title">{p.name}</span>
-					<span class="opt-sub">{p.blurb}</span>
 				</button>
 			{/each}
+		</div>
+
+		<!-- Always-visible overlay scrollbar (native scrollbars can be auto-hidden on macOS) -->
+		<div
+			class="scrollbar"
+			aria-hidden="true"
+			bind:this={scrollbarEl}
+			onpointerdown={onScrollbarPointerDown}
+			onpointermove={onScrollbarPointerMove}
+			onpointerup={onScrollbarPointerUp}
+			onpointercancel={onScrollbarPointerUp}
+		>
+			<div
+				class="scrollbar-thumb"
+				style={`height:${scrollbarThumbHeight}px; transform: translateY(${scrollbarThumbTop}px);`}
+			></div>
 		</div>
 	</div>
 
@@ -203,6 +364,7 @@
 		gap: 16px;
 		align-items: stretch;
 		--selector-h: 240px;
+		--slot-h: 56px;
 	}
 
 	.desc {
@@ -300,31 +462,60 @@
 	}
 
 	.listbox {
+		position: relative;
 		border-radius: 16px;
 		border: 1px solid var(--card-border);
 		background: rgba(255, 255, 255, 0.22);
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
 		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.10);
-		padding: 8px;
+		padding: calc(var(--selector-h) / 2 - var(--slot-h) / 2) 22px  calc(var(--selector-h) / 2 - var(--slot-h) / 2) 10px;
 		height: var(--selector-h);
-		overflow-y: auto;
-		scroll-snap-type: y proximity;
+		overflow-y: scroll;
+		scroll-snap-type: y mandatory;
+		scroll-snap-stop: always;
+		overscroll-behavior: contain;
+		overscroll-behavior-x: contain;
+		scrollbar-gutter: stable;
+		touch-action: pan-y;
+		-webkit-overflow-scrolling: touch;
 	}
 
-	/* keep scrollbars subtle */
+	/* always-visible, stylized scrollbars */
+	/* Keep the old look, but render it as an overlay so it's always visible on macOS */
 	.listbox {
-		scrollbar-width: thin;
-		scrollbar-color: rgba(11, 18, 32, 0.22) transparent;
+		scrollbar-width: none;
 	}
 	.listbox::-webkit-scrollbar {
-		width: 10px;
+		width: 0px;
+		height: 0px;
 	}
-	.listbox::-webkit-scrollbar-thumb {
-		background: rgba(11, 18, 32, 0.18);
-		border-radius: 999px;
-		border: 3px solid transparent;
-		background-clip: padding-box;
+
+	.scrollbar {
+		position: absolute;
+		right: 10px;
+		top: 5px;
+		bottom: 5px;
+		width: 10px;
+		border-radius: 14px;
+		border: none;
+		background: transparent;
+		box-shadow: none;
+		z-index: 3;
+	}
+
+	.scrollbar-thumb {
+		width: 10px;
+		border-radius: 14px;
+		border: 1px solid rgba(124, 58, 237, 0.30);
+		background: rgba(255, 255, 255, 0.14);
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+			0 10px 24px rgba(11, 18, 32, 0.12);
+	}
+
+	.scrollbar-thumb:hover {
+		background: rgba(255, 255, 255, 0.22);
 	}
 
 	.listbox:focus-visible {
@@ -339,15 +530,18 @@
 		border: 1px solid transparent;
 		background: transparent;
 		border-radius: 12px;
-		padding: 10px 10px;
+		padding: 0 10px;
+		height: var(--slot-h);
 		cursor: pointer;
-		display: grid;
-		gap: 4px;
+		display: flex;
+		align-items: center;
 		scroll-snap-align: center;
 		transition:
 			background 140ms ease,
 			border-color 140ms ease,
-			transform 140ms ease;
+			transform 140ms ease,
+			filter 140ms ease;
+		filter: saturate(0.95);
 	}
 
 	.opt:hover {
@@ -358,18 +552,55 @@
 	.opt[aria-selected='true'] {
 		background: rgba(124, 58, 237, 0.12);
 		border-color: rgba(124, 58, 237, 0.18);
+		transform: scale(1.02);
+		filter: saturate(1.1);
 	}
 
 	.opt-title {
 		font-weight: 800;
 		color: rgba(11, 18, 32, 0.92);
-		font-size: 13px;
+		font-size: 14px;
+		letter-spacing: -0.01em;
 	}
 
-	.opt-sub {
-		color: rgba(11, 18, 32, 0.62);
-		font-size: 12px;
-		line-height: 1.3;
+	.reel {
+		position: relative;
+		height: var(--selector-h);
+	}
+
+	.reel-window {
+		position: absolute;
+		left: 8px;
+		right: 20px;
+		top: 50%;
+		transform: translateY(-50%);
+		height: var(--slot-h);
+		border-radius: 10px;
+		border: 1px solid rgba(124, 58, 237, 0.30);
+		background: rgba(255, 255, 255, 0.14);
+		box-shadow:
+			inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+			0 10px 24px rgba(11, 18, 32, 0.12);
+		pointer-events: none;
+	}
+
+	.reel-shade {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 54px;
+		pointer-events: none;
+		z-index: 2;
+	}
+
+	.reel-shade--top {
+		top: 0;
+		background: linear-gradient(to bottom, rgba(11, 18, 32, 0.14), rgba(11, 18, 32, 0));
+	}
+
+	.reel-shade--bottom {
+		bottom: 0;
+		background: linear-gradient(to top, rgba(11, 18, 32, 0.14), rgba(11, 18, 32, 0));
 	}
 
 	.desc-empty {
