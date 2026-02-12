@@ -139,7 +139,10 @@
 		display: none;
 	}
 
-	@media (max-width: 900px), (max-height: 520px) {
+	/* Only show the "rotate / desktop only" gate on SMALL + narrower-than-square viewports.
+	   This prevents the gate from appearing on square (1/1) and wider aspect ratios. */
+	@media (max-width: 900px) and (max-aspect-ratio: 999/1000),
+		(max-height: 520px) and (max-aspect-ratio: 999/1000) {
 		.desktop-app {
 			display: none; /* no functionality on mobile */
 		}

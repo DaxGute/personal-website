@@ -3,10 +3,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import ContactFanout from '$lib/ContactFanout.svelte';
+	import InfoCard from '$lib/InfoCard.svelte';
+	import ProjectSelect from '$lib/ProjectSelect.svelte';
+	import type { Project } from '$lib/projects';
 
 	type Panel = {
 		id: string;
 		title: string;
+		navTitle?: string;
 		kicker?: string;
 		body: string;
 	};
@@ -105,6 +109,7 @@
 			id: 'greeting',
 			kicker: "Stanford '27",
 			title: 'Daxton Gutekunst',
+			navTitle: 'Title',
 			body: 'Scroll to continue'
 		},
 		{
@@ -123,7 +128,7 @@
 			id: 'projects',
 			kicker: 'Projects',
 			title: 'Projects',
-			body: 'Add featured projects, links, and short impact-focused descriptions here.'
+			body: 'Pick a project to see details (description, highlights, tech, and links).'
 		},
 		{
 			id: 'awards',
@@ -136,6 +141,40 @@
 			kicker: 'Toolbox',
 			title: 'Skills',
 			body: 'Add your skills, technologies, and strengths here.'
+		}
+	];
+
+	const projects: Project[] = [
+		{
+			id: 'project-1',
+			name: 'Project One',
+			blurb: 'One-line summary of what this does.',
+			description:
+				'Longer description goes here. Explain the problem, your approach, and the impact in 2–4 sentences.',
+			highlights: ['Key result or metric', 'What you built / shipped', 'Interesting technical challenge'],
+			tech: ['SvelteKit', 'TypeScript', 'Vite'],
+			links: [
+				{ label: 'GitHub', href: 'https://github.com/' },
+				{ label: 'Live', href: 'https://example.com' }
+			]
+		},
+		{
+			id: 'project-2',
+			name: 'Project Two',
+			blurb: 'Another short summary.',
+			description:
+				'Describe this project. Keep it impact-focused: what changed, what improved, what you learned.',
+			highlights: ['Highlight A', 'Highlight B'],
+			tech: ['Python', 'Pandas', 'Scikit-learn'],
+			links: [{ label: 'Writeup', href: 'https://example.com' }]
+		},
+		{
+			id: 'project-3',
+			name: 'Project Three',
+			blurb: 'Third project summary.',
+			description: 'Description for the third project.',
+			tech: ['React', 'Node.js'],
+			links: [{ label: 'GitHub', href: 'https://github.com/' }]
 		}
 	];
 
@@ -378,40 +417,130 @@
 	});
 </script>
 
-<main
-	class="scroller"
-	bind:this={scroller}
-	aria-label="Horizontally scrolling panels"
->
-	<svg
-		class="ribbon"
-		aria-hidden="true"
-		focusable="false"
-		width={ribbonWidth}
-		height={ribbonHeight}
-		viewBox={`0 0 ${ribbonWidth} ${ribbonHeight}`}
-		style={`width:${ribbonWidth}px;height:${ribbonHeight}px;`}
+<div class="stage">
+	<main
+		class="scroller"
+		bind:this={scroller}
+		aria-label="Horizontally scrolling panels"
 	>
-		<defs>
-			<linearGradient
-				id="ribbonStroke"
-				gradientUnits="userSpaceOnUse"
-				x1="0"
-				y1="0"
-				x2={ribbonWidth}
-				y2="0"
-			>
-				<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="0.9" />
-				<stop offset="45%" stop-color="rgb(34 211 238)" stop-opacity="0.85" />
-				<stop offset="100%" stop-color="rgb(16 185 129)" stop-opacity="0.85" />
-			</linearGradient>
-		</defs>
+		<svg
+			class="ribbon"
+			aria-hidden="true"
+			focusable="false"
+			width={ribbonWidth}
+			height={ribbonHeight}
+			viewBox={`0 0 ${ribbonWidth} ${ribbonHeight}`}
+			style={`width:${ribbonWidth}px;height:${ribbonHeight}px;`}
+		>
+			<defs>
+				<linearGradient
+					id="ribbonStroke"
+					gradientUnits="userSpaceOnUse"
+					x1="0"
+					y1="0"
+					x2={ribbonWidth}
+					y2="0"
+				>
+					<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="0.9" />
+					<stop offset="45%" stop-color="rgb(34 211 238)" stop-opacity="0.85" />
+					<stop offset="100%" stop-color="rgb(16 185 129)" stop-opacity="0.85" />
+				</linearGradient>
+			</defs>
 
-		<!-- faint full ribbon (always visible) -->
-		<path class="ribbon-base" d={ribbonD} />
-		<!-- animated ribbon "draw" layer -->
-		<path class="ribbon-anim" bind:this={ribbonPathAnimated} d={ribbonD} />
-	</svg>
+			<!-- faint full ribbon (always visible) -->
+			<path class="ribbon-base" d={ribbonD} />
+			<!-- animated ribbon "draw" layer -->
+			<path class="ribbon-anim" bind:this={ribbonPathAnimated} d={ribbonD} />
+		</svg>
+
+		{#each panels as panel}
+			<section
+				id={panel.id}
+				class="panel"
+				aria-label={panel.title}
+				style={
+					panel.id === 'experiences'
+						? `--exp-t:${experiencesT};`
+						: panel.id === 'education'
+							? `--edu-t:${educationT};`
+							: undefined
+				}
+			>
+				{#if panel.id === 'greeting'}
+					<div class="greeting">
+						{#if panel.kicker}
+							<p class="kicker">{panel.kicker}</p>
+						{/if}
+						<h1 class="title">{panel.title}</h1>
+						<p class="body">
+							{panel.body}<span class="jump-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+						</p>
+					</div>
+				{:else}
+					<div class="panel-inner">
+						{#if panel.id === 'projects'}
+							<div class="projects-select projects-select--top">
+								<ProjectSelect projects={projects} initialId={projects[0]?.id ?? null} />
+							</div>
+						{/if}
+
+						{#if panel.kicker}
+							<p class="kicker">{panel.kicker}</p>
+						{/if}
+						<h1 class="title">{panel.title}</h1>
+
+						<p class="body">{panel.body}</p>
+
+						{#if panel.id === 'experiences'}
+							<ul class="experience-list" aria-label="Jobs and internships list">
+								{#each experiences as exp}
+									<li class="experience-item">
+										<InfoCard
+											variant="experience"
+											heading={exp.company}
+											subheading={`${exp.title} · ${exp.location}`}
+											dates={abbreviateMonths(exp.dates)}
+											items={exp.highlights}
+										/>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+
+						{#if panel.id === 'education'}
+							<div
+								class="education-carousel"
+								class:is-swapped={educationSwap}
+								aria-label="Education carousel"
+							>
+								{#each educations.slice(0, 2) as edu (edu.school)}
+									<article class="education-card">
+										<InfoCard
+											variant="education"
+											heading={edu.school}
+											subheading={`${edu.degree} · ${edu.location}`}
+											dates={abbreviateMonths(edu.dates)}
+											items={edu.details}
+										/>
+									</article>
+								{/each}
+							</div>
+						{/if}
+
+					{#if panel.id !== 'experiences' && panel.id !== 'education' && panel.id !== 'projects'}
+							<div class="card">
+								<p class="card-title">Edit me:</p>
+								<p class="card-body">
+									Open <code>src/routes/+page.svelte</code> and replace the placeholder copy with your real
+									content.
+								</p>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</section>
+		{/each}
+	</main>
 
 	<header class="chrome">
 		<ContactFanout {linkedinHref} {githubHref} {emailHref} />
@@ -422,7 +551,7 @@
 			<button
 				type="button"
 				class="dot-btn"
-				aria-label={`Go to ${p.title}`}
+				aria-label={`Go to ${p.navTitle ?? p.title}`}
 				aria-current={activeId === p.id ? 'true' : undefined}
 				onclick={() => scrollToPanel(p.id)}
 			>
@@ -431,104 +560,23 @@
 					style={`--dist:${Math.abs(progressIndex - i)};`}
 					aria-hidden="true"
 				></span>
-				<span class="dot-label" aria-hidden="true">{p.title}</span>
+				<span class="dot-label" aria-hidden="true">{p.navTitle ?? p.title}</span>
 			</button>
 		{/each}
 	</nav>
-
-	{#each panels as panel}
-		<section
-			id={panel.id}
-			class="panel"
-			aria-label={panel.title}
-			style={
-				panel.id === 'experiences'
-					? `--exp-t:${experiencesT};`
-					: panel.id === 'education'
-						? `--edu-t:${educationT};`
-						: undefined
-			}
-		>
-			{#if panel.id === 'greeting'}
-				<div class="greeting">
-					{#if panel.kicker}
-						<p class="kicker">{panel.kicker}</p>
-					{/if}
-					<h1 class="title">{panel.title}</h1>
-					<p class="body">
-						{panel.body}<span class="jump-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
-					</p>
-				</div>
-			{:else}
-				<div class="panel-inner">
-					{#if panel.kicker}
-						<p class="kicker">{panel.kicker}</p>
-					{/if}
-					<h1 class="title">{panel.title}</h1>
-					<p class="body">{panel.body}</p>
-
-					{#if panel.id === 'experiences'}
-						<ul class="experience-list" aria-label="Jobs and internships list">
-							{#each experiences as exp}
-								<li class="experience-item">
-									<div class="experience-header">
-										<div class="experience-meta">
-											<p class="experience-company">{exp.company}</p>
-											<p class="experience-sub">{exp.title} · {exp.location}</p>
-										</div>
-										<p class="experience-dates">{abbreviateMonths(exp.dates)}</p>
-									</div>
-									<ul class="experience-highlights">
-										{#each exp.highlights as h}
-											<li>{h}</li>
-										{/each}
-									</ul>
-								</li>
-							{/each}
-						</ul>
-					{/if}
-
-					{#if panel.id === 'education'}
-						<div
-							class="education-carousel"
-							class:is-swapped={educationSwap}
-							aria-label="Education carousel"
-						>
-							{#each educations.slice(0, 2) as edu (edu.school)}
-								<article class="education-card">
-									<div class="experience-header">
-										<div class="experience-meta">
-											<p class="experience-company">{edu.school}</p>
-											<p class="experience-sub">{edu.degree} · {edu.location}</p>
-										</div>
-										<p class="experience-dates">{abbreviateMonths(edu.dates)}</p>
-									</div>
-									<div class="education-details">
-										{#each edu.details as d}
-											<p>{d}</p>
-										{/each}
-									</div>
-								</article>
-							{/each}
-						</div>
-					{/if}
-
-					{#if panel.id !== 'experiences' && panel.id !== 'education'}
-						<div class="card">
-							<p class="card-title">Edit me:</p>
-							<p class="card-body">
-								Open <code>src/routes/+page.svelte</code> and replace the placeholder copy with your real
-								content.
-							</p>
-						</div>
-					{/if}
-				</div>
-			{/if}
-		</section>
-	{/each}
-</main>
+</div>
 
 <style>
+	.stage {
+		position: relative;
+		height: 100vh;
+		width: 100vw;
+		overflow: hidden;
+		/* Shared sizing vars for the chrome + ContactFanout + panel padding */
+		--menu-pad: 8px;
+		--menu-control-h: 34px;
+	}
+
 	.scroller {
 		position: relative;
 		height: 100vh;
@@ -536,9 +584,6 @@
 		overflow-x: auto;
 		overflow-y: hidden;
 		display: flex;
-		/* Shared sizing vars for the fixed chrome + ContactFanout */
-		--menu-pad: 8px;
-		--menu-control-h: 34px;
 		background:
 			radial-gradient(1000px 520px at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
 			radial-gradient(900px 500px at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
@@ -586,7 +631,7 @@
 	}
 
 	.chrome {
-		position: fixed;
+		position: absolute;
 		inset: 0 0 auto 0;
 		z-index: 10;
 		display: flex;
@@ -598,7 +643,7 @@
 	}
 
 	.dots {
-		position: fixed;
+		position: absolute;
 		left: 50%;
 		bottom: 15vh; /* ~15% up from bottom */
 		transform: translateX(-50%);
@@ -676,6 +721,12 @@
 	/* Move the Experiences box up a bit (slightly less top clearance than other panels). */
 	#experiences.panel {
 		padding-top: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 70px);
+	}
+
+	/* Projects: move the whole glass box up via a bottom offset (instead of changing slide padding). */
+	#projects.panel .panel-inner {
+		--projects-lift: 130px;
+		bottom: var(--projects-lift);
 	}
 
 	.panel-inner {
@@ -950,83 +1001,6 @@
 		}
 	}
 
-	.experience-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 12px;
-		margin-bottom: 8px;
-	}
-
-	.experience-meta {
-		display: grid;
-		gap: 2px;
-		min-width: 0;
-	}
-
-	.experience-company {
-		margin: 0;
-		font-weight: 700;
-	}
-
-	.experience-role {
-		margin: 0;
-		font-weight: 700;
-		min-width: 0;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.experience-sub {
-		margin: 0;
-		color: var(--muted);
-		font-size: 13px;
-		line-height: 1.2;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.experience-dates {
-		margin: 0;
-		color: var(--muted);
-		font-size: 13px;
-		white-space: nowrap;
-	}
-
-	@media (max-width: 520px) {
-		.experience-header {
-			flex-direction: column;
-			gap: 6px;
-			align-items: flex-start;
-		}
-	}
-
-	.experience-highlights {
-		margin: 0;
-		padding-left: 0;
-		color: var(--muted);
-		font-size: 12px;
-		line-height: 1.35;
-		list-style: none;
-	}
-
-	.experience-highlights li {
-		margin: 0;
-	}
-
-	.education-details {
-		display: grid;
-		gap: 6px;
-		color: var(--muted);
-		line-height: 1.6;
-	}
-
-	.education-details p {
-		margin: 0;
-	}
-
 	.greeting {
 		width: min(860px, 100%);
 		padding: 6px;
@@ -1073,6 +1047,14 @@
 		margin: 0;
 		color: var(--muted);
 		line-height: 1.6;
+	}
+
+	.projects-select {
+		margin: 12px 0 14px;
+	}
+
+	.projects-select--top {
+		margin: 0 0 16px;
 	}
 
 	code {
