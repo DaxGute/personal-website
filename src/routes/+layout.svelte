@@ -5,6 +5,7 @@
 	let { children } = $props();
 
 	const sourceCodeHref = 'https://github.com/DaxGute/personal-website';
+	export const prerender = true;
 </script>
 
 <svelte:head>
