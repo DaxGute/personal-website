@@ -65,7 +65,7 @@
 			company: 'Benevolent AI',
 			location: 'London, England',
 			title: 'Research Intern',
-			dates: 'June 2025 - Present',
+			dates: 'June 2025 - Aug 2025',
 			highlights: [
 				'Working on AI and biotech research, analyzing product-fit within the evolving biotech landscape and potential areas for innovation.'
 			]
@@ -92,21 +92,21 @@
 
 	const educations: Education[] = [
 		{
-			school: 'The Bishops School',
-			location: 'San Diego CA',
-			degree: 'HS Diploma',
-			dates: 'August 2017 - June 2023',
-			details: [
-				'Graduated Cum Laude; Coursework in advanced mathematics, computer science, and economics. [GPA: 4.82]'
-			]
-		},
-		{
 			school: 'Stanford University',
 			location: 'Stanford CA',
 			degree: 'Data Science [BS]',
 			dates: 'September 2023 - Present',
 			details: [
 				'Coursework in probability, statistics, computer science, and data-driven decision making. Focused on applied machine learning and data analysis.'
+			]
+		},
+		{
+			school: 'The Bishops School',
+			location: 'San Diego CA',
+			degree: 'HS Diploma',
+			dates: 'August 2017 - June 2023',
+			details: [
+				'Graduated Cum Laude; Coursework in advanced mathematics, computer science, and economics. [GPA: 4.82]'
 			]
 		}
 	];
@@ -198,7 +198,14 @@
 			name: 'ConfCap',
 			blurb: 'Designed and Built a Conference Bounty App from Ground Up',
 			description:
-				'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations.'
+				'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations. ⚠️ WIP ⚠️'
+		},
+		{
+			id: 'project-3',
+			name: 'Rise South City',
+			blurb: 'Redesigning the AQI Data Pipeline for SSF',
+			description:
+				'As part of an ongoing partnership with Rise South City, I have recently built a ground-up pipeline of gathering air quality information from the San Francisco PurpleAir sensors. ⚠️ WIP ⚠️'
 		}
 	];
 
