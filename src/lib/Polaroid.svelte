@@ -5,8 +5,6 @@
 	export let alt = '';
 	export let caption: string;
 	export let loading: 'lazy' | 'eager' = 'lazy';
-	// IntersectionObserver tuning (used for reveal animation timing).
-	// "Earlier" reveal = less-negative root margins (wider in-view band) and/or lower threshold.
 	export let revealRootMargin = '0px -35% 0px -35%';
 	export let revealThreshold = 0.01;
 
@@ -17,6 +15,40 @@
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	}
+
+	// ---- 3D tilt hover ----
+	const MAX_TILT_DEG = 9; // tweak 6–12 for taste
+	const HOVER_SCALE = 1.035; // subtle zoom
+
+	function setTilt(e: PointerEvent) {
+		if (!rootEl) return;
+		if (prefersReducedMotion()) return;
+
+		const r = rootEl.getBoundingClientRect();
+		const x = (e.clientX - r.left) / r.width;
+		const y = (e.clientY - r.top) / r.height;
+
+		const dx = x - 0.5;
+		const dy = y - 0.5;
+
+		const rotX = (dy * 2 * MAX_TILT_DEG).toFixed(3);
+		const rotY = (-dx * 2 * MAX_TILT_DEG).toFixed(3);
+
+		rootEl.style.setProperty('--rx', `${rotX}deg`);
+		rootEl.style.setProperty('--ry', `${rotY}deg`);
+		rootEl.style.setProperty('--scale', `${HOVER_SCALE}`);
+		rootEl.style.setProperty('--hover', '1');
+	}
+
+	function resetTilt() {
+		if (!rootEl) return;
+
+		rootEl.style.setProperty('--rx', `0deg`);
+		rootEl.style.setProperty('--ry', `0deg`);
+		rootEl.style.setProperty('--scale', `1`);
+		rootEl.style.setProperty('--hover', '0');
+	}
+	// ------------------------
 
 	onMount(() => {
 		if (revealed) return;
@@ -39,8 +71,6 @@
 				}
 			},
 			{
-				// The page scrolls horizontally; delay reveal until the item has slid far enough into view.
-				// Negative LEFT/RIGHT margins create a "center band" (here: middle ~30% of viewport width).
 				rootMargin: revealRootMargin,
 				threshold: revealThreshold
 			}
@@ -55,7 +85,14 @@
 	});
 </script>
 
-<figure class="polaroid" class:is-revealed={revealed} bind:this={rootEl}>
+<figure
+	class="polaroid"
+	class:is-revealed={revealed}
+	bind:this={rootEl}
+	on:pointerenter={setTilt}
+	on:pointermove={setTilt}
+	on:pointerleave={resetTilt}
+>
 	<div class="photo">
 		{#if src}
 			<img src={src} {alt} {loading} decoding="async" />
@@ -69,6 +106,8 @@
 
 <style>
 	.polaroid {
+		position: relative;
+		z-index: 3;
 		margin: 0;
 		height: 100%;
 		display: flex;
@@ -80,27 +119,47 @@
 		background: rgba(255, 255, 255, 0.8);
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
-		transform: translateZ(0);
+		box-shadow: 0 0px 30px rgba(11, 18, 32, 0.12);
+		transform:
+			perspective(900px)
+			rotateX(var(--rx, 0deg))
+			rotateY(var(--ry, 0deg))
+			scale(var(--scale, 1));
+
+		transform-style: preserve-3d;
+
 		transition:
-			transform 200ms ease,
-			box-shadow 200ms ease;
+			transform 140ms ease,
+			box-shadow 180ms ease;
+
+		will-change: transform;
+		isolation: isolate;
 	}
 
 	.polaroid:hover {
-		transform: translateY(-4px);
-		box-shadow: 0 22px 65px rgba(11, 18, 32, 0.14);
+		z-index: 2000;
+		box-shadow: 0 0px 30px rgba(11, 18, 32, 0.3);
 	}
 
 	.photo {
+		transform: translateZ(calc(10px * var(--hover, 0)));
+		transition: transform 140ms ease;
 		position: relative;
 		width: 100%;
-		border-radius: 10px;
+		border-radius: 12px;
 		overflow: hidden;
 		border: 1px solid rgba(11, 18, 32, 0.1);
-		background: rgba(255, 255, 255, 0.35);
+		background: rgba(255, 255, 255, 0.4);
 		aspect-ratio: 1 / 1;
 	}
+
+	@media (prefers-reduced-motion: reduce) {
+	.polaroid,
+	.photo {
+		transition: none;
+		transform: none;
+	}
+}
 
 	.photo img {
 		display: block;
