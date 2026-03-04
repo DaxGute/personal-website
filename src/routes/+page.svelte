@@ -1103,7 +1103,6 @@
 	#interests.panel .title,
 	#interests.panel .body {
 		position: relative;
-		z-index: 5;
 	}
 
 	.interest-ski {
