@@ -237,9 +237,7 @@
 	let panelOffsets: number[] = [];
 	let progressIndex = 0;
 	let experiencesT = 0; // 0..1 progress across the Experiences panel
-	let educationT = 0; // 0..1 progress for Education card rotation (enter -> exit visibility)
-	let educationFadeT = 0; // 0..1 progress for Education fade (kept early in the slide)
-	let educationSwap = false;
+	let educationT = 0; // 0..1 progress for Education card pull-apart (enter -> exit visibility)
 	let panelW = 0;
 
 	// Decorative "ribbon" line that loops/winds through all panels.
@@ -549,44 +547,29 @@
 				// The panel is clipped (see CSS) so the cards won't visually bleed into the previous slide.
 				const shiftPx = (panelW || denom || window.innerWidth) * 0.78;
 				const start = expStart - shiftPx;
-				const end = expEnd - shiftPx;
-				experiencesT = end === start ? 1 : clamp01((x - start) / (end - start));
+				// Let the animation "finish" a bit later than the panel boundary.
+				const tailPx = (panelW || denom || window.innerWidth) * 0.5;
+				const end = expEnd - shiftPx + tailPx;
+				const linearT = end === start ? 1 : clamp01((x - start) / (end - start));
+				experiencesT = easeOutCubic(linearT);
 			}
 
-			// Education carousel: swap early in the slide scroll distance.
+			// Education: stacked -> pull apart (Stanford left, Bishops right).
 			const eduIdx = panels.findIndex((p) => p.id === 'education');
 			if (eduIdx !== -1 && panelOffsets[eduIdx] != null) {
 				const eduStart = panelOffsets[eduIdx];
-				const eduEnd = panelOffsets[Math.min(eduIdx + 1, panelOffsets.length - 1)] ?? eduStart;
 
-				// Drive rotation for the entire time the Education panel is visible:
+				// Drive the animation for the entire time the Education panel is visible:
 				// from when its left edge first enters the viewport (x = eduStart - panelW)
 				// until its right edge leaves the viewport (x = eduStart + panelW).
-				//
-				// That gives a slower, "rotates with scroll the whole time it's on-screen" feel.
 				const w = panelW || window.innerWidth;
 				const visibleStart = eduStart - w;
 				const visibleEnd = eduStart + w;
 				const span = visibleEnd - visibleStart;
 				const eduLinearT = span <= 0 ? 0 : clamp01((x - visibleStart) / span);
 				educationT = eduLinearT;
-
-				// Keep fade + stacking swap on the previous (early) timing so the cards
-				// don't stay semi-transparent for the whole panel duration.
-				const denom = eduEnd - eduStart;
-				// Swap timing (stacking order) stays the same as before.
-				const swapDistance = denom * 0.18;
-				const swapLinearT = swapDistance <= 0 ? 1 : clamp01((x - eduStart) / swapDistance);
-				educationSwap = swapLinearT > 0.22;
-
-				// Fade earlier than the swap by using a shorter distance.
-				const fadeDistance = denom * 0.11;
-				const fadeLinearT = fadeDistance <= 0 ? 1 : clamp01((x - eduStart) / fadeDistance);
-				educationFadeT = easeInOutPow(fadeLinearT, 5);
 			} else {
 				educationT = 0;
-				educationFadeT = 0;
-				educationSwap = false;
 			}
 
 			// Keep the ribbon visible across all slides.
@@ -689,7 +672,7 @@
 					panel.id === 'experiences'
 						? `--exp-t:${experiencesT};`
 						: panel.id === 'education'
-							? `--edu-t:${educationT};--edu-fade-t:${educationFadeT};`
+							? `--edu-t:${educationT};`
 							: undefined
 				}
 			>
@@ -741,7 +724,6 @@
 						{#if panel.id === 'education'}
 							<div
 								class="education-carousel"
-								class:is-swapped={educationSwap}
 								aria-label="Education carousel"
 							>
 								{#each educations.slice(0, 2) as edu (edu.school)}
@@ -1247,97 +1229,73 @@
 		gap: 16px;
 	}
 
-	/* Education: 2-card diagonal carousel */
+	/* Education: stacked cards that pull apart on scroll */
 	.education-carousel {
 		position: relative;
 		isolation: isolate;
 		/* Keep cards square while staying responsive */
 		--edu-card-size: clamp(260px, 46vw, 420px);
-		width: min(var(--edu-card-size), 100%);
-		aspect-ratio: 1 / 1;
+		/* How far the cards separate at t=1 */
+		--edu-split: clamp(200px, 24vw, 420px);
+		/* Base offset so the stacked start sits further left */
+		--edu-base-x: clamp(-260px, -12vw, -120px);
+		/* Small vertical separation while stacked */
+		--edu-stack-sep: 16px;
+		width: min(980px, 100%);
+		height: var(--edu-card-size);
 		margin: 18px auto 0;
 		top: -100px;
 		left: 70px;
-		perspective: 900px;
 		/* 0..1 from scroll (set on #education.panel) */
 		--t: var(--edu-t, 0);
-		/* independent fade progress (kept early) */
-		--fade: var(--edu-fade-t, 0);
 	}
 
 	.education-card {
 		position: absolute;
-		inset: 0;
+		top: 0;
+		left: 50%;
+		width: var(--edu-card-size);
+		height: var(--edu-card-size);
 		margin: 0;
-		--x-nudge: 0px;
-		/* inert wrapper: keep it out of compositing */
-		transform: none;
-		opacity: 1;
-		will-change: auto;
+		transform: translate(-50%, 0);
+		will-change: transform;
 	}
 
-	/* Nudge Stanford card further right */
+	/* Stanford starts visually on top */
 	.education-card.is-stanford {
-		--x-nudge: 80px;
-	}
-
-	/* card 1: front -> back as --t goes 0 -> 1 */
-	.education-card:nth-child(1) {
 		z-index: 2;
+		transform: translate(-50%, 0)
+			/* both move right; Stanford moves farther */
+			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 2.5)))
+			translateY(calc(-1 * var(--edu-stack-sep) * (1 - var(--t))));
 	}
 
-	/* card 2: back -> front as --t goes 0 -> 1 */
-	.education-card:nth-child(2) {
+	/* Bishops starts underneath, then separates right */
+	.education-card:not(.is-stanford) {
 		z-index: 1;
-	}
-
-	/* Apply carousel transforms to the blur element itself (InfoCard root) */
-	.education-card:nth-child(1) :global(.info-card) {
-		transform: translate(calc((34px * var(--t)) + var(--x-nudge)), calc(22px * var(--t)))
-			rotate(calc(-14deg + (40deg * var(--t))))
-			scale(calc(1 - (0.03 * var(--t))))
-			translateZ(0);
-		opacity: calc(1 - (0.65 * var(--fade)));
-		will-change: transform, opacity;
-		transform-origin: 40% 25%;
-		transform-style: preserve-3d;
-	}
-
-	.education-card:nth-child(2) :global(.info-card) {
-		transform: translate(calc((34px * (1 - var(--t))) + var(--x-nudge)), calc(22px * (1 - var(--t))))
-			rotate(calc(16deg - (40deg * var(--t))))
-			scale(calc(0.97 + (0.03 * var(--t))))
-			translateZ(0);
-		opacity: calc(0.35 + (0.65 * var(--fade)));
-		will-change: transform, opacity;
-		transform-origin: 40% 25%;
-		transform-style: preserve-3d;
-	}
-
-	/* hard swap stacking so the “front” card is actually on top */
-	.education-carousel.is-swapped .education-card:nth-child(1) {
-		z-index: 1;
-	}
-	.education-carousel.is-swapped .education-card:nth-child(2) {
-		z-index: 2;
+		transform: translate(-50%, 0)
+			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 0.5)))
+			translateY(calc(var(--edu-stack-sep) * (1 - var(--t))));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.education-carousel {
-			/* In reduced motion we show both cards at once; don't constrain the container. */
-			width: min(560px, 100%);
-			aspect-ratio: auto;
-			perspective: none;
+			width: min(980px, 100%);
+			height: auto;
 			display: grid;
-			gap: 16px;
-			--t: 0;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 18px;
+			top: 0;
+			left: 0;
 		}
 
 		.education-card {
 			position: relative;
+			left: auto;
+			width: 100%;
 			aspect-ratio: 1 / 1;
 			transform: none;
-			opacity: 1;
+			height: auto;
 		}
 	}
 
@@ -1352,9 +1310,8 @@
 
 	.experience-item {
 		/* Scroll-driven "fan-in" (0..1 progress across the slide) */
-		/* Per-card offset lets one card animate slightly earlier/later. */
-		/* Multiply shift by --exp-t so nothing protrudes before the slide starts animating. */
-		--t: clamp(0, calc(var(--exp-t, 1) + (var(--t-shift, 0) * var(--exp-t, 1))), 1);
+		/* All cards use the exact same start/end scroll values via --exp-t. */
+		--t: var(--exp-t, 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
 		width: 100%;
@@ -1398,8 +1355,6 @@
 
 		/* Castle Creek — middle */
 		#experiences .experience-item:nth-child(2) {
-			/* Castle Creek should start animating slightly earlier than the others */
-			--t-shift: 0.18;
 			/* Keep this non-negative so it can't visually bleed into the previous slide */
 			--spread-x: 0px;
 			--spread-y: 120px;

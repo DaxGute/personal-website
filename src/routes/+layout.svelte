@@ -146,7 +146,7 @@
 	*/
 	:global(.hover-polaroid-scale) {
 		transform: scale(var(--scale, 1));
-		transition: transform 0.5s ease-in-out;
+		transition: transform 0.2s ease-in;
 		will-change: transform;
 	}
 
