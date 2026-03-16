@@ -73,10 +73,19 @@
 					<div class="experience-header">
 						<div class="experience-meta">
 							<p class="experience-company">{heading}</p>
-							<p class="experience-sub" class:wrap-sub={variant === 'award'}>{subheading}</p>
+							<p class="experience-sub" class:wrap-sub={variant !== 'experience'}>{subheading}</p>
 						</div>
-						{#if dates}
-							<p class="experience-dates">{dates}</p>
+						{#if dates || (variant === 'education' && logoSrc)}
+							<div class="experience-side">
+								{#if dates}
+									<p class="experience-dates">{dates}</p>
+								{/if}
+								{#if variant === 'education' && logoSrc}
+									<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+										<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+									</div>
+								{/if}
+							</div>
 						{/if}
 					</div>
 
@@ -178,6 +187,14 @@
 		margin-bottom: 8px;
 	}
 
+	.experience-side {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 8px;
+		flex: 0 0 auto;
+	}
+
 	.experience-meta {
 		display: grid;
 		gap: 2px;
@@ -203,6 +220,7 @@
 		white-space: normal;
 		overflow: visible;
 		text-overflow: unset;
+		overflow-wrap: anywhere;
 	}
 
 	.experience-dates {
@@ -212,11 +230,33 @@
 		white-space: nowrap;
 	}
 
+	.education-logo {
+		width: clamp(28px, 3.2vw, 44px);
+		height: clamp(28px, 3.2vw, 44px);
+		display: grid;
+		place-items: center;
+		padding: 2px;
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.35);
+		border: 1px solid rgba(11, 18, 32, 0.08);
+	}
+
+	.education-logo img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+
 	@media (max-width: 520px) {
 		.experience-header {
 			flex-direction: column;
 			gap: 6px;
 			align-items: flex-start;
+		}
+
+		.experience-side {
+			align-items: flex-start;
+			gap: 6px;
 		}
 	}
 
@@ -249,6 +289,7 @@
 		gap: 6px;
 		color: var(--muted);
 		line-height: 1.6;
+		overflow-wrap: anywhere;
 	}
 
 	.education-details p {

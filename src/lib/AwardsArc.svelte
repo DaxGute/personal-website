@@ -13,40 +13,158 @@
 	export let body: string;
 	export let awards: Award[] = [];
 
-	// Tuning knobs
-	// Overall orbit speed (keep this stable).
-	export let durationMs = 26000;
-	// Wider visible window => multiple awards can be "in the air" at the same time.
-	export let windowStart = 0.1; // visible arc window start (0..1)
-	export let windowEnd = 0.55; // visible arc window end (0..1)
-	// Repeat the awards list to tighten pacing while keeping spacing constant (no end-of-loop pause).
-	// Example: 2 => a 4-award list becomes 8 orbiting cards (same order, repeats seamlessly).
-	export let repeatFactor = 2;
-	// Higher = more slowdown at the tip (u≈0.5). Lower = faster at the top of the arc.
+	// Repeat the awards list to tighten pacing while keeping spacing constant.
+	export let repeatFactor = 3;
+
+	// Autoscroll (disabled by default).
+	export let autoScroll = false;
+	// If enabled, autoscroll speed (one full cycle duration).
+	export let durationMs = 9000;
+
+	// Visible arc window (0..1).
+	// Smaller window => more “gap/delay” between awards.
+	export let windowStart = 0.1;
+	export let windowEnd = 0.7;
+
+	// Higher = more slowdown at the tip (u≈0.5).
 	export let slowAtTip = 0.08; // 0..1 (must be < 1)
-	export let peakY = 0.0; // as fraction of container height (negative => above top)
-	export let baseY = 1.4; // as fraction of container height
-	// Make the card exist slightly offscreen while visible (so it "appears before it enters")
-	export let startX = -0.18; // as fraction of container width
-	export let endX = 1.18; // as fraction of container width
+
+	// Arc geometry in container coordinates.
+	// More pronounced arc: higher peak + lower base.
+	// Start well above the page, then arc down through the orbit.
+	export let peakY = -0.75; // fraction of height (negative => above top)
+	// Center the active award at mid-screen.
+	export let centerY = 0.5; // fraction of height
+	// Controls how quickly the arc falls (higher => stays high longer, then drops).
+	export let fallExp = 1.6;
+	// Narrower horizontal travel => awards sit closer together.
+	export let startX = -0.1; // fraction of width
+	export let endX = 1.1; // fraction of width
+
+	// Manual control (only while hovered).
+	export let wheelPhasePerPx = 0.00045; // cycles per px of wheel delta
 
 	let orbitEl: HTMLElement | null = null;
 	let awardEls: (HTMLElement | null)[] = [];
 	let raf: number | null = null;
+	let lastNow = 0;
+	let phase = 0; // 0..1
+	let phaseAnim: { start: number; delta: number; startTime: number; durationMs: number } | null = null;
+	let snapTimer: number | null = null;
+	let didInitialSnap = false;
+	let wheelLockUntil = 0;
+
+	let hoverCapable = false;
+	let allowManual = false; // true only while hovered (desktop)
+
+	let dragging = false;
+	let dragStartX = 0;
+	let dragStartPhase = 0;
 
 	$: safeRepeatFactor = Math.max(1, Math.min(6, Math.floor(repeatFactor || 1)));
-	$: displayAwards = Array.from(
-		{ length: awards.length * safeRepeatFactor },
-		(_, i) => awards[i % awards.length]!
-	);
+	$: displayAwards =
+		awards.length === 0
+			? []
+			: Array.from({ length: awards.length * safeRepeatFactor }, (_, i) => awards[i % awards.length]!);
 
 	function clamp(n: number, min: number, max: number) {
 		return Math.max(min, Math.min(max, n));
 	}
 
-	function smoothstep(edge0: number, edge1: number, x: number) {
-		const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
-		return t * t * (3 - 2 * t);
+	function clamp01(n: number) {
+		return Math.max(0, Math.min(1, n));
+	}
+
+	function wrap01(n: number) {
+		const x = n % 1;
+		return x < 0 ? x + 1 : x;
+	}
+
+	function easeInOutCubic(t: number) {
+		const x = clamp01(t);
+		return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+	}
+
+	function shortestDelta(from: number, to: number) {
+		// returns delta in [-0.5, 0.5)
+		// NOTE: JS % can be negative, so we wrap explicitly.
+		let d = wrap01(to - from); // [0,1)
+		if (d >= 0.5) d -= 1; // [-0.5,0.5)
+		return d;
+	}
+
+	function tipPhase() {
+		return wrap01(windowStart + 0.5 * (windowEnd - windowStart));
+	}
+
+	function displayCount() {
+		return Math.max(1, awards.length * safeRepeatFactor);
+	}
+
+	function closestIndexToTip() {
+		const n = displayCount();
+		if (n <= 0) return 0;
+		const tip = tipPhase();
+		let best = 0;
+		let bestDist = Infinity;
+		for (let j = 0; j < n; j++) {
+			const pj = wrap01(phase + j / n);
+			const d = shortestDelta(pj, tip);
+			const ad = Math.abs(d);
+			if (ad < bestDist) {
+				bestDist = ad;
+				best = j;
+			}
+		}
+		return best;
+	}
+
+	function animatePhaseTo(target: number, durationMs = 560) {
+		phaseAnim = {
+			start: phase,
+			delta: shortestDelta(phase, wrap01(target)),
+			startTime: typeof window !== 'undefined' ? performance.now() : Date.now(),
+			durationMs
+		};
+	}
+
+	function animateToCenteredIndex(idx: number, durationMs = 560) {
+		const n = displayCount();
+		if (n <= 0) return;
+		const tip = tipPhase();
+		const targetPhase = wrap01(tip - idx / n);
+		animatePhaseTo(targetPhase, durationMs);
+	}
+
+	function stepCentered(steps: -1 | 1, durationMs = 560) {
+		const n = displayCount();
+		if (n <= 0) return;
+		const cur = closestIndexToTip();
+		const next = (cur + steps + n) % n;
+		animateToCenteredIndex(next, durationMs);
+	}
+
+	function snapToNearest(durationMs = 420) {
+		const n = displayCount();
+		if (n <= 0) return;
+		animateToCenteredIndex(closestIndexToTip(), durationMs);
+	}
+
+	function snapImmediatelyToNearest() {
+		const n = displayCount();
+		if (n <= 0) return;
+		const idx = closestIndexToTip();
+		const tip = tipPhase();
+		phaseAnim = null;
+		phase = wrap01(tip - idx / n);
+	}
+
+	function scheduleSnap(delayMs = 120, durationMs = 420) {
+		if (snapTimer != null) window.clearTimeout(snapTimer);
+		snapTimer = window.setTimeout(() => {
+			snapTimer = null;
+			snapToNearest(durationMs);
+		}, delayMs);
 	}
 
 	function shouldAnimate() {
@@ -72,55 +190,59 @@
 			const n = els.length;
 			if (n === 0) return;
 
+			const dt = lastNow > 0 ? Math.max(8, now - lastNow) : 16;
+			lastNow = now;
+
+			if (phaseAnim) {
+				const t = clamp01((now - phaseAnim.startTime) / phaseAnim.durationMs);
+				phase = wrap01(phaseAnim.start + phaseAnim.delta * easeInOutCubic(t));
+				if (t >= 1) phaseAnim = null;
+			}
+
+			// Stop on hover (and while dragging).
+			const paused = (hoverCapable && allowManual) || dragging;
+			if (autoScroll && !paused) {
+				const dur = Math.max(3000, durationMs || 9000);
+				phase = (phase + dt / dur) % 1;
+			}
+
 			const rect = orbitEl.getBoundingClientRect();
 			const w = rect.width;
 			const h = rect.height;
 
-			// Arc geometry (true parabola) in container coordinates.
 			const x0 = startX * w;
 			const x1 = endX * w;
-			const yBase = baseY * h;
 			const yPeak = peakY * h;
-
-			const tCycle = ((now % durationMs) / durationMs) % 1; // 0..1
+			// Choose yBase so that at p=0.5 the award sits at centerY * h.
+			const k = Math.pow(0.5, Math.max(0.3, fallExp));
+			const yCenter = clamp(centerY, 0.2, 0.8) * h;
+			const yBase = yPeak + (yCenter - yPeak) / k;
 
 			for (let i = 0; i < n; i++) {
 				const el = els[i];
-				// Even spacing across the whole cycle => seamless restart after the last card.
-				const phase = (tCycle + i / n) % 1;
-
-				// Hide outside the arc window; only appear "when it's their time".
+				const phaseI = (phase + i / n) % 1;
 				const surface = el.querySelector('.award-card-surface') as HTMLElement | null;
 
-				if (phase < windowStart || phase > windowEnd) {
+				if (phaseI < windowStart || phaseI > windowEnd) {
 					el.style.visibility = 'hidden';
 					el.style.pointerEvents = 'none';
 					if (surface) surface.style.opacity = '0';
 					continue;
 				}
 
-				// Normalize time within the visible window.
-				const u = (phase - windowStart) / (windowEnd - windowStart); // 0..1
-
-				// Time-warp so speed is slowest at the tip (u≈0.5) and faster near edges.
-				// p(u) = u + a/(2π) * sin(2πu) with a in (0,1). Derivative: 1 + a*cos(2πu)
-				// => minimum at u=0.5 (cos π = -1).
+				const u = (phaseI - windowStart) / (windowEnd - windowStart); // 0..1
 				const a = clamp(slowAtTip, 0, 0.98);
 				const p = u + (a / (2 * Math.PI)) * Math.sin(2 * Math.PI * u);
 
 				const x = x0 + (x1 - x0) * p;
-				// Parabola with apex at p=0.5.
-				const y = yPeak + (yBase - yPeak) * 4 * Math.pow(p - 0.5, 2);
-
-				// One full rotation across the arc, but flat/upright at the tip.
+				// Enter from above, then arc down as p progresses.
+				const y = yPeak + (yBase - yPeak) * Math.pow(p, Math.max(0.3, fallExp));
 				const rot = 360 * (p - 0.5);
 
-				// No fade: pop on before entering, pop off after leaving.
 				el.style.visibility = 'visible';
 				el.style.pointerEvents = 'auto';
-				// Use 2D transforms (avoid translate3d) to keep backdrop-filter reliable on some browsers.
 				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg)`;
-				if (surface) surface.style.opacity = `1`;
+				if (surface) surface.style.opacity = '1';
 			}
 
 			raf = requestAnimationFrame(tick);
@@ -130,40 +252,139 @@
 	}
 
 	onMount(() => {
+		if (typeof window !== 'undefined') {
+			lastNow = performance.now();
+			hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+		}
+
 		const onResize = () => start();
+
+		const onHoverCheck = (e: MouseEvent) => {
+			const t = e.target as HTMLElement | null;
+			allowManual = !!t?.closest?.('.award-card-surface');
+		};
+
+		const onLeaveOrbit = () => {
+			allowManual = false;
+		};
+
+		const onWheel = (e: WheelEvent) => {
+			if (!shouldAnimate()) return;
+			if (!hoverCapable) return;
+			const target = e.target as HTMLElement | null;
+			const overCard = !!target?.closest?.('.award-card-surface');
+			const now = typeof window !== 'undefined' ? performance.now() : Date.now();
+
+			// Only block page scrolling if the wheel gesture STARTS on a card.
+			// Once started, keep a short lock so the rest of the same gesture doesn't scroll the page.
+			if (!overCard && now >= wheelLockUntil) return;
+			if (overCard) wheelLockUntil = now + 220;
+
+			e.preventDefault();
+			e.stopPropagation();
+			phaseAnim = null;
+			const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+			// Invert so "scroll down" advances forward visually.
+			phase = (phase - d * wheelPhasePerPx) % 1;
+			if (phase < 0) phase += 1;
+			scheduleSnap(140, 420);
+		};
+
+		const onPointerDown = (e: PointerEvent) => {
+			if (!shouldAnimate()) return;
+			if (hoverCapable && !allowManual) return;
+			phaseAnim = null;
+			dragging = true;
+			dragStartX = e.clientX;
+			dragStartPhase = phase;
+			orbitEl?.setPointerCapture?.(e.pointerId);
+		};
+
+		const onPointerMove = (e: PointerEvent) => {
+			if (!dragging) return;
+			const dx = e.clientX - dragStartX;
+			phase = (dragStartPhase - dx * wheelPhasePerPx * 1.8) % 1;
+			if (phase < 0) phase += 1;
+		};
+
+		const onPointerUp = () => {
+			if (!dragging) return;
+			dragging = false;
+			scheduleSnap(40, 460);
+		};
+
 		start();
+		// On load, pick a resting award snapped to the middle.
+		// Wait for bindings/layout so `awardEls` exist.
+		if (!didInitialSnap) {
+			didInitialSnap = true;
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					snapImmediatelyToNearest();
+				});
+			});
+		}
+		orbitEl?.addEventListener('mousemove', onHoverCheck, { passive: true });
+		orbitEl?.addEventListener('mouseleave', onLeaveOrbit, { passive: true });
+		// Capture phase so we intercept before the page scroller's wheel handler.
+		orbitEl?.addEventListener('wheel', onWheel, { passive: false, capture: true });
+		orbitEl?.addEventListener('pointerdown', onPointerDown, { passive: true });
+		window.addEventListener('pointermove', onPointerMove, { passive: true });
+		window.addEventListener('pointerup', onPointerUp, { passive: true });
 		window.addEventListener('resize', onResize);
 		return () => {
+			if (snapTimer != null) window.clearTimeout(snapTimer);
+			orbitEl?.removeEventListener('mousemove', onHoverCheck as EventListener);
+			orbitEl?.removeEventListener('mouseleave', onLeaveOrbit as EventListener);
+			orbitEl?.removeEventListener('wheel', onWheel as EventListener, true);
+			orbitEl?.removeEventListener('pointerdown', onPointerDown as EventListener);
+			window.removeEventListener('pointermove', onPointerMove as EventListener);
+			window.removeEventListener('pointerup', onPointerUp as EventListener);
 			window.removeEventListener('resize', onResize);
 			stop();
 		};
 	});
 </script>
 
-<div class="awards-orbit" bind:this={orbitEl} aria-label="Awards orbit">
-	<div class="awards-center" aria-label="Awards summary">
+<div class="awards" aria-label="Awards">
+	<div
+		class="awards-carousel awards-orbit"
+		bind:this={orbitEl}
+		role="region"
+		aria-label="Awards carousel"
+	>
+		<ul class="awards-ring" aria-label="Awards list">
+			{#each displayAwards as award, i (`${award.heading}-${i}`)}
+				<li class="award-item" bind:this={awardEls[i]}>
+					<div class="award-card-surface" aria-hidden={i >= awards.length ? 'true' : undefined}>
+						<InfoCard
+							variant="award"
+							heading={award.heading}
+							subheading={award.subheading}
+							dates={null}
+							items={award.items}
+						/>
+					</div>
+				</li>
+			{/each}
+		</ul>
+	</div>
+
+	<div class="awards-header" aria-label="Awards summary">
 		{#if kicker}
 			<p class="kicker">{kicker}</p>
 		{/if}
-		<h1 class="title">{title}</h1>
+		<div class="awards-title-row" aria-label="Awards title and navigation">
+			<button type="button" class="awards-nav-btn" aria-label="Previous award" onclick={() => stepCentered(1)}>
+				<span aria-hidden="true">‹</span>
+			</button>
+			<h1 class="title">{title}</h1>
+			<button type="button" class="awards-nav-btn" aria-label="Next award" onclick={() => stepCentered(-1)}>
+				<span aria-hidden="true">›</span>
+			</button>
+		</div>
 		<p class="body">{body}</p>
 	</div>
-
-	<ul class="awards-ring" aria-label="Awards list">
-		{#each displayAwards as award, i (`${award.heading}-${i}`)}
-			<li class="award-item" bind:this={awardEls[i]}>
-				<div class="award-card-surface">
-					<InfoCard
-						variant="award"
-						heading={award.heading}
-						subheading={award.subheading}
-						dates={null}
-						items={award.items}
-					/>
-				</div>
-			</li>
-		{/each}
-	</ul>
 </div>
 
 <style>
@@ -190,25 +411,42 @@
 		line-height: 1.6;
 	}
 
-	.awards-orbit {
+	.awards {
 		position: relative;
 		width: min(980px, 100%);
-		min-height: clamp(420px, 62vh, 620px);
-		display: grid;
-		place-items: center;
+		height: 100%;
 		isolation: isolate;
 	}
 
-	.awards-center {
-		text-align: center;
-		width: min(520px, 92%);
-		z-index: 2;
-		/* tweak as desired */
-		transform: translateY(-70%);
+	.awards-carousel {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		/* Important: avoid overflow clipping so the arc can extend vertically. */
+		overflow: visible;
+		/* Clip left/right like before, without clipping top/bottom. */
+		-webkit-clip-path: inset(-1200px 0 -1200px 0);
+		clip-path: inset(-1200px 0 -1200px 0);
+		padding: 0;
 	}
 
-	.awards-center .body {
-		margin-bottom: 0;
+	/* (no edge fades) */
+
+	.awards-orbit {
+		position: absolute;
+		inset: 0;
+		isolation: isolate;
+		touch-action: pan-y;
+		cursor: default;
+	}
+
+	@media (hover: hover) and (pointer: fine) {
+		.awards-orbit:hover {
+			cursor: grab;
+		}
+		.awards-orbit:hover:active {
+			cursor: grabbing;
+		}
 	}
 
 	.awards-ring {
@@ -217,7 +455,6 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
-		z-index: 6;
 	}
 
 	.award-item {
@@ -232,17 +469,67 @@
 	.award-card-surface {
 		width: min(360px, 42vw);
 		position: relative;
-		/* surface styling now lives in InfoCard */
 		opacity: 1;
 	}
 
-	@media (hover: hover) and (pointer: fine) {
-		.award-item:hover {
-			z-index: 20;
-		}
+	.awards-header {
+		position: absolute;
+		left: 50%;
+		top: 53%;
+		/* Keep copy just below mid-screen */
+		transform: translate(-50%, clamp(60px, 8vh, 120px));
+		text-align: center;
+		width: min(520px, 92%);
+	}
+
+	.awards-title-row {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+	}
+
+	.awards-title-row .title {
+		margin: 0;
+	}
+
+	.awards-nav-btn {
+		appearance: none;
+		border: 1px solid var(--card-border);
+		background: rgba(255, 255, 255, 0.55);
+		backdrop-filter: blur(calc(var(--glass-blur) + 2px));
+		border-radius: 999px;
+		width: 34px;
+		height: 34px;
+		display: grid;
+		place-items: center;
+		color: rgba(11, 18, 32, 0.9);
+		cursor: pointer;
+		user-select: none;
+		transition: transform 140ms ease, background-color 140ms ease;
+	}
+
+	.awards-nav-btn:hover {
+		background: rgba(255, 255, 255, 0.7);
+		transform: translateY(-1px);
+	}
+
+	.awards-nav-btn:active {
+		transform: translateY(0);
+	}
+
+	.awards-header .body {
+		margin-bottom: 0;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.awards-carousel {
+			padding-top: 0;
+		}
+		.awards-carousel::before,
+		.awards-carousel::after {
+			display: none;
+		}
 		.awards-ring {
 			position: relative;
 			inset: unset;
@@ -255,15 +542,18 @@
 			transform: none;
 		}
 		.award-card-surface {
-			opacity: 1;
+			width: min(540px, 92vw);
+			margin-inline: auto;
 		}
 	}
 
 	@media (max-width: 720px) {
-		.awards-orbit {
-			min-height: unset;
-			gap: 18px;
-			padding: 18px 0;
+		.awards-carousel {
+			padding-top: 0;
+		}
+		.awards-carousel::before,
+		.awards-carousel::after {
+			display: none;
 		}
 		.awards-ring {
 			position: relative;
@@ -273,11 +563,8 @@
 		}
 		.award-item {
 			position: relative;
-			transform: none;
 			visibility: visible;
-		}
-		.award-card-surface {
-			opacity: 1;
+			transform: none;
 		}
 		.award-card-surface {
 			width: min(540px, 92vw);

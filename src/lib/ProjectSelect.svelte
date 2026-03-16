@@ -1,6 +1,11 @@
 <script lang="ts">
 	import type { Project } from '$lib/projects';
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { fly } from 'svelte/transition';
+	import { cubicOut, cubicIn } from 'svelte/easing';
+	import confcapLogo from '$lib/assets/project/confcap_logo.png';
+	import kbkLogo from '$lib/assets/project/kbk_logo.png';
+	import rscLogo from '$lib/assets/project/rsc_logo.png';
 
 	export let projects: Project[] = [];
 	export let initialId: string | null = null;
@@ -16,9 +21,18 @@
 	let isDraggingScrollbar = false;
 	let dragStartY = 0;
 	let dragStartScrollTop = 0;
+	let descDir: 1 | -1 = 1;
+	let lastActiveId: string | null = null;
+	let headTextEl: HTMLDivElement | null = null;
+	let headTextHeightPx = 0;
+	let headTextResizeObs: ResizeObserver | null = null;
 
 	let scrollbarThumbTop = 0;
 	let scrollbarThumbHeight = 16;
+
+	function prefersReducedMotion() {
+		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
 
 	function getOptionEls(): HTMLButtonElement[] {
 		if (!listboxEl) return [];
@@ -196,10 +210,35 @@
 		else if (!activeId || !projects.some((p) => p.id === activeId)) activeId = projects[0]?.id ?? null;
 	}
 
+	$: {
+		// Make the description transition follow the direction the selection moved.
+		// Down the list: enter from below, exit upwards. Up the list: reverse it.
+		if (activeId !== lastActiveId) {
+			const prevIdx = lastActiveId ? projects.findIndex((p) => p.id === lastActiveId) : -1;
+			const nextIdx = activeId ? projects.findIndex((p) => p.id === activeId) : -1;
+			if (prevIdx !== -1 && nextIdx !== -1 && prevIdx !== nextIdx) {
+				descDir = nextIdx > prevIdx ? 1 : -1;
+			}
+			lastActiveId = activeId;
+		}
+	}
+
 	$: active = projects.find((p) => p.id === activeId) ?? null;
 	$: websiteLink =
 		active?.links?.find((l) => (l.label ?? '').trim().toLowerCase() === 'website') ?? null;
 	$: otherLinks = active?.links?.filter((l) => l !== websiteLink) ?? [];
+	$: motionOff = prefersReducedMotion();
+	$: descKey = active?.id ?? 'empty';
+	$: projectLogo =
+		!active
+			? null
+			: (active.name ?? '').trim().toLowerCase() === 'confcap'
+				? { src: confcapLogo, alt: 'ConfCap logo' }
+				: (active.name ?? '').trim().toLowerCase() === 'kid by kid'
+					? { src: kbkLogo, alt: 'Kid By Kid logo' }
+					: (active.name ?? '').trim().toLowerCase() === 'rise south city'
+						? { src: rscLogo, alt: 'Rise South City logo' }
+						: null;
 
 	function selectByIndex(idx: number) {
 		if (projects.length === 0) return;
@@ -264,12 +303,28 @@
 		};
 	});
 
+	onMount(() => {
+		// Keep the project logo height locked to the two-line title+blurb block.
+		if (typeof ResizeObserver === 'undefined') return;
+		headTextResizeObs = new ResizeObserver(() => {
+			headTextHeightPx = headTextEl?.clientHeight ?? 0;
+		});
+		if (headTextEl) headTextResizeObs.observe(headTextEl);
+		headTextHeightPx = headTextEl?.clientHeight ?? 0;
+		return () => {
+			headTextResizeObs?.disconnect();
+			headTextResizeObs = null;
+		};
+	});
+
 	onDestroy(() => {
 		if (scrollRaf) cancelAnimationFrame(scrollRaf);
 		resizeObs?.disconnect();
 		resizeObs = null;
 		intersectObs?.disconnect();
 		intersectObs = null;
+		headTextResizeObs?.disconnect();
+		headTextResizeObs = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = null;
 	});
@@ -323,48 +378,68 @@
 	</div>
 
 	<div class="desc" aria-live="polite">
-		{#if active}
-			<h2 class="desc-title">{active.name}</h2>
-			<p class="desc-blurb">{active.blurb}</p>
+		{#key descKey}
+			<div
+				class="desc-inner"
+				in:fly={{ y: 8 * descDir, duration: motionOff ? 0 : 170, easing: cubicOut }}
+				out:fly={{ y: -6 * descDir, duration: motionOff ? 0 : 130, easing: cubicIn }}
+			>
+				{#if active}
+					<div class="desc-head">
+						<div class="desc-head-text" bind:this={headTextEl}>
+							<h2 class="desc-title">{active.name}</h2>
+							<p class="desc-blurb">{active.blurb}</p>
+						</div>
+						{#if projectLogo}
+							<img
+								class="desc-logo"
+								src={projectLogo.src}
+								alt={projectLogo.alt}
+								style={`height:${Math.max(0, headTextHeightPx)}px;`}
+							/>
+						{/if}
+					</div>
 
-			<p class="desc-body">{active.description}</p>
+					<p class="desc-body">{active.description}</p>
 
-			{#if websiteLink}
-				<p class="desc-website">
-					<a class="desc-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
-						Website.
-					</a>
-				</p>
-			{/if}
+					{#if websiteLink}
+						<p class="desc-website">
+							<a class="desc-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
+								Website.
+							</a>
+						</p>
+					{/if}
 
-			{#if active.highlights?.length}
-				<ul class="desc-list" aria-label="Project highlights">
-					{#each active.highlights as h (h)}
-						<li>{h}</li>
-					{/each}
-				</ul>
-			{/if}
+					{#if active.highlights?.length}
+						<ul class="desc-list" aria-label="Project highlights">
+							{#each active.highlights as h (h)}
+								<li>{h}</li>
+							{/each}
+						</ul>
+					{/if}
 
-			{#if active.tech?.length}
-				<div class="chips" aria-label="Tech stack">
-					{#each active.tech as t (t)}
-						<span class="chip">{t}</span>
-					{/each}
-				</div>
-			{/if}
+					{#if active.tech?.length}
+						<div class="chips" aria-label="Tech stack">
+							{#each active.tech as t (t)}
+								<span class="chip">{t}</span>
+							{/each}
+						</div>
+					{/if}
 
-			{#if otherLinks.length}
-				<div class="links" aria-label="Project links">
-					{#each otherLinks as link (link.href)}
-						<a class="link" href={link.href} target="_blank" rel="noreferrer">
-							{link.label}
-						</a>
-					{/each}
-				</div>
-			{/if}
-		{:else}
-			<p class="desc-empty">Add some projects to see details here.</p>
-		{/if}
+					{#if otherLinks.length}
+						<div class="links" aria-label="Project links">
+							{#each otherLinks as link (link.href)}
+								<a class="link" href={link.href} target="_blank" rel="noreferrer">
+									{link.label}
+								</a>
+							{/each}
+						</div>
+					{/if}
+				{:else}
+					<p class="desc-empty">Add some projects to see details here.</p>
+				{/if}
+			</div>
+		{/key}
 	</div>
 </div>
 
@@ -387,24 +462,54 @@
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
 		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
-		padding: 14px 14px;
 		/* Fixed height, and never scrollable: clip overflow instead */
 		height: var(--selector-h);
 		overflow: hidden; /* fallback */
 		overflow: clip;
+		position: relative;
+	}
+
+	.desc-inner {
+		position: absolute;
+		inset: 0;
+		padding: 14px 14px;
 	}
 
 	.desc-title {
-		margin: 0 0 6px;
+		margin: 0;
 		font-size: 18px;
+		line-height: 1.1;
 		letter-spacing: -0.02em;
 	}
 
 	.desc-blurb {
-		margin: 0 0 10px;
+		margin: 0;
 		color: rgba(11, 18, 32, 0.78);
 		font-weight: 650;
 		line-height: 1.35;
+	}
+
+	.desc-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: flex-start;
+		gap: 12px;
+		margin: 0 0 10px;
+	}
+
+	.desc-head-text {
+		min-width: 0;
+		display: grid;
+		gap: 6px;
+	}
+
+	.desc-logo {
+		width: auto;
+		max-width: min(160px, 34%);
+		margin-left: auto;
+		object-fit: contain;
+		flex: 0 0 auto;
+		filter: drop-shadow(0 10px 22px rgba(11, 18, 32, 0.12));
 	}
 
 	.desc-body {
@@ -625,11 +730,15 @@
 	.reel-shade--top {
 		top: 0;
 		background: linear-gradient(to bottom, rgba(11, 18, 32, 0.14), rgba(11, 18, 32, 0));
+		border-top-left-radius: 16px;
+		border-top-right-radius: 16px;
 	}
 
 	.reel-shade--bottom {
 		bottom: 0;
 		background: linear-gradient(to top, rgba(11, 18, 32, 0.14), rgba(11, 18, 32, 0));
+		border-bottom-left-radius: 16px;
+		border-bottom-right-radius: 16px;
 	}
 
 	.desc-empty {

@@ -7,19 +7,63 @@
 	export let emailHref: string;
 
 	let open = false;
+	let pulsesDisabled = false;
 	let root: HTMLDivElement | null = null;
+	let pulse1: HTMLSpanElement | null = null;
+	let pulse2: HTMLSpanElement | null = null;
+	let pulse3: HTMLSpanElement | null = null;
+	let ringFinishAnims: Animation[] = [];
+
+	function stopRingPulsesButLetCurrentFinish() {
+		for (const a of ringFinishAnims) a.cancel();
+		ringFinishAnims = [];
+
+		const pulseEls = [pulse1, pulse2, pulse3] as const;
+
+		for (const el of pulseEls) {
+			if (!el) continue;
+
+			// Snapshot current rendered state before disabling the CSS animation.
+			const cs = getComputedStyle(el);
+			const startOpacity = Number.parseFloat(cs.opacity) || 0;
+			const startTransform = cs.transform === 'none' ? 'scale(1)' : cs.transform;
+
+			// Stop new pulses from spawning.
+			el.style.animation = 'none';
+			el.style.opacity = String(startOpacity);
+			el.style.transform = startTransform;
+
+			// Finish the currently-visible ring smoothly, then hold.
+			const anim = el.animate(
+				[
+					{ opacity: startOpacity, transform: startTransform },
+					{ opacity: 0, transform: 'scale(3.08)' }
+				],
+				{ duration: 360, easing: 'linear', fill: 'forwards' }
+			);
+			ringFinishAnims.push(anim);
+		}
+	}
 
 	function toggle(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
-		open = !open;
+		const next = !open;
+		open = next;
+		if (open && !pulsesDisabled) stopRingPulsesButLetCurrentFinish();
+		if (!open) pulsesDisabled = true;
 	}
 
 	function close() {
+		if (open) pulsesDisabled = true;
 		open = false;
 	}
 
 	onMount(() => {
+		// Ensure hot-reloads don't preserve disabled state.
+		open = false;
+		pulsesDisabled = false;
+
 		const onPointerDown = (e: PointerEvent) => {
 			if (!open) return;
 			const t = e.target as Node | null;
@@ -41,11 +85,16 @@
 	});
 </script>
 
-<div class="contact-menu" bind:this={root} data-open={open ? 'true' : 'false'}>
+<div
+	class="contact-menu"
+	bind:this={root}
+	data-open={open ? 'true' : 'false'}
+	data-pulse-disabled={pulsesDisabled ? 'true' : 'false'}
+>
 	<div class="contact-btn-wrap">
-		<span class="pulse pulse-1" aria-hidden="true"></span>
-		<span class="pulse pulse-2" aria-hidden="true"></span>
-		<span class="pulse pulse-3" aria-hidden="true"></span>
+		<span class="pulse pulse-1" aria-hidden="true" bind:this={pulse1}></span>
+		<span class="pulse pulse-2" aria-hidden="true" bind:this={pulse2}></span>
+		<span class="pulse pulse-3" aria-hidden="true" bind:this={pulse3}></span>
 		<button
 			class="contact-btn"
 			type="button"
@@ -145,6 +194,19 @@
 		--pulse-dur: 6.6s;
 		transform-origin: 50% 50%;
 		animation: contactWrapPulse 2.2s ease-in-out infinite;
+	}
+
+	/* After closing the fanout once, disable pulse permanently (this load). */
+	.contact-menu[data-pulse-disabled='true'] .contact-btn-wrap {
+		animation: none;
+	}
+	.contact-menu[data-pulse-disabled='true'] .contact-btn-wrap::before {
+		animation: none;
+		opacity: 0;
+	}
+	.contact-menu[data-pulse-disabled='true'] .pulse {
+		animation: none;
+		opacity: 0;
 	}
 
 	/* Clean pulsing glow behind the button */

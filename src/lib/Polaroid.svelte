@@ -4,6 +4,7 @@
 	export let src: string | null = null;
 	export let alt = '';
 	export let caption: string;
+	export let subtitle: string | null = null;
 	export let loading: 'lazy' | 'eager' = 'lazy';
 	export let revealRootMargin = '0px -35% 0px -35%';
 	export let revealThreshold = 0.01;
@@ -102,8 +103,13 @@
 				{/if}
 				<div class="reveal-overlay" aria-hidden="true"></div>
 			</div>
+			<figcaption class="caption">
+				<span class="caption-title">{caption}</span>
+				{#if subtitle}
+					<span class="caption-subtitle">{subtitle}</span>
+				{/if}
+			</figcaption>
 		</div>
-		<figcaption class="caption">{caption}</figcaption>
 	</figure>
 </div>
 
@@ -224,10 +230,24 @@
 	.caption {
 		margin: 0;
 		text-align: center;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+
+	.caption-title {
 		font-size: 12px;
 		line-height: 1.25;
 		letter-spacing: 0.02em;
 		color: rgba(11, 18, 32, 0.86);
+	}
+
+	.caption-subtitle {
+		font-size: 11px;
+		line-height: 1.2;
+		letter-spacing: 0.01em;
+		color: rgba(11, 18, 32, 0.6);
 	}
 </style>
 

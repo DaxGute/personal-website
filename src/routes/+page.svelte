@@ -16,6 +16,8 @@
 	import baiLogo from '$lib/assets/experience/bai_logo.jpg';
 	import ccLogo from '$lib/assets/experience/cc_logo.jpg';
 	import sdLogo from '$lib/assets/experience/sd_logo.jpg';
+	import bishopsLogo from '$lib/assets/education/bishops_logo.png';
+	import stanfordLogo from '$lib/assets/education/stanford_logo.png';
 
 	type Panel = {
 		id: string;
@@ -41,6 +43,8 @@
 		degree: string;
 		dates: string;
 		details: string[];
+		logoSrc: string;
+		logoAlt: string;
 	};
 
 	const MONTH_ABBREV: Record<string, string> = {
@@ -109,7 +113,9 @@
 			dates: 'September 2023 - Present',
 			details: [
 				'Coursework in probability, statistics, computer science, and data-driven decision making. Focused on applied machine learning and data analysis.'
-			]
+			],
+			logoSrc: stanfordLogo,
+			logoAlt: 'Stanford logo'
 		},
 		{
 			school: 'The Bishops School',
@@ -118,7 +124,9 @@
 			dates: 'August 2017 - June 2023',
 			details: [
 				'Graduated Cum Laude; Coursework in advanced mathematics, computer science, and economics. [GPA: 4.82]'
-			]
+			],
+			logoSrc: bishopsLogo,
+			logoAlt: "The Bishop's School logo"
 		}
 	];
 
@@ -220,7 +228,7 @@
 		}
 	];
 
-	const interests: { caption: string }[] = [
+	const interests: { caption: string; subtitle?: string }[] = [
 		{
 			caption: 'PADI Certified Diver'
 		},
@@ -567,7 +575,7 @@
 				const visibleEnd = eduStart + w;
 				const span = visibleEnd - visibleStart;
 				const eduLinearT = span <= 0 ? 0 : clamp01((x - visibleStart) / span);
-				educationT = eduLinearT;
+				educationT = easeInOutPow(eduLinearT, 3);
 			} else {
 				educationT = 0;
 			}
@@ -579,17 +587,26 @@
 			// after measuring in `measure()`.
 		};
 
+		let lastX = 0;
+		let lastT = performance.now();
 		let ticking = false;
 		const onScroll = () => {
 			if (ticking) return;
 			ticking = true;
 			requestAnimationFrame(() => {
+				const now = performance.now();
+				lastX = scroller!.scrollLeft;
+				lastT = now;
 				updateProgress();
 				ticking = false;
 			});
 		};
 
 		const wheel = (e: WheelEvent) => {
+			// Allow Awards arc to handle wheel only when hovering a card.
+			const target = e.target as HTMLElement | null;
+			if (target?.closest?.('.award-card-surface')) return;
+
 			// Convert vertical wheel to horizontal scroll (best for mouse wheels).
 			// Trackpads often emit deltaX already, so we only intercept when deltaY dominates.
 			const absX = Math.abs(e.deltaX);
@@ -609,6 +626,8 @@
 		resetToTitle();
 		requestAnimationFrame(resetToTitle);
 		setTimeout(resetToTitle, 50);
+		lastX = scroller.scrollLeft;
+		lastT = performance.now();
 		updateProgress();
 
 		scroller.addEventListener('wheel', wheel, { passive: false });
@@ -737,6 +756,8 @@
 											subheading={`${edu.degree} · ${edu.location}`}
 											dates={abbreviateMonths(edu.dates)}
 											items={edu.details}
+											logoSrc={edu.logoSrc}
+											logoAlt={edu.logoAlt}
 										/>
 									</article>
 								{/each}
@@ -749,18 +770,28 @@
 								title={panel.title}
 								body={panel.body}
 								awards={awards}
-								repeatFactor={1}
+								repeatFactor={3}
 							/>
 						{/if}
 
 						{#if panel.id === 'interests'}
 							<div class="interests-content" aria-label="Interests">
 								<div class="interest-ski" aria-label="Skiing">
-									<Polaroid src={skiingPhoto} alt="Skiing" caption={interests[1]?.caption ?? 'Skiing'} />
+									<Polaroid
+										src={skiingPhoto}
+										alt="Skiing"
+										caption={interests[1]?.caption ?? 'Skiing'}
+										subtitle={interests[1]?.subtitle ?? null}
+									/>
 								</div>
 
 								<div class="interest-chess" aria-label="Chess">
-									<Polaroid src={chessPhoto} alt="Chess" caption={interests[2]?.caption ?? 'Chess'} />
+									<Polaroid
+										src={chessPhoto}
+										alt="Chess"
+										caption={interests[2]?.caption ?? 'Chess'}
+										subtitle={interests[2]?.subtitle ?? null}
+									/>
 								</div>
 
 								<div class="interest-padi" aria-label="PADI Certified Diver">
@@ -770,6 +801,7 @@
 										revealRootMargin="0px -15% 0px -15%"
 										revealThreshold={0}
 										caption={interests[0]?.caption ?? 'PADI Certified Diver'}
+										subtitle={interests[0]?.subtitle ?? null}
 									/>
 								</div>
 
@@ -778,6 +810,7 @@
 										src={tableTennisPhoto}
 										alt="Table Tennis"
 										caption={interests[3]?.caption ?? 'Table Tennis'}
+										subtitle={interests[3]?.subtitle ?? null}
 									/>
 								</div>
 
@@ -786,13 +819,14 @@
 										src={billiardsPhoto}
 										alt="Billiards"
 										caption={interests[4]?.caption ?? 'Billiards'}
+										subtitle={interests[4]?.subtitle ?? null}
 									/>
 								</div>
 
 								{#if interests.length > 5}
 									<div class="interests-grid" aria-label="Interests grid">
 										{#each interests.slice(5) as item (item.caption)}
-											<Polaroid src={null} caption={item.caption} />
+											<Polaroid src={null} caption={item.caption} subtitle={item.subtitle ?? null} />
 										{/each}
 									</div>
 								{/if}
@@ -862,8 +896,8 @@
 			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
 			var(--bg);
 		background-repeat: no-repeat;
-		/* Crucial: tie background movement to the scroller's scroll position (no "fixed" feel). */
-		background-attachment: local;
+		/* Keep background stationary while panels scroll. */
+		background-attachment: scroll;
 		scroll-behavior: smooth;
 		-webkit-overflow-scrolling: touch;
 		touch-action: pan-x;
@@ -1006,6 +1040,14 @@
 		z-index: 6;
 	}
 
+	/* Education cards can visually spill into Projects; keep them hoverable */
+	#education.panel {
+		z-index: 7;
+		/* Prevent the education cards from rendering into the Projects panel. */
+		overflow: hidden; /* fallback */
+		overflow: clip;
+	}
+
 	#projects.panel .panel-inner {
 		--projects-lift: 130px;
 		bottom: var(--projects-lift);
@@ -1046,6 +1088,11 @@
 
 	/* Awards slide: no outer glass box */
 	#awards.panel .panel-inner {
+		/* Fill the entire slide so AwardsArc can position relative to the viewport. */
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		border: 0;
 		background: transparent;
 		backdrop-filter: none;
@@ -1183,6 +1230,8 @@
 	/* Awards slide: center content block in the middle of the panel */
 	#awards.panel {
 		place-items: center;
+		/* Override the global top-heavy padding so this slide can actually center vertically. */
+		padding: 0;
 	}
 
 	.kicker {
@@ -1236,16 +1285,16 @@
 		/* Keep cards square while staying responsive */
 		--edu-card-size: clamp(260px, 46vw, 420px);
 		/* How far the cards separate at t=1 */
-		--edu-split: clamp(200px, 24vw, 420px);
+		--edu-split: clamp(180px, 22vw, 380px);
 		/* Base offset so the stacked start sits further left */
-		--edu-base-x: clamp(-260px, -12vw, -120px);
+		--edu-base-x: clamp(-240px, -11vw, -110px);
 		/* Small vertical separation while stacked */
 		--edu-stack-sep: 16px;
 		width: min(980px, 100%);
 		height: var(--edu-card-size);
 		margin: 18px auto 0;
 		top: -100px;
-		left: 70px;
+		left: 0;
 		/* 0..1 from scroll (set on #education.panel) */
 		--t: var(--edu-t, 0);
 	}
@@ -1266,7 +1315,7 @@
 		z-index: 2;
 		transform: translate(-50%, 0)
 			/* both move right; Stanford moves farther */
-			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 2.5)))
+			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 1.9)))
 			translateY(calc(-1 * var(--edu-stack-sep) * (1 - var(--t))));
 	}
 
@@ -1274,8 +1323,13 @@
 	.education-card:not(.is-stanford) {
 		z-index: 1;
 		transform: translate(-50%, 0)
-			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 0.5)))
+			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 0.75)))
 			translateY(calc(var(--edu-stack-sep) * (1 - var(--t))));
+	}
+
+	/* On hover, bring the hovered school above the other card */
+	.education-card:hover {
+		z-index: 5;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -1314,10 +1368,26 @@
 		--t: var(--exp-t, 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
+		position: relative;
+		z-index: 1;
 		width: 100%;
 		min-height: clamp(180px, 20vh, 240px);
 		/* Use 2D transforms to keep backdrop-filter reliable on some browsers. */
 		transform: translate(calc(var(--spread-x) * (1 - var(--t))), calc(var(--spread-y) * (1 - var(--t))));
+	}
+
+	/* Explicit stacking order so overlapping cards don't steal hover */
+	#experiences .experience-item:nth-child(1) {
+		z-index: 30;
+	}
+	#experiences .experience-item:nth-child(2) {
+		z-index: 20;
+	}
+	#experiences .experience-item:nth-child(3) {
+		z-index: 10;
+	}
+	#experiences .experience-item:hover {
+		z-index: 40;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
