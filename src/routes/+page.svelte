@@ -13,6 +13,9 @@
 	import skiingPhoto from '$lib/assets/skiing.jpg';
 	import scubaPhoto from '$lib/assets/scuba.jpg';
 	import tableTennisPhoto from '$lib/assets/table_tennis.jpg';
+	import baiLogo from '$lib/assets/experience/bai_logo.jpg';
+	import ccLogo from '$lib/assets/experience/cc_logo.jpg';
+	import sdLogo from '$lib/assets/experience/sd_logo.jpg';
 
 	type Panel = {
 		id: string;
@@ -28,6 +31,8 @@
 		title: string;
 		dates: string;
 		highlights: string[];
+		logoSrc: string;
+		logoAlt: string;
 	};
 
 	type Education = {
@@ -68,7 +73,9 @@
 			dates: 'June 2025 - Aug 2025',
 			highlights: [
 				'Working on AI and biotech research, analyzing product-fit within the evolving biotech landscape and potential areas for innovation.'
-			]
+			],
+			logoSrc: baiLogo,
+			logoAlt: 'Benevolent AI logo'
 		},
 		{
 			company: 'Castle Creek Capital',
@@ -77,7 +84,9 @@
 			dates: 'June 2024 - September 2024',
 			highlights: [
 				'Assisted with financial modeling and analysis in small community banks across the U.S. for eventual presentation to management.'
-			]
+			],
+			logoSrc: ccLogo,
+			logoAlt: 'Castle Creek Capital logo'
 		},
 		{
 			company: 'City of San Diego',
@@ -86,7 +95,9 @@
 			dates: 'October 2021 - June 2023',
 			highlights: [
 				'Represented District 3 on the city’s Youth Commission, advising on programs and policies affecting young people in San Diego.'
-			]
+			],
+			logoSrc: sdLogo,
+			logoAlt: 'City of San Diego logo'
 		}
 	];
 
@@ -719,6 +730,8 @@
 											subheading={`${exp.title} · ${exp.location}`}
 											dates={abbreviateMonths(exp.dates)}
 											items={exp.highlights}
+											logoSrc={exp.logoSrc}
+											logoAlt={exp.logoAlt}
 										/>
 									</li>
 								{/each}
@@ -1345,6 +1358,7 @@
 		--spread-x: 0px;
 		--spread-y: 0px;
 		width: 100%;
+		min-height: clamp(180px, 20vh, 240px);
 		/* Use 2D transforms to keep backdrop-filter reliable on some browsers. */
 		transform: translate(calc(var(--spread-x) * (1 - var(--t))), calc(var(--spread-y) * (1 - var(--t))));
 	}
@@ -1354,6 +1368,10 @@
 	}
 
 	@media (min-width: 720px) {
+		#experiences .experience-list {
+			--exp-card-w: min(520px, 46vw);
+		}
+
 		.experience-item {
 			width: 50%;
 			margin-inline: auto;
@@ -1362,7 +1380,7 @@
 		/* Experiences slide positions */
 		#experiences .experience-item {
 			position: absolute;
-			width: min(420px, 42vw);
+			width: var(--exp-card-w);
 			margin: 0;
 		}
 
@@ -1373,7 +1391,7 @@
 			/* Lift it above the Experiences title */
 			top: -90px;
 			/* Always finish next to Castle Creek (which is anchored at left: 0) */
-			left: calc(min(420px, 42vw) + 100px);
+			left: calc(var(--exp-card-w) + 100px);
 			right: auto;
 			z-index: 5;
 		}
@@ -1398,7 +1416,7 @@
 			/* Move it up: slightly below Castle Creek's height, while keeping Benevolent's right alignment */
 			top: 44px;
 			/* Always finish next to Castle Creek (which is anchored at left: 0) */
-			left: calc(min(420px, 42vw) + 28px);
+			left: calc(var(--exp-card-w) + 28px);
 			right: auto;
 			bottom: auto;
 		}

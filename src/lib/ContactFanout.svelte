@@ -42,33 +42,38 @@
 </script>
 
 <div class="contact-menu" bind:this={root} data-open={open ? 'true' : 'false'}>
-	<button
-		class="contact-btn"
-		type="button"
-		aria-label="Contact links"
-		title="Contact"
-		aria-haspopup="true"
-		aria-expanded={open}
-		aria-controls="contact-fanout"
-		onclick={toggle}
-	>
-		<span class="icon-swap" aria-hidden="true">
-			<img class="swap-icon swap-mail" src={signature} alt="" aria-hidden="true" />
+	<div class="contact-btn-wrap">
+		<span class="pulse pulse-1" aria-hidden="true"></span>
+		<span class="pulse pulse-2" aria-hidden="true"></span>
+		<span class="pulse pulse-3" aria-hidden="true"></span>
+		<button
+			class="contact-btn"
+			type="button"
+			aria-label="Contact links"
+			title="Contact"
+			aria-haspopup="true"
+			aria-expanded={open}
+			aria-controls="contact-fanout"
+			onclick={toggle}
+		>
+			<span class="icon-swap" aria-hidden="true">
+				<img class="swap-icon swap-mail" src={signature} alt="" aria-hidden="true" />
 
-			<svg
-				class="swap-icon swap-x"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			>
-				<path d="M18 6 6 18"></path>
-				<path d="M6 6l12 12"></path>
-			</svg>
-		</span>
-	</button>
+				<svg
+					class="swap-icon swap-x"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				>
+					<path d="M18 6 6 18"></path>
+					<path d="M6 6l12 12"></path>
+				</svg>
+			</span>
+		</button>
+	</div>
 
 	<div id="contact-fanout" class="fanout" aria-hidden={!open}>
 		<a
@@ -131,6 +136,67 @@
 		transform-origin: top right;
 	}
 
+	.contact-btn-wrap {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		isolation: isolate;
+		--pulse-dur: 6.6s;
+		transform-origin: 50% 50%;
+		animation: contactWrapPulse 2.2s ease-in-out infinite;
+	}
+
+	/* Clean pulsing glow behind the button */
+	.contact-btn-wrap::before {
+		content: '';
+		position: absolute;
+		inset: -26px;
+		border-radius: 999px;
+		pointer-events: none;
+		z-index: 0;
+		background: radial-gradient(
+			closest-side at 55% 45%,
+			rgba(34, 211, 238, 0.22),
+			rgba(124, 58, 237, 0.14) 48%,
+			rgba(124, 58, 237, 0) 72%
+		);
+		filter: blur(9px);
+		opacity: 0.55;
+		transform: scale(0.96);
+		animation: tidalPulseGlow var(--pulse-dur) ease-in-out infinite;
+	}
+
+	/* Multiple ring pulses (start at button size) */
+	.pulse {
+		position: absolute;
+		inset: -1px; /* start basically at the button edge */
+		border-radius: 999px;
+		pointer-events: none;
+		z-index: 0;
+		transform: scale(1);
+		opacity: 0;
+		background: radial-gradient(
+			circle at 50% 50%,
+			rgba(34, 211, 238, 0) 58%,
+			rgba(34, 211, 238, 0.34) 61%,
+			rgba(124, 58, 237, 0.24) 65%,
+			rgba(124, 58, 237, 0) 72%
+		);
+		filter: blur(0.35px);
+		animation: pulseRing var(--pulse-dur) linear infinite;
+	}
+
+	.pulse-1 {
+		animation-delay: 0s;
+	}
+	.pulse-2 {
+		animation-delay: calc(var(--pulse-dur) / -3);
+	}
+	.pulse-3 {
+		animation-delay: calc((var(--pulse-dur) * -2) / 3);
+	}
+
 	/* Match existing button look (the parent page defines these classes too). */
 	.contact-btn {
 		display: inline-flex;
@@ -140,17 +206,20 @@
 		height: calc(var(--menu-control-h) + (var(--menu-pad) * 2));
 		padding: var(--menu-pad);
 		border-radius: 999px;
-		border: 1px solid var(--card-border);
+		border: 1px solid rgba(11, 18, 32, 0.28);
 		background: var(--card);
 		backdrop-filter: blur(var(--glass-blur));
 		color: var(--muted);
 		box-shadow: var(--shadow);
 		cursor: pointer;
+		position: relative;
+		z-index: 1; /* ensure it sits above the wave layers */
 	}
 
 	.contact-btn:hover {
 		color: var(--fg);
 		background: var(--card-hover);
+		border-color: rgba(11, 18, 32, 0.36);
 	}
 
 	.contact-btn:focus-visible {
@@ -275,11 +344,58 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.contact-btn-wrap {
+			animation: none;
+		}
+		.contact-btn-wrap::before,
+		.pulse {
+			animation: none;
+			opacity: 0;
+		}
 		.swap-icon {
 			transition: none;
 		}
 		.bubble {
 			transition: none;
+		}
+	}
+
+	@keyframes tidalPulseGlow {
+		0%,
+		100% {
+			transform: scale(0.96);
+			opacity: 0.46;
+		}
+		50% {
+			transform: scale(1.12);
+			opacity: 0.68;
+		}
+	}
+
+	@keyframes contactWrapPulse {
+		0%,
+		100% {
+			transform: scale(1.05);
+		}
+		50% {
+			transform: scale(1.0);
+		}
+	}
+
+	@keyframes pulseRing {
+		0% {
+			opacity: 0;
+		}
+		8% {
+			opacity: 0.95;
+		}
+		55% {
+			opacity: 0.22;
+		}
+		100% {
+			/* ~50% more travel distance before fadeout */
+			transform: scale(3.08);
+			opacity: 0;
 		}
 	}
 </style>

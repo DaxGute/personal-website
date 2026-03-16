@@ -140,6 +140,47 @@
 		box-sizing: border-box;
 	}
 
+	/* Shared Polaroid-style hover transforms (tilt vars set by JS)
+	   - scale: eased on enter/leave
+	   - tilt: instant on pointer move (no lag)
+	*/
+	:global(.hover-polaroid-scale) {
+		transform: scale(var(--scale, 1));
+		transition: transform 0.5s ease-in-out;
+		will-change: transform;
+	}
+
+	:global(.hover-polaroid-tilt) {
+		transform: perspective(900px) rotateX(0deg) rotateY(0deg);
+		transform-style: preserve-3d;
+		transition: transform 120ms linear;
+		will-change: transform;
+	}
+
+	:global(.hover-polaroid-surface) {
+		border: 1px solid var(--hp-border, rgba(11, 18, 32, 0.14));
+		background: var(--hp-bg, rgba(255, 255, 255, 0.86));
+		box-shadow: var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12));
+		transition-property: background, box-shadow, border-color;
+		transition-duration: 160ms, 180ms, 160ms;
+		transition-timing-function: ease, ease, ease;
+	}
+
+	:global(.hover-polaroid-scale:hover .hover-polaroid-surface) {
+		border-color: var(--hp-border-hover, var(--hp-border, rgba(11, 18, 32, 0.14)));
+		background: var(--hp-bg-hover, var(--hp-bg, rgba(255, 255, 255, 0.86)));
+		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:global(.hover-polaroid-scale),
+		:global(.hover-polaroid-tilt),
+		:global(.hover-polaroid-surface) {
+			transition: none;
+			transform: none;
+		}
+	}
+
 	.desktop-app {
 		display: block;
 	}

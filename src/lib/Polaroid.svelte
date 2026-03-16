@@ -9,6 +9,7 @@
 	export let revealThreshold = 0.01;
 
 	let rootEl: HTMLElement | null = null;
+	let tiltEl: HTMLElement | null = null;
 	let revealed = false;
 	let obs: IntersectionObserver | null = null;
 
@@ -21,7 +22,7 @@
 	const HOVER_SCALE = 1.035; // subtle zoom
 
 	function setTilt(e: PointerEvent) {
-		if (!rootEl) return;
+		if (!rootEl || !tiltEl) return;
 		if (prefersReducedMotion()) return;
 
 		const r = rootEl.getBoundingClientRect();
@@ -34,8 +35,7 @@
 		const rotX = (dy * 2 * MAX_TILT_DEG).toFixed(3);
 		const rotY = (-dx * 2 * MAX_TILT_DEG).toFixed(3);
 
-		rootEl.style.setProperty('--rx', `${rotX}deg`);
-		rootEl.style.setProperty('--ry', `${rotY}deg`);
+		tiltEl.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
 		rootEl.style.setProperty('--scale', `${HOVER_SCALE}`);
 		rootEl.style.setProperty('--hover', '1');
 	}
@@ -43,8 +43,7 @@
 	function resetTilt() {
 		if (!rootEl) return;
 
-		rootEl.style.setProperty('--rx', `0deg`);
-		rootEl.style.setProperty('--ry', `0deg`);
+		if (tiltEl) tiltEl.style.transform = `perspective(900px) rotateX(0deg) rotateY(0deg)`;
 		rootEl.style.setProperty('--scale', `1`);
 		rootEl.style.setProperty('--hover', '0');
 	}
@@ -85,60 +84,57 @@
 	});
 </script>
 
-<figure
-	class="polaroid"
-	class:is-revealed={revealed}
+<!-- svelte-ignore a11y-no-static-element-interactions -->
+<div
+	class="hover-polaroid-scale"
 	bind:this={rootEl}
 	on:pointerenter={setTilt}
 	on:pointermove={setTilt}
 	on:pointerleave={resetTilt}
 >
-	<div class="photo">
-		{#if src}
-			<img src={src} {alt} {loading} decoding="async" />
-		{:else}
-			<div class="placeholder" aria-hidden="true"></div>
-		{/if}
-		<div class="reveal-overlay" aria-hidden="true"></div>
-	</div>
-	<figcaption class="caption">{caption}</figcaption>
-</figure>
+	<figure class="polaroid-frame hover-polaroid-tilt" bind:this={tiltEl}>
+		<div class="polaroid hover-polaroid-surface" class:is-revealed={revealed}>
+			<div class="photo">
+				{#if src}
+					<img src={src} {alt} {loading} decoding="async" />
+				{:else}
+					<div class="placeholder" aria-hidden="true"></div>
+				{/if}
+				<div class="reveal-overlay" aria-hidden="true"></div>
+			</div>
+		</div>
+		<figcaption class="caption">{caption}</figcaption>
+	</figure>
+</div>
 
 <style>
-	.polaroid {
-		position: relative;
-		z-index: 3;
+	.polaroid-frame {
 		margin: 0;
 		height: 100%;
+	}
+
+	.polaroid {
+		--hp-border: rgba(11, 18, 32, 0.14);
+		--hp-border-hover: rgba(11, 18, 32, 0.14);
+		--hp-bg: rgba(255, 255, 255, 0.8);
+		--hp-bg-hover: rgba(255, 255, 255, 0.86);
+		--hp-shadow: 0 0px 30px rgba(11, 18, 32, 0.12);
+		--hp-shadow-hover: 0 0px 30px rgba(11, 18, 32, 0.3);
+
+		position: relative;
+		z-index: 3;
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 		padding: 10px 10px 12px;
 		border-radius: 18px;
-		border: 1px solid rgba(11, 18, 32, 0.14);
-		background: rgba(255, 255, 255, 0.8);
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		box-shadow: 0 0px 30px rgba(11, 18, 32, 0.12);
-		transform:
-			perspective(900px)
-			rotateX(var(--rx, 0deg))
-			rotateY(var(--ry, 0deg))
-			scale(var(--scale, 1));
-
-		transform-style: preserve-3d;
-
-		transition:
-			transform 140ms ease,
-			box-shadow 180ms ease;
-
-		will-change: transform;
 		isolation: isolate;
 	}
 
 	.polaroid:hover {
 		z-index: 2000;
-		box-shadow: 0 0px 30px rgba(11, 18, 32, 0.3);
 	}
 
 	.photo {
@@ -154,7 +150,6 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-	.polaroid,
 	.photo {
 		transition: none;
 		transform: none;
