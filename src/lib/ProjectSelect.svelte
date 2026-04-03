@@ -18,6 +18,7 @@
 	let intersectObs: IntersectionObserver | null = null;
 	let wheelAccum = 0;
 	let wheelResetTimer: ReturnType<typeof setTimeout> | null = null;
+	let wheelLockUntil = 0;
 	let isDraggingScrollbar = false;
 	let dragStartY = 0;
 	let dragStartScrollTop = 0;
@@ -167,6 +168,20 @@
 		return Number.isFinite(n) && n > 0 ? n : 56;
 	}
 
+	function wheelDominantPx(e: WheelEvent): number {
+		// Normalize WheelEvent deltas to "pixel-ish" units across devices.
+		// - deltaMode 0: pixels
+		// - deltaMode 1: lines (approx. 16px per line)
+		// - deltaMode 2: pages (use the element height as the scale)
+		const absX = Math.abs(e.deltaX);
+		const absY = Math.abs(e.deltaY);
+		const dominant = absY >= absX ? e.deltaY : e.deltaX;
+		let scale = 1;
+		if (e.deltaMode === 1) scale = 16;
+		else if (e.deltaMode === 2) scale = listboxEl?.clientHeight ?? 800;
+		return dominant * scale;
+	}
+
 	function onReelWheel(e: WheelEvent) {
 		// Make the reel feel like a slot machine: one "tick" per wheel gesture.
 		// Also: always consume the wheel event while hovering the reel so the page
@@ -174,18 +189,26 @@
 		if (!listboxEl) return;
 		if (projects.length <= 1) return;
 
+		// Let pinch-to-zoom / browser zoom gestures work.
+		if (e.ctrlKey) return;
+
 		e.preventDefault();
 		e.stopPropagation();
 
-		// Trackpads often send diagonal gestures (deltaX + deltaY). Use the dominant axis.
-		const dominantDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-		wheelAccum += dominantDelta;
+		const now = typeof window !== 'undefined' ? performance.now() : Date.now();
+		if (now < wheelLockUntil) return;
 
-		const threshold = 24; // small enough to work on trackpads, big enough to ignore noise
+		const dominantPx = wheelDominantPx(e);
+		wheelAccum += dominantPx;
+
+		// Higher threshold reduces accidental "ticks" from tiny trackpad noise.
+		// Keep mouse wheels responsive by using a lower threshold for non-pixel delta modes.
+		const threshold = e.deltaMode === 0 ? 90 : 48;
 		if (Math.abs(wheelAccum) < threshold) return;
 
 		const dir = wheelAccum > 0 ? 1 : -1;
 		wheelAccum = 0;
+		wheelLockUntil = now + 220;
 
 		const step = getSlotStepPx();
 		listboxEl.scrollBy({ top: dir * step, behavior: 'smooth' });
@@ -194,7 +217,7 @@
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = setTimeout(() => {
 			wheelAccum = 0;
-		}, 120);
+		}, 180);
 	}
 
 	async function scrollIdToCenter(id: string, behavior: ScrollBehavior = 'smooth') {

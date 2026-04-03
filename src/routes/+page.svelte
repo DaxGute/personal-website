@@ -244,9 +244,9 @@
 	let panelEls: HTMLElement[] = [];
 	let panelOffsets: number[] = [];
 	let progressIndex = 0;
-	let experiencesT = 0; // 0..1 progress across the Experiences panel
-	let educationT = 0; // 0..1 progress for Education card pull-apart (enter -> exit visibility)
 	let panelW = 0;
+	let experiencesPanelEl: HTMLElement | null = null;
+	let educationPanelEl: HTMLElement | null = null;
 
 	// Decorative "ribbon" line that loops/winds through all panels.
 	let ribbonD = '';
@@ -256,6 +256,12 @@
 	let ribbonPathAnimated: SVGPathElement | null = null;
 	let ribbonPanelIds: string[] = [];
 
+	// Greeting (title slide) intro timeline
+	let greetingTimelineOn = false;
+	let greetingDotsOn = false;
+	let greetingDotsTimer: number | null = null;
+	let greetingScrollLocked = true;
+
 
 	// Contact links
 	const linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
@@ -264,6 +270,31 @@
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	function splitTitle(title: string): { first: string; last: string } {
+		const parts = (title ?? '')
+			.trim()
+			.split(/\s+/g)
+			.filter(Boolean);
+		if (parts.length <= 1) return { first: parts[0] ?? title ?? '', last: '' };
+		return { first: parts[0] ?? '', last: parts.slice(1).join(' ') };
+	}
+
+	function splitSuffixFade(text: string, suffix: string): { prefix: string; fade: string } {
+		const t = (text ?? '').trim();
+		const s = (suffix ?? '').trim();
+		if (!t || !s) return { prefix: t, fade: '' };
+		if (t.toLowerCase().endsWith(s.toLowerCase())) {
+			return { prefix: t.slice(0, -s.length), fade: t.slice(-s.length) };
+		}
+		return { prefix: t, fade: '' };
+	}
+
+	function splitHeadFadeRest(text: string, headChars = 1): { head: string; fade: string } {
+		const t = (text ?? '').trim();
+		const n = Math.max(0, Math.min(t.length, Math.floor(headChars)));
+		return { head: t.slice(0, n), fade: t.slice(n) };
 	}
 
 	function clamp01(n: number) {
@@ -506,6 +537,11 @@
 			.map((p) => document.getElementById(p.id))
 			.filter((el): el is HTMLElement => el instanceof HTMLElement);
 
+		experiencesPanelEl = document.getElementById('experiences');
+		educationPanelEl = document.getElementById('education');
+		const expIdx = panels.findIndex((p) => p.id === 'experiences');
+		const eduIdx = panels.findIndex((p) => p.id === 'education');
+
 		const measure = () => {
 			if (!scroller) return;
 			panelOffsets = panelEls.map((el) => el.offsetLeft);
@@ -543,10 +579,10 @@
 			const t = end === start ? 0 : Math.max(0, Math.min(1, (x - start) / (end - start)));
 
 			progressIndex = i + t;
-			activeId = panels[Math.round(progressIndex)]?.id ?? activeId;
+			const nextActiveId = panels[Math.round(progressIndex)]?.id ?? activeId;
+			if (nextActiveId !== activeId) activeId = nextActiveId;
 
 			// Per-panel animation progress (used for Experiences card fan-in)
-			const expIdx = panels.findIndex((p) => p.id === 'experiences');
 			if (expIdx !== -1 && panelOffsets[expIdx] != null) {
 				const expStart = panelOffsets[expIdx];
 				const expEnd = panelOffsets[Math.min(expIdx + 1, panelOffsets.length - 1)] ?? expStart;
@@ -559,11 +595,10 @@
 				const tailPx = (panelW || denom || window.innerWidth) * 0.5;
 				const end = expEnd - shiftPx + tailPx;
 				const linearT = end === start ? 1 : clamp01((x - start) / (end - start));
-				experiencesT = easeOutCubic(linearT);
+				experiencesPanelEl?.style.setProperty('--exp-t', `${easeOutCubic(linearT)}`);
 			}
 
 			// Education: stacked -> pull apart (Stanford left, Bishops right).
-			const eduIdx = panels.findIndex((p) => p.id === 'education');
 			if (eduIdx !== -1 && panelOffsets[eduIdx] != null) {
 				const eduStart = panelOffsets[eduIdx];
 
@@ -575,9 +610,9 @@
 				const visibleEnd = eduStart + w;
 				const span = visibleEnd - visibleStart;
 				const eduLinearT = span <= 0 ? 0 : clamp01((x - visibleStart) / span);
-				educationT = easeInOutPow(eduLinearT, 3);
+				educationPanelEl?.style.setProperty('--edu-t', `${easeInOutPow(eduLinearT, 3)}`);
 			} else {
-				educationT = 0;
+				educationPanelEl?.style.setProperty('--edu-t', `0`);
 			}
 
 			// Keep the ribbon visible across all slides.
@@ -603,6 +638,10 @@
 		};
 
 		const wheel = (e: WheelEvent) => {
+			if (greetingScrollLocked) {
+				e.preventDefault();
+				return;
+			}
 			// Allow Awards arc to handle wheel only when hovering a card.
 			const target = e.target as HTMLElement | null;
 			if (target?.closest?.('.award-card-surface')) return;
@@ -618,6 +657,31 @@
 			}
 		};
 
+		const onScrollLock = () => {
+			// Keep pinned to title while the intro is playing.
+			if (!greetingScrollLocked) return;
+			if (!scroller) return;
+			if (scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
+		};
+
+		const keyLock = (e: KeyboardEvent) => {
+			if (!greetingScrollLocked) return;
+			// Prevent keys that can trigger scroll.
+			const keys = [
+				'ArrowLeft',
+				'ArrowRight',
+				'ArrowUp',
+				'ArrowDown',
+				'PageUp',
+				'PageDown',
+				'Home',
+				'End',
+				' ',
+				'Spacebar'
+			];
+			if (keys.includes(e.key)) e.preventDefault();
+		};
+
 		measure();
 		// Always start on the title (first) panel.
 		// Use scrollTo(...behavior:'auto') to avoid smooth scrolling, and re-apply after rAF/timeout
@@ -630,8 +694,28 @@
 		lastT = performance.now();
 		updateProgress();
 
+		// Greeting slide staged animations:
+		// - last name fades/slides in
+		// - kicker fades/slides
+		// - "scroll to continue" fades/slides
+		// - dots start jumping after everything else (~1.75s)
+		requestAnimationFrame(() => {
+			greetingTimelineOn = true;
+			if (prefersReducedMotion()) {
+				greetingDotsOn = true;
+				greetingScrollLocked = false;
+				return;
+			}
+			greetingDotsTimer = window.setTimeout(() => {
+				greetingDotsOn = true;
+				greetingScrollLocked = false;
+			}, 1750);
+		});
+
 		scroller.addEventListener('wheel', wheel, { passive: false });
 		scroller.addEventListener('scroll', onScroll, { passive: true });
+		scroller.addEventListener('scroll', onScrollLock, { passive: true });
+		window.addEventListener('keydown', keyLock);
 		window.addEventListener('resize', () => {
 			measure();
 			updateProgress();
@@ -640,13 +724,17 @@
 		return () => {
 			scroller?.removeEventListener('wheel', wheel as EventListener);
 			scroller?.removeEventListener('scroll', onScroll);
+			scroller?.removeEventListener('scroll', onScrollLock);
+			window.removeEventListener('keydown', keyLock);
 			cancelScrollAnim();
+			if (greetingDotsTimer != null) window.clearTimeout(greetingDotsTimer);
+			greetingDotsTimer = null;
 		};
 	});
 
 </script>
 
-<div class="stage">
+<div class="stage" class:intro-locked={greetingScrollLocked}>
 	<main
 		class="scroller"
 		bind:this={scroller}
@@ -687,22 +775,25 @@
 				id={panel.id}
 				class="panel"
 				aria-label={panel.title}
-				style={
-					panel.id === 'experiences'
-						? `--exp-t:${experiencesT};`
-						: panel.id === 'education'
-							? `--edu-t:${educationT};`
-							: undefined
-				}
 			>
 				{#if panel.id === 'greeting'}
-					<div class="greeting">
+					{@const parts = splitTitle(panel.title)}
+					{@const firstParts = splitSuffixFade(parts.first, 'ton')}
+					{@const lastParts = splitHeadFadeRest(parts.last, 1)}
+					<div class="greeting" class:greeting--animate={greetingTimelineOn}>
 						{#if panel.kicker}
-							<p class="kicker">{panel.kicker}</p>
+							<p class="kicker greeting-kicker">{panel.kicker}</p>
 						{/if}
-						<h1 class="title">{panel.title}</h1>
-						<p class="body">
-							{panel.body}<span class="jump-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+						<h1 class="title title--greeting">
+							<span class="title-first"
+								><span class="first-static">{firstParts.prefix}</span
+								>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
+							>{#if parts.last}<span class="title-last"><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span>{/if}
+						</h1>
+						<p class="body greeting-body">
+							{panel.body}<span class="jump-dots" class:jump-dots--on={greetingDotsOn} aria-hidden="true"
+								><span>.</span><span>.</span><span>.</span></span
+							>
 						</p>
 					</div>
 				{:else}
@@ -859,6 +950,7 @@
 				class="dot-btn"
 				aria-label={`Go to ${p.navTitle ?? p.title}`}
 				aria-current={activeId === p.id ? 'true' : undefined}
+				disabled={greetingScrollLocked}
 				onclick={() => scrollToPanel(p.id)}
 			>
 				<span
@@ -909,6 +1001,7 @@
 		z-index: 2;
 		pointer-events: none;
 		overflow: visible;
+		will-change: transform;
 	}
 
 	.ribbon-base {
@@ -930,6 +1023,8 @@
 		stroke-miterlimit: 10;
 		shape-rendering: geometricPrecision;
 		filter: drop-shadow(0 8px 18px rgba(11, 18, 32, 0.16));
+		/* Hint: keep this expensive layer composited during scroll */
+		will-change: transform;
 	}
 
 	/* hide scrollbars without disabling scrolling */
@@ -950,6 +1045,11 @@
 		gap: 12px;
 		padding: 18px 18px 0 18px;
 		pointer-events: none; /* allow drag/scroll anywhere */
+		opacity: 1;
+		transform: translateY(0);
+		transition:
+			opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1),
+			transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
 	.dots {
@@ -960,6 +1060,18 @@
 		z-index: 10;
 		display: inline-flex;
 		gap: 12px;
+		opacity: 1;
+		transition: opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	/* During the greeting intro, keep UI chrome invisible */
+	.intro-locked .chrome {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+
+	.intro-locked .dots {
+		opacity: 0;
 	}
 
 	.dot-btn {
@@ -973,6 +1085,11 @@
 		flex-direction: column;
 		align-items: center;
 		gap: 6px;
+	}
+
+	.dot-btn:disabled {
+		cursor: default;
+		opacity: 0.45;
 	}
 
 	.dot-btn:focus-visible {
@@ -1306,25 +1423,27 @@
 		width: var(--edu-card-size);
 		height: var(--edu-card-size);
 		margin: 0;
-		transform: translate(-50%, 0);
+		transform: translate3d(-50%, 0, 0);
 		will-change: transform;
 	}
 
 	/* Stanford starts visually on top */
 	.education-card.is-stanford {
 		z-index: 2;
-		transform: translate(-50%, 0)
+		transform: translate3d(-50%, 0, 0)
 			/* both move right; Stanford moves farther */
 			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 1.9)))
-			translateY(calc(-1 * var(--edu-stack-sep) * (1 - var(--t))));
+			translateY(calc(-1 * var(--edu-stack-sep) * (1 - var(--t))))
+			translateZ(0);
 	}
 
 	/* Bishops starts underneath, then separates right */
 	.education-card:not(.is-stanford) {
 		z-index: 1;
-		transform: translate(-50%, 0)
+		transform: translate3d(-50%, 0, 0)
 			translateX(calc(var(--edu-base-x) + (var(--edu-split) * var(--t) * 0.75)))
-			translateY(calc(var(--edu-stack-sep) * (1 - var(--t))));
+			translateY(calc(var(--edu-stack-sep) * (1 - var(--t))))
+			translateZ(0);
 	}
 
 	/* On hover, bring the hovered school above the other card */
@@ -1373,7 +1492,12 @@
 		width: 100%;
 		min-height: clamp(180px, 20vh, 240px);
 		/* Use 2D transforms to keep backdrop-filter reliable on some browsers. */
-		transform: translate(calc(var(--spread-x) * (1 - var(--t))), calc(var(--spread-y) * (1 - var(--t))));
+		transform: translate3d(
+			calc(var(--spread-x) * (1 - var(--t))),
+			calc(var(--spread-y) * (1 - var(--t))),
+			0
+		);
+		will-change: transform;
 	}
 
 	/* Explicit stacking order so overlapping cards don't steal hover */
@@ -1452,6 +1576,76 @@
 		padding: 6px;
 	}
 
+	.title--greeting {
+		white-space: nowrap;
+	}
+
+	.title-first {
+		display: inline-block;
+	}
+
+	.first-static {
+		display: inline-block;
+	}
+
+	.first-fade {
+		display: inline-block;
+		opacity: 0;
+		will-change: opacity;
+	}
+
+	.title-last {
+		display: inline-flex;
+		margin-left: 0.22em;
+	}
+
+	.last-g {
+		display: inline-block;
+		opacity: 0;
+		transform: translateX(-14px);
+		will-change: transform, opacity;
+	}
+
+	.last-fade {
+		display: inline-block;
+		opacity: 0;
+		transform: translateX(-14px);
+		will-change: transform, opacity;
+	}
+
+	.greeting-kicker,
+	.greeting-body {
+		opacity: 0;
+		transform: translateY(10px);
+		will-change: transform, opacity;
+	}
+
+	.greeting-kicker {
+		transform: translateY(-10px);
+	}
+
+	.greeting--animate .first-fade {
+		animation: greetTonIn 1200ms ease-out 0ms forwards;
+	}
+
+	.greeting--animate .last-g {
+		animation: greetGIn 650ms cubic-bezier(0.16, 1, 0.3, 1) 0ms forwards;
+	}
+
+	.greeting--animate .last-fade {
+		animation:
+			greetTonIn 1200ms ease-out 0ms forwards,
+			greetSlideXIn 650ms cubic-bezier(0.16, 1, 0.3, 1) 0ms forwards;
+	}
+
+	.greeting--animate .greeting-kicker {
+		animation: greetTopTextIn 420ms cubic-bezier(0.16, 1, 0.3, 1) 560ms forwards;
+	}
+
+	.greeting--animate .greeting-body {
+		animation: greetContinueIn 420ms cubic-bezier(0.16, 1, 0.3, 1) 1080ms forwards;
+	}
+
 	.jump-dots {
 		display: inline-flex;
 		gap: 3px;
@@ -1461,14 +1655,70 @@
 	.jump-dots > span {
 		display: inline-block;
 		transform: translateY(0);
+		animation: none;
+		opacity: 0.65;
+	}
+
+	.jump-dots.jump-dots--on > span {
 		animation: dotJump 1s infinite ease-in-out;
 	}
 
-	.jump-dots > span:nth-child(2) {
+	.jump-dots.jump-dots--on > span:nth-child(2) {
 		animation-delay: 0.12s;
 	}
-	.jump-dots > span:nth-child(3) {
+	.jump-dots.jump-dots--on > span:nth-child(3) {
 		animation-delay: 0.24s;
+	}
+
+	@keyframes greetTonIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	@keyframes greetGIn {
+		from {
+			opacity: 0;
+			transform: translateX(-14px);
+		}
+		to {
+			opacity: 1;
+			transform: translateX(0);
+		}
+	}
+
+	@keyframes greetSlideXIn {
+		from {
+			transform: translateX(-14px);
+		}
+		to {
+			transform: translateX(0);
+		}
+	}
+
+	@keyframes greetTopTextIn {
+		from {
+			opacity: 0;
+			transform: translateY(-10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes greetContinueIn {
+		from {
+			opacity: 0;
+			transform: translateY(10px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	@keyframes dotJump {
@@ -1481,6 +1731,31 @@
 		40% {
 			transform: translateY(-6px);
 			opacity: 1;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.title-first,
+		.title-last,
+		.greeting-kicker,
+		.greeting-body {
+			animation: none !important;
+			opacity: 1 !important;
+			transform: none !important;
+		}
+
+		.first-fade {
+			opacity: 1 !important;
+		}
+
+		.last-g,
+		.last-fade {
+			opacity: 1 !important;
+			transform: none !important;
+		}
+
+		.jump-dots > span {
+			animation: none !important;
 		}
 	}
 
