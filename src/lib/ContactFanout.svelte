@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import signature from '$lib/assets/signature.svg';
 
 	export let linkedinHref: string;
 	export let githubHref: string;
@@ -106,7 +105,18 @@
 			onclick={toggle}
 		>
 			<span class="icon-swap" aria-hidden="true">
-				<img class="swap-icon swap-mail" src={signature} alt="" aria-hidden="true" />
+				<svg
+					class="swap-icon swap-contact"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path>
+				</svg>
 
 				<svg
 					class="swap-icon swap-x"
@@ -158,7 +168,6 @@
 		</a>
 
 		<a class="bubble bubble-email" href={emailHref} aria-label="Email" title="Email">
-			<!-- Outline mail icon (previously used as the main contact icon) -->
 			<svg
 				viewBox="0 0 24 24"
 				fill="none"
@@ -308,13 +317,8 @@
 			opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 	}
 
-	/* Ensure the signature image scales nicely */
-	.swap-icon.swap-mail {
-		object-fit: contain;
-	}
-
 	/* Closed state */
-	.swap-mail {
+	.swap-contact {
 		opacity: 1;
 		transform: rotate(0deg) scale(1);
 	}
@@ -323,8 +327,8 @@
 		transform: rotate(-90deg) scale(0.85);
 	}
 
-	/* Open state: rotate mail out, rotate X in */
-	.contact-menu[data-open='true'] .swap-mail {
+	/* Open state: rotate contact icon out, rotate X in */
+	.contact-menu[data-open='true'] .swap-contact {
 		opacity: 0;
 		transform: rotate(90deg) scale(0.85);
 	}

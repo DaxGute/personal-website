@@ -248,13 +248,9 @@
 	let experiencesPanelEl: HTMLElement | null = null;
 	let educationPanelEl: HTMLElement | null = null;
 
-	// Decorative "ribbon" line that loops/winds through all panels.
-	let ribbonD = '';
+	// Decorative line from `static/background.svg` (viewBox 0 0 3200 300), scaled to the scroll area.
 	let ribbonWidth = 1;
 	let ribbonHeight = 1;
-	let ribbonLen = 0;
-	let ribbonPathAnimated: SVGPathElement | null = null;
-	let ribbonPanelIds: string[] = [];
 
 	// Greeting (title slide) intro timeline
 	let greetingTimelineOn = false;
@@ -310,171 +306,15 @@
 		return 1 - 0.5 * Math.pow(2 * (1 - x), power);
 	}
 
-	function hash32(str: string) {
-		// FNV-1a (32-bit)
-		let h = 2166136261;
-		for (let i = 0; i < str.length; i++) {
-			h ^= str.charCodeAt(i);
-			h = Math.imul(h, 16777619);
-		}
-		return h >>> 0;
-	}
-
-	function rand01(seed: number) {
-		// xorshift32 -> [0, 1)
-		let x = seed >>> 0;
-		x ^= x << 13;
-		x ^= x >>> 17;
-		x ^= x << 5;
-		return ((x >>> 0) & 0xffffffff) / 4294967296;
-	}
-
 	function clamp(n: number, min: number, max: number) {
 		return Math.max(min, Math.min(max, n));
 	}
 
-	function buildRibbonPathRightToLeft(panelOffsetsPx: number[], panelIds: string[], panelW: number, h: number) {
-		if (panelOffsetsPx.length === 0) return '';
-		const totalW = panelOffsetsPx[panelOffsetsPx.length - 1] + panelW;
-
-		// “Cursive” ribbon: generate multiple swoopy control points per panel, then
-		// convert them to a smooth spline (Catmull–Rom -> cubic Béziers).
-		type Pt = { x: number; y: number };
-		const TAU = Math.PI * 2;
-
-		const clampY = (y: number) => clamp(y, h * 0.10, h * 0.90);
-
-		const pushLoop = (
-			pts: Pt[],
-			cx: number,
-			cy: number,
-			rx: number,
-			ry: number,
-			tiltRad: number,
-			dir: 1 | -1,
-			seed: number
-		) => {
-			// Near-full loop (avoid closing exactly on the start point to prevent a cusp).
-			const steps = 24;
-			const start = rand01(seed ^ 0x68e31da4) * TAU;
-			const sweep = TAU * (0.985 + 0.01 * rand01(seed ^ 0xb5297a4d));
-			const ct = Math.cos(tiltRad);
-			const st = Math.sin(tiltRad);
-
-			for (let s = 0; s < steps; s++) {
-				const t = steps <= 1 ? 0 : s / (steps - 1);
-				const a = start + dir * sweep * t;
-				const x = Math.cos(a) * rx;
-				const y = Math.sin(a) * ry;
-				const xr = x * ct - y * st;
-				const yr = x * st + y * ct;
-				pts.push({ x: cx + xr, y: clampY(cy + yr) });
-			}
-		};
-
-		const points: Pt[] = [];
-		points.push({ x: totalW + 180, y: clampY(h * 0.34) });
-
-		// Build points from right -> left (matches scroll direction).
-		for (let i = panelOffsetsPx.length - 1; i >= 0; i--) {
-			const panelStart = panelOffsetsPx[i] ?? 0;
-			const id = panelIds[i] ?? `panel-${i}`;
-			const seed = hash32(id);
-
-			const rA = rand01(seed ^ 0x9e3779b9);
-			const rB = rand01(seed ^ 0x85ebca6b);
-			const rC = rand01(seed ^ 0xc2b2ae35);
-			const rD = rand01(seed ^ 0x27d4eb2f);
-
-			// Big vertical movement (huge swoops), alternating per panel.
-			const dir = i % 2 === 0 ? 1 : -1;
-			const baseY = clampY(h * (0.52 + (rA - 0.5) * 0.14));
-			const amp = h * clamp(0.22 + 0.16 * rB, 0.18, 0.42);
-
-			// Slight horizontal jitter so each slide is distinct.
-			const jx = (rC - 0.5) * panelW * 0.05;
-
-			const x1 = panelStart + panelW * (0.86 + (rD - 0.5) * 0.06) + jx;
-			const x2 = panelStart + panelW * (0.66 + (rC - 0.5) * 0.08) + jx;
-			const x3 = panelStart + panelW * (0.40 + (rB - 0.5) * 0.06) + jx;
-			const x4 = panelStart + panelW * (0.20 + (rA - 0.5) * 0.05) + jx;
-
-			// “Handwriting” feel: downstroke -> upstroke -> downstroke -> flick.
-			const y1 = clampY(baseY + dir * amp * (0.22 + 0.18 * rD));
-			const y2 = clampY(baseY - dir * amp * (1.05 + 0.15 * rC));
-			const y3 = clampY(baseY + dir * amp * (0.95 + 0.10 * rB));
-			const y4 = clampY(baseY + dir * amp * (0.08 + 0.20 * rA));
-
-			points.push({ x: x1, y: y1 });
-			points.push({ x: x2, y: y2 });
-			// Add 1–2 cursive loops per panel so the stroke actually loops around itself.
-			const loops = 1 + Math.floor(rand01(seed ^ 0x1f123bb5) * 2);
-			for (let l = 0; l < loops; l++) {
-				const ls = seed ^ ((l + 1) * 0x5bd1e995);
-				const lr1 = rand01(ls ^ 0x6c2e2c6f);
-				const lr2 = rand01(ls ^ 0xbb67ae85);
-				const lr3 = rand01(ls ^ 0x9b05688c);
-
-				const cx = panelStart + panelW * (0.58 - l * 0.13 + (lr1 - 0.5) * 0.05) + jx;
-				const cy = clampY(baseY + dir * amp * (0.12 + 0.22 * lr2) * (l % 2 === 0 ? 1 : -1));
-				const rx = clamp(panelW * (0.09 + 0.07 * lr2), 44, panelW * 0.22);
-				const ry = clamp(h * (0.10 + 0.10 * lr1), 36, h * 0.26);
-				const tilt = (lr3 - 0.5) * 1.0;
-				const loopDir: 1 | -1 = rand01(ls ^ 0x27d4eb2d) > 0.5 ? 1 : -1;
-
-				const sizeBoost = clamp(0.95 + (amp / h) * 0.40, 0.95, 1.28);
-				pushLoop(points, cx, cy, rx * sizeBoost, ry * sizeBoost, tilt, loopDir, ls ^ 0x2e1b2138);
-			}
-			points.push({ x: x3, y: y3 });
-			points.push({ x: x4, y: y4 });
-		}
-
-		points.push({ x: -260, y: clampY(h * 0.66) });
-
-		// Use a centripetal Catmull–Rom conversion (smoother for uneven point spacing),
-		// and slightly damp tangents to reduce “snappiness” near loop stitching.
-		const alpha = 0.5;
-		const tangScale = 0.72;
-		const dist = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y);
-		const tInc = (a: Pt, b: Pt) => Math.pow(dist(a, b), alpha);
-		let d = `M ${points[0]!.x} ${points[0]!.y}`;
-
-		for (let i = 0; i < points.length - 1; i++) {
-			const p0 = points[i - 1] ?? points[i]!;
-			const p1 = points[i]!;
-			const p2 = points[i + 1]!;
-			const p3 = points[i + 2] ?? p2;
-
-			const t0 = 0;
-			const t1 = t0 + tInc(p0, p1);
-			const t2 = t1 + tInc(p1, p2);
-			const t3 = t2 + tInc(p2, p3);
-
-			const dt = t2 - t1;
-			const denom1 = t2 - t0;
-			const denom2 = t3 - t1;
-
-			const m1x = denom1 > 1e-6 ? ((p2.x - p0.x) / denom1) * tangScale : 0;
-			const m1y = denom1 > 1e-6 ? ((p2.y - p0.y) / denom1) * tangScale : 0;
-			const m2x = denom2 > 1e-6 ? ((p3.x - p1.x) / denom2) * tangScale : 0;
-			const m2y = denom2 > 1e-6 ? ((p3.y - p1.y) / denom2) * tangScale : 0;
-
-			const c1x = p1.x + (m1x * dt) / 3;
-			const c1y = p1.y + (m1y * dt) / 3;
-			const c2x = p2.x - (m2x * dt) / 3;
-			const c2y = p2.y - (m2y * dt) / 3;
-
-			d += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`;
-		}
-
-		return d;
-	}
-
-	function setRibbonDrawProgress(t: number) {
-		if (!ribbonPathAnimated || ribbonLen <= 0) return;
-		const p = clamp01(t);
-		ribbonPathAnimated.style.strokeDashoffset = `${ribbonLen * (1 - p)}`;
-	}
+	/** `static/background.svg` — path in viewBox 0 0 3200 300 */
+	const RIBBON_VIEWBOX_W = 3200;
+	const RIBBON_VIEWBOX_H = 300;
+	const RIBBON_PATH_D =
+		'm -12.914181,111.40442 c 590.857891,-0.62626 143.701551,103.81272 282.481281,80.44502 86.94196,-14.63927 92.43184,-84.44327 34.74779,-45.56945 -110.24799,74.29716 111.69439,9.92858 129.58722,-3.31676 18.30719,-13.55208 -34.95776,-14.26853 -79.79039,46.93158 -14.63959,19.9842 64.74964,-15.98568 64.74964,-15.98568 0,0 5.34627,6.47487 -20.4468,23.8173 -62.06536,41.73075 -63.74974,152.47679 85.06848,34.83426 173.31068,-137.004109 389.59544,-125.31322 432.39345,-124.95271 28.71572,0.24189 25.61363,-23.184702 25.45812,-41.241642 -0.0901,-10.46198 -19.13995,-19.511717 -43.78868,-19.511717 -26.72535,0 -51.04783,4.08019 -50.82093,18.37206 0.0648,4.08065 19.95517,21.62226 91.92951,0.54052 7.79074,-2.28196 24.97896,2.23571 24.97896,12.18953 0,15.99737 0.69239,38.915039 0.10005,53.502339 -0.82645,20.35281 -11.39545,19.56432 -27.86198,20.03815 -41.4397,1.19245 -52.19109,1.54534 -76.35443,0.59983 -24.16334,-0.9455 -42.09036,4.30987 -40.59794,-15.71555 1.24481,-16.70291 1.33659,-42.973249 1.33659,-59.082379 0,-7.64016 5.29566,-11.671529 23.97462,-12.10887 128.08727,-2.99898 243.08752,96.296669 380.64162,107.332739 137.5541,11.03607 30.5571,70.25212 107.2486,69.92756 76.6916,-0.32455 -16.6336,-21.40533 -46.4866,-32.47007 -8.4961,-2.08473 -8.3613,-7.48661 -1.9659,-10.16374 11.9584,-5.00586 19.464,-7.7785 34.4289,-13.68073 14.965,-5.90223 21.1368,-5.73995 32.8048,0.0966 11.668,5.83657 24.427,12.17776 30.0241,15.61324 5.5971,3.43548 5.3442,6.33512 0.4744,8.1921 -16.387,6.24883 -65.9392,-6.06203 -49.1374,-6.3776 65.7042,-1.23405 44.2886,71.24002 46.6522,85.09903 0,0 209.7418,-226.591175 291.2449,-162.38755 81.5031,64.20362 91.5819,72.92109 120.5784,98.25797 5.1885,4.53365 13.2354,20.72681 12.8695,21.02603 -0.4737,0.38741 -13.6585,-1.23737 -22.7355,-7.28722 -24.6101,-16.40273 -89.4174,-66.45412 -117.502,-89.20891 -10.7189,-8.68466 -6.1218,-13.31021 -1.3383,-17.51679 9.0044,-7.91843 20.4871,4.36347 12.9381,5.02917 -4.6881,0.41342 -10.5068,5.12676 -8.6145,10.46865 2.6844,7.57779 171.8412,131.42977 202.7858,129.75844 46.8074,-2.52811 37.8146,-32.7113 61.59,-40.43437 35.8333,-11.63991 16.976,117.5622 91.4932,-1.24948 132.6328,-211.472315 292.2986,3.89055 282.3923,16.75118 -9.9063,12.86063 -67.2951,-14.47013 -121.7691,-30.58036 -54.474,-16.11022 60.9163,-29.44165 114.0783,-39.62421 53.162,-10.18256 -124.384,128.0261 -92.342,56.42455 32.042,-71.60155 -13.9634,-166.396561 538.0936,-150.186567 338.0187,9.925208 149.1456,98.051147 78.4522,112.014567 0,0 -98.0235,-210.142931 30.7525,-126.221477 128.776,83.921457 -166.3845,82.588727 -87.1505,145.443827 79.2339,62.85511 505.3109,-2.19859 505.3109,-2.19859';
 
 	function easeOutCubic(t: number) {
 		return 1 - Math.pow(1 - t, 3);
@@ -545,7 +385,6 @@
 		const measure = () => {
 			if (!scroller) return;
 			panelOffsets = panelEls.map((el) => el.offsetLeft);
-			ribbonPanelIds = panelEls.map((el) => el.id);
 
 			panelW = scroller.clientWidth || window.innerWidth;
 			const h = scroller.clientHeight || window.innerHeight;
@@ -553,17 +392,6 @@
 
 			ribbonWidth = Math.max(1, totalW);
 			ribbonHeight = Math.max(1, h);
-			ribbonD = buildRibbonPathRightToLeft(panelOffsets, ribbonPanelIds, panelW, h);
-
-			// Recompute path length after DOM updates.
-			requestAnimationFrame(() => {
-				if (!ribbonPathAnimated) return;
-				ribbonLen = ribbonPathAnimated.getTotalLength();
-				if (!Number.isFinite(ribbonLen) || ribbonLen <= 0) return;
-				ribbonPathAnimated.style.strokeDasharray = `${ribbonLen}`;
-				// Default: fully visible (we can animate later if desired).
-				setRibbonDrawProgress(1);
-			});
 		};
 
 		const updateProgress = () => {
@@ -615,11 +443,6 @@
 				educationPanelEl?.style.setProperty('--edu-t', `0`);
 			}
 
-			// Keep the ribbon visible across all slides.
-			// NOTE: avoid writing to strokeDashoffset on every scroll frame — the ribbon
-			// has a drop-shadow filter and can be expensive to repaint, which makes
-			// slide-to-slide motion feel “stuck”/janky. We already set it to fully drawn
-			// after measuring in `measure()`.
 		};
 
 		let lastX = 0;
@@ -746,7 +569,8 @@
 			focusable="false"
 			width={ribbonWidth}
 			height={ribbonHeight}
-			viewBox={`0 0 ${ribbonWidth} ${ribbonHeight}`}
+			viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
+			preserveAspectRatio="xMidYMid slice"
 			style={`width:${ribbonWidth}px;height:${ribbonHeight}px;`}
 		>
 			<defs>
@@ -755,7 +579,7 @@
 					gradientUnits="userSpaceOnUse"
 					x1="0"
 					y1="0"
-					x2={ribbonWidth}
+					x2={RIBBON_VIEWBOX_W}
 					y2="0"
 				>
 					<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="0.9" />
@@ -764,10 +588,8 @@
 				</linearGradient>
 			</defs>
 
-			<!-- faint full ribbon (always visible) -->
-			<path class="ribbon-base" d={ribbonD} />
-			<!-- animated ribbon "draw" layer -->
-			<path class="ribbon-anim" bind:this={ribbonPathAnimated} d={ribbonD} />
+			<path class="ribbon-base" d={RIBBON_PATH_D} />
+			<path class="ribbon-anim" d={RIBBON_PATH_D} />
 		</svg>
 
 		{#each panels as panel}
@@ -988,8 +810,8 @@
 			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
 			var(--bg);
 		background-repeat: no-repeat;
-		/* Keep background stationary while panels scroll. */
-		background-attachment: scroll;
+		/* Scroll wash layers with panel content (not fixed in the viewport). */
+		background-attachment: local, local, local;
 		scroll-behavior: smooth;
 		-webkit-overflow-scrolling: touch;
 		touch-action: pan-x;
@@ -1007,7 +829,7 @@
 	.ribbon-base {
 		fill: none;
 		stroke: rgba(11, 18, 32, 0.22);
-		stroke-width: 4;
+		stroke-width: 2;
 		stroke-linecap: butt;
 		stroke-linejoin: miter;
 		stroke-miterlimit: 10;
@@ -1017,7 +839,7 @@
 	.ribbon-anim {
 		fill: none;
 		stroke: url(#ribbonStroke);
-		stroke-width: 6;
+		stroke-width: 3;
 		stroke-linecap: butt;
 		stroke-linejoin: miter;
 		stroke-miterlimit: 10;
