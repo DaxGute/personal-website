@@ -44,6 +44,11 @@
 	// Manual control (only while hovered).
 	export let wheelPhasePerPx = 0.00045; // cycles per px of wheel delta
 
+	/** Initial spin speed when the block first enters the viewport (cycles per second). */
+	const ENTRY_IMPULSE_SPEED = 0.507;
+	/** Exponential decay time constant for that spin (ms); higher = longer glide. */
+	const ENTRY_IMPULSE_DECAY_MS = 820;
+
 	let orbitEl: HTMLElement | null = null;
 	let awardEls: (HTMLElement | null)[] = [];
 	let raf: number | null = null;
@@ -53,6 +58,11 @@
 	let snapTimer: number | null = null;
 	let didInitialSnap = false;
 	let wheelLockUntil = 0;
+
+	// One-time “push” when the awards first scroll into view: phase spins then eases to rest.
+	let entryImpulseVelocity = 0; // cycles per second
+	let didEntryImpulse = false;
+	let awardsRootEl: HTMLElement | null = null;
 
 	let hoverCapable = false;
 	let allowManual = false; // true only while hovered (desktop)
@@ -120,6 +130,7 @@
 	}
 
 	function animatePhaseTo(target: number, durationMs = 560) {
+		entryImpulseVelocity = 0;
 		phaseAnim = {
 			start: phase,
 			delta: shortestDelta(phase, wrap01(target)),
@@ -155,6 +166,7 @@
 		if (n <= 0) return;
 		const idx = closestIndexToTip();
 		const tip = tipPhase();
+		entryImpulseVelocity = 0;
 		phaseAnim = null;
 		phase = wrap01(tip - idx / n);
 	}
@@ -197,6 +209,15 @@
 				const t = clamp01((now - phaseAnim.startTime) / phaseAnim.durationMs);
 				phase = wrap01(phaseAnim.start + phaseAnim.delta * easeInOutCubic(t));
 				if (t >= 1) phaseAnim = null;
+			}
+
+			if (entryImpulseVelocity > 1e-6) {
+				phase = wrap01(phase + entryImpulseVelocity * (dt / 1000));
+				entryImpulseVelocity *= Math.exp(-dt / ENTRY_IMPULSE_DECAY_MS);
+				if (entryImpulseVelocity < 0.0016) {
+					entryImpulseVelocity = 0;
+					scheduleSnap(40, 420);
+				}
 			}
 
 			// Stop on hover (and while dragging).
@@ -282,6 +303,7 @@
 
 			e.preventDefault();
 			e.stopPropagation();
+			entryImpulseVelocity = 0;
 			phaseAnim = null;
 			const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
 			// Invert so "scroll down" advances forward visually.
@@ -293,6 +315,7 @@
 		const onPointerDown = (e: PointerEvent) => {
 			if (!shouldAnimate()) return;
 			if (hoverCapable && !allowManual) return;
+			entryImpulseVelocity = 0;
 			phaseAnim = null;
 			dragging = true;
 			dragStartX = e.clientX;
@@ -324,6 +347,27 @@
 				});
 			});
 		}
+
+		let awardsRevealObserver: IntersectionObserver | null = null;
+		if (typeof IntersectionObserver !== 'undefined' && awardsRootEl) {
+			awardsRevealObserver = new IntersectionObserver(
+				(entries) => {
+					for (const e of entries) {
+						if (!e.isIntersecting || didEntryImpulse) continue;
+						if (!shouldAnimate()) continue;
+						didEntryImpulse = true;
+						phaseAnim = null;
+						entryImpulseVelocity = ENTRY_IMPULSE_SPEED;
+						awardsRevealObserver?.disconnect();
+						awardsRevealObserver = null;
+						break;
+					}
+				},
+				{ threshold: 0.16, rootMargin: '0px 0px -6% 0px' }
+			);
+			awardsRevealObserver.observe(awardsRootEl);
+		}
+
 		orbitEl?.addEventListener('mousemove', onHoverCheck, { passive: true });
 		orbitEl?.addEventListener('mouseleave', onLeaveOrbit, { passive: true });
 		// Capture phase so we intercept before the page scroller's wheel handler.
@@ -333,6 +377,7 @@
 		window.addEventListener('pointerup', onPointerUp, { passive: true });
 		window.addEventListener('resize', onResize);
 		return () => {
+			awardsRevealObserver?.disconnect();
 			if (snapTimer != null) window.clearTimeout(snapTimer);
 			orbitEl?.removeEventListener('mousemove', onHoverCheck as EventListener);
 			orbitEl?.removeEventListener('mouseleave', onLeaveOrbit as EventListener);
@@ -346,7 +391,7 @@
 	});
 </script>
 
-<div class="awards" aria-label="Awards">
+<div class="awards" aria-label="Awards" bind:this={awardsRootEl}>
 	<div
 		class="awards-carousel awards-orbit"
 		bind:this={orbitEl}

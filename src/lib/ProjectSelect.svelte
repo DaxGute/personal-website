@@ -16,6 +16,13 @@
 	let scrollRaf = 0;
 	let resizeObs: ResizeObserver | null = null;
 	let intersectObs: IntersectionObserver | null = null;
+	let viewportFadeObs: IntersectionObserver | null = null;
+	let wrapEl: HTMLDivElement | null = null;
+	let reelEl: HTMLDivElement | null = null;
+	let descEl: HTMLDivElement | null = null;
+	let reelViewportRevealed = false;
+	let descViewportRevealed = false;
+	let viewportFadeMode = false;
 	let wheelAccum = 0;
 	let wheelResetTimer: ReturnType<typeof setTimeout> | null = null;
 	let wheelLockUntil = 0;
@@ -33,6 +40,21 @@
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	function elIntersectsViewport(el: HTMLElement | null) {
+		if (!el) return false;
+		const r = el.getBoundingClientRect();
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		return (
+			r.width > 0 &&
+			r.height > 0 &&
+			r.bottom > 0 &&
+			r.right > 0 &&
+			r.top < vh &&
+			r.left < vw
+		);
 	}
 
 	function getOptionEls(): HTMLButtonElement[] {
@@ -293,6 +315,28 @@
 	}
 
 	onMount(() => {
+		const fadeOk = !prefersReducedMotion() && typeof IntersectionObserver !== 'undefined';
+		if (fadeOk && wrapEl && reelEl && descEl) {
+			reelViewportRevealed = elIntersectsViewport(reelEl);
+			descViewportRevealed = elIntersectsViewport(descEl);
+			viewportFadeMode = true;
+			viewportFadeObs = new IntersectionObserver(
+				(entries) => {
+					for (const entry of entries) {
+						const t = entry.target;
+						if (t === reelEl) reelViewportRevealed = entry.isIntersecting;
+						if (t === descEl) descViewportRevealed = entry.isIntersecting;
+					}
+				},
+				{ threshold: 0.12, root: null, rootMargin: '0px' }
+			);
+			viewportFadeObs.observe(reelEl);
+			viewportFadeObs.observe(descEl);
+		} else {
+			reelViewportRevealed = true;
+			descViewportRevealed = true;
+		}
+
 		// Slot-machine behavior:
 		// - spin the reel (scroll) and always select the option in the center window.
 		// - on mount, center initialId (if provided) without animation.
@@ -346,6 +390,8 @@
 		resizeObs = null;
 		intersectObs?.disconnect();
 		intersectObs = null;
+		viewportFadeObs?.disconnect();
+		viewportFadeObs = null;
 		headTextResizeObs?.disconnect();
 		headTextResizeObs = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
@@ -353,8 +399,8 @@
 	});
 </script>
 
-<div class="wrap" aria-label="Project selector">
-	<div class="reel" aria-label="Project slot reel">
+<div class="wrap" class:js-viewport-fade={viewportFadeMode} aria-label="Project selector" bind:this={wrapEl}>
+	<div class="reel" class:viewport-revealed={reelViewportRevealed} aria-label="Project slot reel" bind:this={reelEl}>
 		<div class="reel-window" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--top" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--bottom" aria-hidden="true"></div>
@@ -400,7 +446,7 @@
 		</div>
 	</div>
 
-	<div class="desc" aria-live="polite">
+	<div class="desc" class:viewport-revealed={descViewportRevealed} aria-live="polite" bind:this={descEl}>
 		{#key descKey}
 			<div
 				class="desc-inner"
@@ -474,6 +520,21 @@
 		align-items: stretch;
 		--selector-h: 240px;
 		--slot-h: 56px;
+	}
+
+	.wrap.js-viewport-fade .reel:not(.viewport-revealed),
+	.wrap.js-viewport-fade .desc:not(.viewport-revealed) {
+		opacity: 0;
+	}
+
+	.wrap.js-viewport-fade .reel,
+	.wrap.js-viewport-fade .desc {
+		transition: opacity 1.1s ease;
+	}
+
+	.wrap.js-viewport-fade .reel.viewport-revealed,
+	.wrap.js-viewport-fade .desc.viewport-revealed {
+		opacity: 1;
 	}
 
 	.desc {
