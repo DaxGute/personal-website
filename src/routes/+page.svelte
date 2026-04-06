@@ -3,6 +3,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import ContactFanout from '$lib/ContactFanout.svelte';
+	import Ribbon from '$lib/Ribbon.svelte';
+	import { GREETING_SCROLL_UNLOCK_MS, RIBBON_SIDE_BLEED_PX } from '$lib/ribbon';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import AwardsArc from '$lib/AwardsArc.svelte';
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
@@ -239,15 +241,20 @@
 	];
 
 	let scroller: HTMLElement | null = null;
-	let activeId: string = panels[0]?.id ?? 'home';
+	/** Non-reactive: panel switches must not re-render the whole page (see setNavAriaCurrent). */
+	const activePanelRef = { id: panels[0]?.id ?? 'home' };
 	let scrollAnim: number | null = null;
 	let panelEls: HTMLElement[] = [];
 	let panelOffsets: number[] = [];
 	let panelW = 0;
 	let experiencesPanelEl: HTMLElement | null = null;
 	let educationPanelEl: HTMLElement | null = null;
-	/** Ribbon SVG — transform updated imperatively on scroll so Svelte doesn’t re-render the page every frame. */
-	let ribbonEl: SVGSVGElement | null = null;
+	/** Ribbon — layout + scroll are fully imperative (no reactive props → no full-page invalidation on resize). */
+	let ribbonCmp: {
+		setLayout: (trackW: number, heightPx: number) => void;
+		syncRevealScroll: (scrollLeft: number) => void;
+	} | null = null;
+
 	/** Nav dots container — `--dist` on each `.nav-dot` set imperatively (same reason). */
 	let dotsNavEl: HTMLElement | null = null;
 
@@ -316,25 +323,20 @@
 		return Math.max(min, Math.min(max, n));
 	}
 
-	/** `static/background.svg` — path in viewBox 0 0 3200 300 */
-	const RIBBON_VIEWBOX_W = 3200;
-	const RIBBON_VIEWBOX_H = 300;
-	/** Ribbon extends this far past each viewport edge (total +60px vs scroll track). */
-	const RIBBON_SIDE_BLEED_PX = 30;
-	const RIBBON_PATH_D =
-		'm -12.914181,111.40442 c 590.857891,-0.62626 143.701551,103.81272 282.481281,80.44502 86.94196,-14.63927 92.43184,-84.44327 34.74779,-45.56945 -110.24799,74.29716 111.69439,9.92858 129.58722,-3.31676 18.30719,-13.55208 -34.95776,-14.26853 -79.79039,46.93158 -14.63959,19.9842 64.74964,-15.98568 64.74964,-15.98568 0,0 5.34627,6.47487 -20.4468,23.8173 -62.06536,41.73075 -63.74974,152.47679 85.06848,34.83426 173.31068,-137.004109 389.59544,-125.31322 432.39345,-124.95271 28.71572,0.24189 25.61363,-23.184702 25.45812,-41.241642 -0.0901,-10.46198 -19.13995,-19.511717 -43.78868,-19.511717 -26.72535,0 -51.04783,4.08019 -50.82093,18.37206 0.0648,4.08065 19.95517,21.62226 91.92951,0.54052 7.79074,-2.28196 24.97896,2.23571 24.97896,12.18953 0,15.99737 0.69239,38.915039 0.10005,53.502339 -0.82645,20.35281 -11.39545,19.56432 -27.86198,20.03815 -41.4397,1.19245 -52.19109,1.54534 -76.35443,0.59983 -24.16334,-0.9455 -42.09036,4.30987 -40.59794,-15.71555 1.24481,-16.70291 1.33659,-42.973249 1.33659,-59.082379 0,-7.64016 5.29566,-11.671529 23.97462,-12.10887 128.08727,-2.99898 243.08752,96.296669 380.64162,107.332739 137.5541,11.03607 30.5571,70.25212 107.2486,69.92756 76.6916,-0.32455 -16.6336,-21.40533 -46.4866,-32.47007 -8.4961,-2.08473 -8.3613,-7.48661 -1.9659,-10.16374 11.9584,-5.00586 19.464,-7.7785 34.4289,-13.68073 14.965,-5.90223 21.1368,-5.73995 32.8048,0.0966 11.668,5.83657 24.427,12.17776 30.0241,15.61324 5.5971,3.43548 5.3442,6.33512 0.4744,8.1921 -16.387,6.24883 -65.9392,-6.06203 -49.1374,-6.3776 65.7042,-1.23405 44.2886,71.24002 46.6522,85.09903 0,0 209.7418,-226.591175 291.2449,-162.38755 81.5031,64.20362 91.5819,72.92109 120.5784,98.25797 5.1885,4.53365 13.2354,20.72681 12.8695,21.02603 -0.4737,0.38741 -13.6585,-1.23737 -22.7355,-7.28722 -24.6101,-16.40273 -89.4174,-66.45412 -117.502,-89.20891 -10.7189,-8.68466 -6.1218,-13.31021 -1.3383,-17.51679 9.0044,-7.91843 20.4871,4.36347 12.9381,5.02917 -4.6881,0.41342 -10.5068,5.12676 -8.6145,10.46865 2.6844,7.57779 171.8412,131.42977 202.7858,129.75844 46.8074,-2.52811 37.8146,-32.7113 61.59,-40.43437 35.8333,-11.63991 16.976,117.5622 91.4932,-1.24948 132.6328,-211.472315 292.2986,3.89055 282.3923,16.75118 -9.9063,12.86063 -67.2951,-14.47013 -121.7691,-30.58036 -54.474,-16.11022 60.9163,-29.44165 114.0783,-39.62421 53.162,-10.18256 -124.384,128.0261 -92.342,56.42455 32.042,-71.60155 -13.9634,-166.396561 538.0936,-150.186567 338.0187,9.925208 149.1456,98.051147 78.4522,112.014567 0,0 -98.0235,-210.142931 30.7525,-126.221477 128.776,83.921457 -166.3845,82.588727 -87.1505,145.443827 79.2339,62.85511 505.3109,-2.19859 505.3109,-2.19859';
-
-	/** Avoid Svelte invalidating the page when scroll moves the ribbon (large SVG + gradient stroke). */
-	function setRibbonScrollTransform(scrollLeft: number) {
-		ribbonEl?.style.setProperty('transform', `translate3d(-${scrollLeft}px,0,0)`);
+	/** One `--progress-index` write per frame (was six `--dist` writes per dot). */
+	function setNavDotScrollStyles(progressIndex: number) {
+		dotsNavEl?.style.setProperty('--progress-index', String(progressIndex));
 	}
 
-	/** Nav dot sizes track scroll continuously; DOM updates only, no reactive re-render. */
-	function setNavDotScrollStyles(progressIndex: number) {
-		const dots = dotsNavEl?.querySelectorAll<HTMLElement>('.nav-dot');
-		if (!dots) return;
-		for (let idx = 0; idx < dots.length; idx++) {
-			dots[idx]!.style.setProperty('--dist', String(Math.abs(progressIndex - idx)));
+	/** Keep aria-current in sync without binding `activeId` in the template (avoids full-page re-renders). */
+	function setNavAriaCurrent(activeId: string) {
+		const nav = dotsNavEl;
+		if (!nav) return;
+		const buttons = nav.querySelectorAll<HTMLButtonElement>('.dot-btn');
+		for (let i = 0; i < buttons.length; i++) {
+			const id = panels[i]?.id;
+			if (id === activeId) buttons[i]!.setAttribute('aria-current', 'true');
+			else buttons[i]!.removeAttribute('aria-current');
 		}
 	}
 
@@ -430,14 +432,14 @@
 			ribbonHeight = Math.max(1, h);
 
 			clampScroller();
-			setRibbonScrollTransform(scroller.scrollLeft);
+			ribbonCmp?.setLayout(ribbonWidth, ribbonHeight);
 		};
 
 		const updateProgress = () => {
 			if (!scroller) return;
 			clampScroller();
 			const x = scroller!.scrollLeft;
-			setRibbonScrollTransform(x);
+			ribbonCmp?.syncRevealScroll(x);
 			if (panelOffsets.length === 0) return;
 
 			let i = 0;
@@ -449,8 +451,11 @@
 
 			const progressIndex = i + t;
 			setNavDotScrollStyles(progressIndex);
-			const nextActiveId = panels[Math.round(progressIndex)]?.id ?? activeId;
-			if (nextActiveId !== activeId) activeId = nextActiveId;
+			const nextActiveId = panels[Math.round(progressIndex)]?.id ?? activePanelRef.id;
+			if (nextActiveId !== activePanelRef.id) {
+				activePanelRef.id = nextActiveId;
+				setNavAriaCurrent(nextActiveId);
+			}
 
 			// Per-panel animation progress (used for Experiences card fan-in)
 			if (expIdx !== -1 && panelOffsets[expIdx] != null) {
@@ -566,6 +571,7 @@
 		lastX = scroller.scrollLeft;
 		lastT = performance.now();
 		updateProgress();
+		setNavAriaCurrent(activePanelRef.id);
 
 		// Greeting slide staged animations:
 		// - last name fades/slides in
@@ -582,7 +588,7 @@
 			greetingDotsTimer = window.setTimeout(() => {
 				greetingDotsOn = true;
 				greetingScrollLocked = false;
-			}, 1750);
+			}, GREETING_SCROLL_UNLOCK_MS);
 		});
 
 		scroller.addEventListener('wheel', wheel, { passive: false });
@@ -608,44 +614,14 @@
 </script>
 
 <div class="stage" class:intro-locked={greetingScrollLocked}>
-	<!-- Fixed ribbon lives outside `.scroller` so it never participates in the horizontal flex row / scrollWidth. -->
-	<!-- Viewport clip: the SVG is as wide as the scroll track; clipping avoids compositing that full width every frame. -->
-	<div class="ribbon-clip" aria-hidden="true">
-		<svg
-			bind:this={ribbonEl}
-			class="ribbon"
-			focusable="false"
-			width={ribbonWidth}
-			height={ribbonHeight}
-			viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
-			preserveAspectRatio="none"
-			style={`left:-${RIBBON_SIDE_BLEED_PX}px;width:${ribbonWidth}px;height:${ribbonHeight}px;`}
-		>
-			<defs>
-				<linearGradient
-					id="ribbonStroke"
-					gradientUnits="objectBoundingBox"
-					x1="0"
-					y1="0"
-					x2="1"
-					y2="0"
-				>
-					<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="1" />
-					<stop offset="45%" stop-color="rgb(34 211 238)" stop-opacity="1" />
-					<stop offset="100%" stop-color="rgb(16 185 129)" stop-opacity="1" />
-				</linearGradient>
-			</defs>
-
-			<path class="ribbon-path" d={RIBBON_PATH_D} />
-		</svg>
-	</div>
-
 	<main
 		class="scroller"
 		bind:this={scroller}
 		aria-label="Horizontally scrolling panels"
 	>
-		<!-- Full-width wash scrolls with panels; scroller bg is transparent so fixed ribbon can sit above wash, below panels. -->
+		<!-- Scrolls natively with the strip (no JS pan); sits above wash, below panels. -->
+		<Ribbon bind:this={ribbonCmp} />
+		<!-- Full-width wash scrolls with panels; scroller bg is transparent so ribbon can sit above wash, below panels. -->
 		<div class="scroller-wash" aria-hidden="true" style={`width:${ribbonScrollTrackW}px`}></div>
 
 		{#each panels as panel}
@@ -827,7 +803,6 @@
 				type="button"
 				class="dot-btn"
 				aria-label={`Go to ${p.navTitle ?? p.title}`}
-				aria-current={activeId === p.id ? 'true' : undefined}
 				disabled={greetingScrollLocked}
 				onclick={() => scrollToPanel(p.id)}
 			>
@@ -863,9 +838,7 @@
 		background: transparent;
 		/* Must stay `auto`: wheel handler sets scrollLeft every tick; `smooth` stacks animations and feels broken. */
 		scroll-behavior: auto;
-		/* `auto` allows native momentum rubber-band at the x ends; keep y contained to this strip */
-		overscroll-behavior-x: auto;
-		overscroll-behavior-y: none;
+		overscroll-behavior: none;
 		-webkit-overflow-scrolling: touch;
 		touch-action: pan-x;
 	}
@@ -884,36 +857,6 @@
 			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
 			var(--bg);
 		background-repeat: no-repeat;
-		background-attachment: local, local, local;
-	}
-
-	.ribbon-clip {
-		position: fixed;
-		top: 0;
-		left: 0;
-		width: 100vw;
-		height: 100vh;
-		overflow: hidden;
-		z-index: 2;
-		pointer-events: none;
-		contain: paint;
-	}
-
-	.ribbon {
-		position: absolute;
-		top: 0;
-		overflow: visible;
-		will-change: transform;
-	}
-
-	.ribbon-path {
-		fill: none;
-		stroke: url(#ribbonStroke);
-		stroke-width: 4;
-		stroke-linecap: butt;
-		stroke-linejoin: miter;
-		stroke-miterlimit: 10;
-		shape-rendering: auto;
 	}
 
 	/* hide scrollbars without disabling scrolling */
@@ -986,24 +929,27 @@
 		outline-offset: 2px;
 	}
 
-	/* Initial --dist for scroll position 0 before JS runs; scroll handler overwrites via inline style. */
-	.dots .dot-btn:nth-child(1) .nav-dot {
-		--dist: 0;
+	/* Single `--progress-index` on `.dots` (set in JS); per-dot index for |Δ| */
+	.dots {
+		--progress-index: 0;
 	}
-	.dots .dot-btn:nth-child(2) .nav-dot {
-		--dist: 1;
+	.dot-btn:nth-child(1) .nav-dot {
+		--dot-idx: 0;
 	}
-	.dots .dot-btn:nth-child(3) .nav-dot {
-		--dist: 2;
+	.dot-btn:nth-child(2) .nav-dot {
+		--dot-idx: 1;
 	}
-	.dots .dot-btn:nth-child(4) .nav-dot {
-		--dist: 3;
+	.dot-btn:nth-child(3) .nav-dot {
+		--dot-idx: 2;
 	}
-	.dots .dot-btn:nth-child(5) .nav-dot {
-		--dist: 4;
+	.dot-btn:nth-child(4) .nav-dot {
+		--dot-idx: 3;
 	}
-	.dots .dot-btn:nth-child(6) .nav-dot {
-		--dist: 5;
+	.dot-btn:nth-child(5) .nav-dot {
+		--dot-idx: 4;
+	}
+	.dot-btn:nth-child(6) .nav-dot {
+		--dot-idx: 5;
 	}
 
 	.nav-dot {
@@ -1011,14 +957,15 @@
 		width: 7px;
 		height: 7px;
 		border-radius: 999px;
+		--dist: max(
+			var(--progress-index) - var(--dot-idx),
+			var(--dot-idx) - var(--progress-index)
+		);
 		/* Fade "falloff" relative to the active dot (higher multiplier = faster fade) */
 		--a: clamp(0.12, calc(0.88 - var(--dist, 0) * 0.48), 0.88);
 		background: rgb(11 18 32 / var(--a));
 		transform: scale(clamp(0.88, calc(1.32 - var(--dist, 0) * 0.22), 1.32));
-		/* These values are driven continuously by scroll position; transitions here can
-		   “stutter” because they restart every scroll frame. Let them track directly. */
 		transition: none;
-		will-change: transform;
 	}
 
 	.dot-btn:hover .nav-dot {
