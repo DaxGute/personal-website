@@ -593,34 +593,35 @@
 
 <div class="stage" class:intro-locked={greetingScrollLocked}>
 	<!-- Fixed ribbon lives outside `.scroller` so it never participates in the horizontal flex row / scrollWidth. -->
-	<svg
-		class="ribbon"
-		aria-hidden="true"
-		focusable="false"
-		width={ribbonWidth}
-		height={ribbonHeight}
-		viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
-		preserveAspectRatio="xMidYMid slice"
-		style={`left:-${RIBBON_SIDE_BLEED_PX}px;width:${ribbonWidth}px;height:${ribbonHeight}px;transform:translate3d(-${ribbonScrollLeft}px,0,0);`}
-	>
-		<defs>
-			<linearGradient
-				id="ribbonStroke"
-				gradientUnits="objectBoundingBox"
-				x1="0"
-				y1="0"
-				x2="1"
-				y2="0"
-			>
-				<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="0.9" />
-				<stop offset="45%" stop-color="rgb(34 211 238)" stop-opacity="0.85" />
-				<stop offset="100%" stop-color="rgb(16 185 129)" stop-opacity="0.85" />
-			</linearGradient>
-		</defs>
+	<!-- Viewport clip: the SVG is as wide as the scroll track; clipping avoids compositing that full width every frame. -->
+	<div class="ribbon-clip" aria-hidden="true">
+		<svg
+			class="ribbon"
+			focusable="false"
+			width={ribbonWidth}
+			height={ribbonHeight}
+			viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
+			preserveAspectRatio="none"
+			style={`left:-${RIBBON_SIDE_BLEED_PX}px;width:${ribbonWidth}px;height:${ribbonHeight}px;transform:translate3d(-${ribbonScrollLeft}px,0,0);`}
+		>
+			<defs>
+				<linearGradient
+					id="ribbonStroke"
+					gradientUnits="objectBoundingBox"
+					x1="0"
+					y1="0"
+					x2="1"
+					y2="0"
+				>
+					<stop offset="0%" stop-color="rgb(124 58 237)" stop-opacity="1" />
+					<stop offset="45%" stop-color="rgb(34 211 238)" stop-opacity="1" />
+					<stop offset="100%" stop-color="rgb(16 185 129)" stop-opacity="1" />
+				</linearGradient>
+			</defs>
 
-		<path class="ribbon-base" d={RIBBON_PATH_D} />
-		<path class="ribbon-anim" d={RIBBON_PATH_D} />
-	</svg>
+			<path class="ribbon-path" d={RIBBON_PATH_D} />
+		</svg>
+	</div>
 
 	<main
 		class="scroller"
@@ -870,36 +871,32 @@
 		background-attachment: local, local, local;
 	}
 
-	.ribbon {
+	.ribbon-clip {
 		position: fixed;
 		top: 0;
+		left: 0;
+		width: 100vw;
+		height: 100vh;
+		overflow: hidden;
 		z-index: 2;
 		pointer-events: none;
+	}
+
+	.ribbon {
+		position: absolute;
+		top: 0;
 		overflow: visible;
 		will-change: transform;
 	}
 
-	.ribbon-base {
-		fill: none;
-		stroke: rgba(11, 18, 32, 0.22);
-		stroke-width: 2;
-		stroke-linecap: butt;
-		stroke-linejoin: miter;
-		stroke-miterlimit: 10;
-		shape-rendering: geometricPrecision;
-	}
-
-	.ribbon-anim {
+	.ribbon-path {
 		fill: none;
 		stroke: url(#ribbonStroke);
-		stroke-width: 3;
+		stroke-width: 4;
 		stroke-linecap: butt;
 		stroke-linejoin: miter;
 		stroke-miterlimit: 10;
-		shape-rendering: geometricPrecision;
-		filter: drop-shadow(0 8px 18px rgba(11, 18, 32, 0.16));
-		/* Hint: keep this expensive layer composited during scroll */
-		will-change: transform;
+		shape-rendering: auto;
 	}
 
 	/* hide scrollbars without disabling scrolling */
