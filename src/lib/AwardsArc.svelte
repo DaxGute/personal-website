@@ -42,12 +42,15 @@
 	export let endX = 1.1; // fraction of width
 
 	// Manual control (only while hovered).
-	export let wheelPhasePerPx = 0.00045; // cycles per px of wheel delta
+	export let wheelPhasePerPx = 0.00015; // cycles per px of wheel delta (lower = slower scroll/drag)
 
 	/** Initial spin speed when the block first enters the viewport (cycles per second). */
 	const ENTRY_IMPULSE_SPEED = 0.507;
 	/** Exponential decay time constant for that spin (ms); higher = longer glide. */
 	const ENTRY_IMPULSE_DECAY_MS = 820;
+
+	/** After this long without a wheel event, end capture so the page can scroll normally again. */
+	const WHEEL_CAPTURE_IDLE_MS = 450;
 
 	let orbitEl: HTMLElement | null = null;
 	let awardEls: (HTMLElement | null)[] = [];
@@ -57,7 +60,11 @@
 	let phaseAnim: { start: number; delta: number; startTime: number; durationMs: number } | null = null;
 	let snapTimer: number | null = null;
 	let didInitialSnap = false;
-	let wheelLockUntil = 0;
+
+	/** Wheel began on an award card; keep blocking page scroll until idle or leaving the awards block. */
+	let wheelCapturedFromCard = false;
+	let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+	let wheelGlobalListenerActive = false;
 
 	// One-time “push” when the awards first scroll into view: phase spins then eases to rest.
 	let entryImpulseVelocity = 0; // cycles per second
@@ -179,6 +186,47 @@
 		}, delayMs);
 	}
 
+	function applyWheelToPhase(e: WheelEvent) {
+		entryImpulseVelocity = 0;
+		phaseAnim = null;
+		const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+		phase = (phase - d * wheelPhasePerPx) % 1;
+		if (phase < 0) phase += 1;
+		scheduleSnap(140, 420);
+	}
+
+	function endWheelCapture() {
+		wheelCapturedFromCard = false;
+		if (wheelIdleTimer != null) {
+			clearTimeout(wheelIdleTimer);
+			wheelIdleTimer = null;
+		}
+		if (wheelGlobalListenerActive) {
+			window.removeEventListener('wheel', onGlobalWheelWhileCaptured, { capture: true });
+			wheelGlobalListenerActive = false;
+		}
+	}
+
+	function scheduleWheelCaptureIdle() {
+		if (wheelIdleTimer != null) clearTimeout(wheelIdleTimer);
+		wheelIdleTimer = window.setTimeout(() => {
+			wheelIdleTimer = null;
+			endWheelCapture();
+		}, WHEEL_CAPTURE_IDLE_MS);
+	}
+
+	function onGlobalWheelWhileCaptured(e: WheelEvent) {
+		if (!wheelCapturedFromCard) return;
+		if (!shouldAnimate()) {
+			endWheelCapture();
+			return;
+		}
+		e.preventDefault();
+		e.stopImmediatePropagation();
+		applyWheelToPhase(e);
+		scheduleWheelCaptureIdle();
+	}
+
 	function shouldAnimate() {
 		if (typeof window === 'undefined') return false;
 		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
@@ -294,22 +342,25 @@
 			if (!hoverCapable) return;
 			const target = e.target as HTMLElement | null;
 			const overCard = !!target?.closest?.('.award-card-surface');
-			const now = typeof window !== 'undefined' ? performance.now() : Date.now();
 
-			// Only block page scrolling if the wheel gesture STARTS on a card.
-			// Once started, keep a short lock so the rest of the same gesture doesn't scroll the page.
-			if (!overCard && now >= wheelLockUntil) return;
-			if (overCard) wheelLockUntil = now + 220;
+			if (overCard) {
+				wheelCapturedFromCard = true;
+				if (!wheelGlobalListenerActive) {
+					window.addEventListener('wheel', onGlobalWheelWhileCaptured, { capture: true, passive: false });
+					wheelGlobalListenerActive = true;
+				}
+			}
+
+			if (!overCard && !wheelCapturedFromCard) return;
 
 			e.preventDefault();
 			e.stopPropagation();
-			entryImpulseVelocity = 0;
-			phaseAnim = null;
-			const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-			// Invert so "scroll down" advances forward visually.
-			phase = (phase - d * wheelPhasePerPx) % 1;
-			if (phase < 0) phase += 1;
-			scheduleSnap(140, 420);
+			applyWheelToPhase(e);
+			scheduleWheelCaptureIdle();
+		};
+
+		const onLeaveAwardsForWheel = () => {
+			endWheelCapture();
 		};
 
 		const onPointerDown = (e: PointerEvent) => {
@@ -368,6 +419,7 @@
 			awardsRevealObserver.observe(awardsRootEl);
 		}
 
+		awardsRootEl?.addEventListener('mouseleave', onLeaveAwardsForWheel, { passive: true });
 		orbitEl?.addEventListener('mousemove', onHoverCheck, { passive: true });
 		orbitEl?.addEventListener('mouseleave', onLeaveOrbit, { passive: true });
 		// Capture phase so we intercept before the page scroller's wheel handler.
@@ -377,8 +429,10 @@
 		window.addEventListener('pointerup', onPointerUp, { passive: true });
 		window.addEventListener('resize', onResize);
 		return () => {
+			endWheelCapture();
 			awardsRevealObserver?.disconnect();
 			if (snapTimer != null) window.clearTimeout(snapTimer);
+			awardsRootEl?.removeEventListener('mouseleave', onLeaveAwardsForWheel as EventListener);
 			orbitEl?.removeEventListener('mousemove', onHoverCheck as EventListener);
 			orbitEl?.removeEventListener('mouseleave', onLeaveOrbit as EventListener);
 			orbitEl?.removeEventListener('wheel', onWheel as EventListener, true);
@@ -536,6 +590,11 @@
 
 	.awards-title-row .title {
 		margin: 0;
+		text-shadow:
+			0 0 28px rgba(255, 255, 255, 1),
+			0 0 56px rgba(255, 255, 255, 0.85),
+			0 0 100px rgba(255, 255, 255, 0.55),
+			0 0 160px rgba(255, 255, 255, 0.35);
 	}
 
 	.awards-nav-btn {
