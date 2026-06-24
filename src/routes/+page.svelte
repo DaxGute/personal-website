@@ -4,11 +4,11 @@
 	import { onMount } from 'svelte';
 	import ContactFanout from '$lib/ContactFanout.svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
+	import SectionNav from '$lib/SectionNav.svelte';
 	import { GREETING_SCROLL_UNLOCK_MS, panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import AwardsArc from '$lib/AwardsArc.svelte';
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
-	import PanelNavScrollbar from '$lib/PanelNavScrollbar.svelte';
 	import Polaroid from '$lib/Polaroid.svelte';
 	import type { Project } from '$lib/projects';
 	import chessPhoto from '$lib/assets/chess.jpg';
@@ -267,8 +267,12 @@
 		syncLayout: (trackWidthPx: number) => void;
 	} | null = null;
 
-	/** Nav dots container — `--dist` on each `.nav-dot` set imperatively (same reason). */
-	let dotsNavEl: HTMLElement | null = null;
+	/** Bottom section nav — scroll progress + reveal updated imperatively (same as ribbon). */
+	let sectionNavCmp: {
+		syncScrollRevealed: (scrollLeft: number) => void;
+		setProgressIndex: (progressIndex: number) => void;
+		setActiveId: (activeId: string) => void;
+	} | null = null;
 
 	// Decorative line from `static/background.svg` — panels anchored along the ribbon track.
 	/** Horizontal scroll extent (panel strip width); wash uses this so `scrollWidth` is not inflated. */
@@ -280,7 +284,6 @@
 	let greetingDotsOn = false;
 	let greetingDotsTimer: number | null = null;
 	let greetingScrollLocked = true;
-
 
 	// Contact links
 	const linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
@@ -376,23 +379,6 @@
 
 	function clamp(n: number, min: number, max: number) {
 		return Math.max(min, Math.min(max, n));
-	}
-
-	/** One `--progress-index` write per frame (was six `--dist` writes per dot). */
-	function setNavDotScrollStyles(progressIndex: number) {
-		dotsNavEl?.style.setProperty('--progress-index', String(progressIndex));
-	}
-
-	/** Keep aria-current in sync without binding `activeId` in the template (avoids full-page re-renders). */
-	function setNavAriaCurrent(activeId: string) {
-		const nav = dotsNavEl;
-		if (!nav) return;
-		const buttons = nav.querySelectorAll<HTMLButtonElement>('.dot-btn');
-		for (let i = 0; i < buttons.length; i++) {
-			const id = panels[i]?.id;
-			if (id === activeId) buttons[i]!.setAttribute('aria-current', 'true');
-			else buttons[i]!.removeAttribute('aria-current');
-		}
 	}
 
 	function easeOutCubic(t: number) {
@@ -496,6 +482,7 @@
 			clampScroller();
 			const x = scroller!.scrollLeft;
 			ribbonCmp?.syncRevealScroll(x);
+			sectionNavCmp?.syncScrollRevealed(x);
 			if (panelOffsets.length === 0) return;
 
 			let i = 0;
@@ -506,12 +493,10 @@
 			const t = end === start ? 0 : Math.max(0, Math.min(1, (x - start) / (end - start)));
 
 			const progressIndex = i + t;
-			setNavDotScrollStyles(progressIndex);
+			sectionNavCmp?.setProgressIndex(progressIndex);
 			const nextActiveId = panels[Math.round(progressIndex)]?.id ?? activePanelRef.id;
-			if (nextActiveId !== activePanelRef.id) {
-				activePanelRef.id = nextActiveId;
-				setNavAriaCurrent(nextActiveId);
-			}
+			sectionNavCmp?.setActiveId(nextActiveId);
+			if (nextActiveId !== activePanelRef.id) activePanelRef.id = nextActiveId;
 
 			// Per-panel animation progress (used for Experiences card fan-in)
 			if (expIdx !== -1 && panelOffsets[expIdx] != null) {
@@ -627,7 +612,7 @@
 		lastX = scroller.scrollLeft;
 		lastT = performance.now();
 		updateProgress();
-		setNavAriaCurrent(activePanelRef.id);
+		sectionNavCmp?.setActiveId(activePanelRef.id);
 
 		// Greeting slide staged animations:
 		// - last name fades/slides in
@@ -639,11 +624,13 @@
 			if (prefersReducedMotion()) {
 				greetingDotsOn = true;
 				greetingScrollLocked = false;
+				updateProgress();
 				return;
 			}
 			greetingDotsTimer = window.setTimeout(() => {
 				greetingDotsOn = true;
 				greetingScrollLocked = false;
+				updateProgress();
 			}, GREETING_SCROLL_UNLOCK_MS);
 		});
 
@@ -705,7 +692,6 @@
 </script>
 
 <div class="stage" class:intro-locked={greetingScrollLocked}>
-	<PanelNavScrollbar />
 	<main
 		class="scroller"
 		bind:this={scroller}
@@ -910,23 +896,12 @@
 		</div>
 	</main>
 
-	<nav class="dots" bind:this={dotsNavEl} aria-label="Panel navigation dots">
-		{#each panels as p, i}
-			<button
-				type="button"
-				class="dot-btn"
-				aria-label={`Go to ${p.navTitle ?? p.title}`}
-				disabled={greetingScrollLocked}
-				onclick={() => scrollToPanel(p.id)}
-			>
-				<span
-					class="nav-dot"
-					aria-hidden="true"
-				></span>
-				<span class="dot-label" aria-hidden="true">{p.navTitle ?? p.title}</span>
-			</button>
-		{/each}
-	</nav>
+	<SectionNav
+		bind:this={sectionNavCmp}
+		{panels}
+		scrollLocked={greetingScrollLocked}
+		onSelect={scrollToPanel}
+	/>
 </div>
 
 <style>
@@ -1009,16 +984,6 @@
 		display: none; /* Chrome/Safari */
 	}
 
-	.dots {
-		position: absolute;
-		left: 50%;
-		bottom: 15vh; /* ~15% up from bottom */
-		transform: translateX(-50%);
-		z-index: 10;
-		display: inline-flex;
-		gap: 12px;
-	}
-
 	/* During the greeting intro, keep contact invisible */
 	.intro-locked .greeting-contact {
 		opacity: 0;
@@ -1038,91 +1003,6 @@
 
 	.greeting-contact :global(.contact-menu) {
 		transform-origin: center left;
-	}
-
-	.dot-btn {
-		appearance: none;
-		border: 0;
-		background: transparent;
-		padding: 10px; /* bigger hit target, tiny visual */
-		border-radius: 999px;
-		cursor: pointer;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.dot-btn:disabled {
-		cursor: default;
-		opacity: 0.45;
-	}
-
-	.dot-btn:focus-visible {
-		outline: 3px solid rgba(124, 58, 237, 0.25);
-		outline-offset: 2px;
-	}
-
-	/* Single `--progress-index` on `.dots` (set in JS); per-dot index for |Δ| */
-	.dots {
-		--progress-index: 0;
-	}
-	.dot-btn:nth-child(1) .nav-dot {
-		--dot-idx: 0;
-	}
-	.dot-btn:nth-child(2) .nav-dot {
-		--dot-idx: 1;
-	}
-	.dot-btn:nth-child(3) .nav-dot {
-		--dot-idx: 2;
-	}
-	.dot-btn:nth-child(4) .nav-dot {
-		--dot-idx: 3;
-	}
-	.dot-btn:nth-child(5) .nav-dot {
-		--dot-idx: 4;
-	}
-	.dot-btn:nth-child(6) .nav-dot {
-		--dot-idx: 5;
-	}
-
-	.nav-dot {
-		display: block;
-		width: 7px;
-		height: 7px;
-		border-radius: 999px;
-		--dist: max(
-			var(--progress-index) - var(--dot-idx),
-			var(--dot-idx) - var(--progress-index)
-		);
-		/* Fade "falloff" relative to the active dot (higher multiplier = faster fade) */
-		--a: clamp(0.12, calc(0.88 - var(--dist, 0) * 0.48), 0.88);
-		background: rgb(11 18 32 / var(--a));
-		transform: scale(clamp(0.88, calc(1.32 - var(--dist, 0) * 0.22), 1.32));
-		transition: none;
-	}
-
-	.dot-btn:hover .nav-dot {
-		background: rgb(11 18 32 / 0.55);
-	}
-
-	.dot-label {
-		font-size: 10px;
-		line-height: 1;
-		letter-spacing: 0.14em;
-		text-transform: uppercase;
-		color: var(--muted);
-		white-space: nowrap;
-		transform: rotate(45deg);
-		transform-origin: top center;
-		pointer-events: none;
-		user-select: none;
-	}
-
-	@media (max-width: 640px) {
-		.dot-label {
-			display: none;
-		}
 	}
 
 	.panel {

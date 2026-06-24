@@ -36,7 +36,7 @@
 			const anim = el.animate(
 				[
 					{ opacity: startOpacity, transform: startTransform },
-					{ opacity: 0, transform: 'scale(3.08)' }
+					{ opacity: 0, transform: 'scale(1)' }
 				],
 				{ duration: 360, easing: 'linear', fill: 'forwards' }
 			);
@@ -255,7 +255,7 @@
 			rgba(124, 58, 237, 0) 72%
 		);
 		filter: blur(0.35px);
-		animation: pulseRing var(--pulse-dur) linear infinite;
+		animation: pulseRing var(--pulse-dur) linear infinite reverse;
 	}
 
 	.pulse-1 {
@@ -377,19 +377,19 @@
 		display: block;
 	}
 
-	/* Fan-out positions (top-left button, arc down-right) */
+	/* Fan-out positions (button anchor, arc down-left) */
 	.bubble-linkedin {
-		--tx: 96px;
+		--tx: -96px;
 		--ty: 12px;
 		transition-delay: 0ms;
 	}
 	.bubble-github {
-		--tx: 74px;
+		--tx: -74px;
 		--ty: 74px;
 		transition-delay: 40ms;
 	}
 	.bubble-email {
-		--tx: 12px;
+		--tx: -12px;
 		--ty: 96px;
 		transition-delay: 80ms;
 	}
