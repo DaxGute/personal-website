@@ -511,9 +511,12 @@
 	}
 
 	.awards {
-		position: relative;
-		width: min(980px, 100%);
-		height: 100%;
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: min(980px, 92%);
+		height: min(720px, 76vh);
 		isolation: isolate;
 	}
 
@@ -574,9 +577,9 @@
 	.awards-header {
 		position: absolute;
 		left: 50%;
-		top: 53%;
-		/* Keep copy just below mid-screen */
-		transform: translate(-50%, clamp(60px, 8vh, 120px));
+		top: 50%;
+		/* Keep copy just below the arc focal point */
+		transform: translate(-50%, clamp(48px, 7vh, 96px));
 		text-align: center;
 		width: min(520px, 92%);
 	}
@@ -627,6 +630,15 @@
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		.awards {
+			position: relative;
+			left: auto;
+			top: auto;
+			transform: none;
+			width: 100%;
+			height: auto;
+			padding: clamp(90px, 12vh, 140px) 18px 24px;
+		}
 		.awards-carousel {
 			padding-top: 0;
 		}
@@ -652,6 +664,15 @@
 	}
 
 	@media (max-width: 720px) {
+		.awards {
+			position: relative;
+			left: auto;
+			top: auto;
+			transform: none;
+			width: 100%;
+			height: auto;
+			padding: clamp(90px, 12vh, 140px) 18px 24px;
+		}
 		.awards-carousel {
 			padding-top: 0;
 		}

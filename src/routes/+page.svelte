@@ -4,10 +4,11 @@
 	import { onMount } from 'svelte';
 	import ContactFanout from '$lib/ContactFanout.svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
-	import { GREETING_SCROLL_UNLOCK_MS, RIBBON_SIDE_BLEED_PX } from '$lib/ribbon';
+	import { GREETING_SCROLL_UNLOCK_MS, panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import AwardsArc from '$lib/AwardsArc.svelte';
 	import ProjectSelect from '$lib/ProjectSelect.svelte';
+	import PanelNavScrollbar from '$lib/PanelNavScrollbar.svelte';
 	import Polaroid from '$lib/Polaroid.svelte';
 	import type { Project } from '$lib/projects';
 	import chessPhoto from '$lib/assets/chess.jpg';
@@ -16,6 +17,7 @@
 	import scubaPhoto from '$lib/assets/scuba.jpg';
 	import tableTennisPhoto from '$lib/assets/table_tennis.jpg';
 	import baiLogo from '$lib/assets/experience/bai_logo.jpg';
+	import cestaLogo from '$lib/assets/experience/CESTA_logo.jpg';
 	import ccLogo from '$lib/assets/experience/cc_logo.jpg';
 	import sdLogo from '$lib/assets/experience/sd_logo.jpg';
 	import bishopsLogo from '$lib/assets/education/bishops_logo.png';
@@ -72,6 +74,17 @@
 	}
 
 	const experiences: Experience[] = [
+		{
+			company: 'CESTA',
+			location: 'Stanford, CA',
+			title: 'Undergraduate Researcher',
+			dates: 'June 2026 - Aug 2026',
+			highlights: [
+				'Researching AI-human coauthorship through computational discourse analysis while developing policy frameworks for hybrid writing.'
+			],
+			logoSrc: cestaLogo,
+			logoAlt: 'CESTA logo'
+		},
 		{
 			company: 'Benevolent AI',
 			location: 'London, England',
@@ -244,26 +257,23 @@
 	/** Non-reactive: panel switches must not re-render the whole page (see setNavAriaCurrent). */
 	const activePanelRef = { id: panels[0]?.id ?? 'home' };
 	let scrollAnim: number | null = null;
-	let panelEls: HTMLElement[] = [];
 	let panelOffsets: number[] = [];
 	let panelW = 0;
 	let experiencesPanelEl: HTMLElement | null = null;
 	let educationPanelEl: HTMLElement | null = null;
 	/** Ribbon — layout + scroll are fully imperative (no reactive props → no full-page invalidation on resize). */
 	let ribbonCmp: {
-		setLayout: (trackW: number, heightPx: number) => void;
 		syncRevealScroll: (scrollLeft: number) => void;
+		syncLayout: (trackWidthPx: number) => void;
 	} | null = null;
 
 	/** Nav dots container — `--dist` on each `.nav-dot` set imperatively (same reason). */
 	let dotsNavEl: HTMLElement | null = null;
 
-	// Decorative line from `static/background.svg` (viewBox 0 0 3200 300), scaled to the scroll area.
+	// Decorative line from `static/background.svg` — panels anchored along the ribbon track.
 	/** Horizontal scroll extent (panel strip width); wash uses this so `scrollWidth` is not inflated. */
-	let ribbonScrollTrackW = 1;
-	/** Painted ribbon width = scroll track + 60px (30px bleed past each viewport edge). */
-	let ribbonWidth = 1;
-	let ribbonHeight = 1;
+	let ribbonScrollTrackW = RIBBON_RENDER_WIDTH_PX;
+	let scrollTrackW = RIBBON_RENDER_WIDTH_PX;
 
 	// Greeting (title slide) intro timeline
 	let greetingTimelineOn = false;
@@ -275,10 +285,55 @@
 	// Contact links
 	const linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
 	const githubHref = 'https://github.com/DaxGute';
+	const sourceCodeHref = 'https://github.com/DaxGute/personal-website';
 	const emailHref = 'mailto:daxton@gutekunst.com';
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	// Experience cards: subtle magnetic pull toward the cursor (panel-level tracking).
+	const EXP_MAGNET_RADIUS = 280;
+	const EXP_MAGNET_STRENGTH = 0.22;
+	const EXP_MAGNET_MAX_PX = 24;
+
+	function updateExperienceMagnet(panel: HTMLElement, clientX: number, clientY: number) {
+		const cards = panel.querySelectorAll<HTMLElement>('.experience-item .info-card');
+		for (const card of cards) {
+			const r = card.getBoundingClientRect();
+			const cx = r.left + r.width * 0.5;
+			const cy = r.top + r.height * 0.5;
+			const dx = clientX - cx;
+			const dy = clientY - cy;
+			const dist = Math.hypot(dx, dy);
+
+			if (dist > EXP_MAGNET_RADIUS) {
+				card.style.setProperty('--mag-x', '0px');
+				card.style.setProperty('--mag-y', '0px');
+				continue;
+			}
+
+			const t = 1 - dist / EXP_MAGNET_RADIUS;
+			const pull = t * t * EXP_MAGNET_STRENGTH;
+			let mx = dx * pull;
+			let my = dy * pull;
+			const mag = Math.hypot(mx, my);
+			if (mag > EXP_MAGNET_MAX_PX) {
+				const s = EXP_MAGNET_MAX_PX / mag;
+				mx *= s;
+				my *= s;
+			}
+
+			card.style.setProperty('--mag-x', `${mx.toFixed(2)}px`);
+			card.style.setProperty('--mag-y', `${my.toFixed(2)}px`);
+		}
+	}
+
+	function resetExperienceMagnet(panel: HTMLElement | null) {
+		panel?.querySelectorAll<HTMLElement>('.experience-item .info-card').forEach((card) => {
+			card.style.setProperty('--mag-x', '0px');
+			card.style.setProperty('--mag-y', '0px');
+		});
 	}
 
 	function splitTitle(title: string): { first: string; last: string } {
@@ -349,12 +404,20 @@
 		scrollAnim = null;
 	}
 
+	function getMaxScrollLeft() {
+		if (!scroller) return 0;
+		const maxByTrack = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+		const lastPanelStart = panelOffsets[panelOffsets.length - 1];
+		if (lastPanelStart == null) return maxByTrack;
+		// Last panel is 100vw wide — don't scroll into empty track past its left edge.
+		return Math.min(maxByTrack, lastPanelStart);
+	}
+
 	function smoothScrollTo(left: number, durationMs?: number) {
 		if (!scroller) return;
 		cancelScrollAnim();
 
-		const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-		const target = clamp(left, 0, maxScroll);
+		const target = clamp(left, 0, getMaxScrollLeft());
 
 		if (prefersReducedMotion()) {
 			scroller.scrollLeft = target;
@@ -377,7 +440,7 @@
 			scroller!.scrollLeft = clamp(
 				startLeft + delta * easeInOutPow(t, 3),
 				0,
-				maxScroll
+				getMaxScrollLeft()
 			);
 			if (t < 1) scrollAnim = requestAnimationFrame(tick);
 			else scrollAnim = null;
@@ -404,10 +467,6 @@
 			// ignore
 		}
 
-		panelEls = panels
-			.map((p) => document.getElementById(p.id))
-			.filter((el): el is HTMLElement => el instanceof HTMLElement);
-
 		experiencesPanelEl = document.getElementById('experiences');
 		educationPanelEl = document.getElementById('education');
 		const expIdx = panels.findIndex((p) => p.id === 'experiences');
@@ -415,24 +474,21 @@
 
 		const clampScroller = () => {
 			if (!scroller) return;
-			const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-			scroller.scrollLeft = clamp(scroller.scrollLeft, 0, max);
+			scroller.scrollLeft = clamp(scroller.scrollLeft, 0, getMaxScrollLeft());
 		};
 
 		const measure = () => {
 			if (!scroller) return;
-			panelOffsets = panelEls.map((el) => el.offsetLeft);
-
 			panelW = scroller.clientWidth || window.innerWidth;
-			const h = scroller.clientHeight || window.innerHeight;
-			const totalW = (panelOffsets[panelOffsets.length - 1] ?? 0) + panelW;
-
-			ribbonScrollTrackW = Math.max(1, totalW);
-			ribbonWidth = Math.max(1, totalW + RIBBON_SIDE_BLEED_PX * 2);
-			ribbonHeight = Math.max(1, h);
+			panelOffsets = panels.map((_, i) => panelTrackLeft(i, panels.length));
+			scrollTrackW = Math.max(
+				RIBBON_RENDER_WIDTH_PX,
+				(panelOffsets[panelOffsets.length - 1] ?? 0) + panelW
+			);
+			ribbonScrollTrackW = scrollTrackW;
+			ribbonCmp?.syncLayout(scrollTrackW);
 
 			clampScroller();
-			ribbonCmp?.setLayout(ribbonWidth, ribbonHeight);
 		};
 
 		const updateProgress = () => {
@@ -517,7 +573,7 @@
 			if (target?.closest?.('.award-card-surface')) return;
 
 			if (!scroller) return;
-			const maxScroll = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+			const maxScroll = getMaxScrollLeft();
 			const cur = scroller.scrollLeft;
 
 			const absX = Math.abs(e.deltaX);
@@ -600,6 +656,37 @@
 			updateProgress();
 		});
 
+		const hoverCapable =
+			typeof window !== 'undefined' &&
+			window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+		let magnetRaf: number | null = null;
+		let magnetX = 0;
+		let magnetY = 0;
+
+		const onExpPointerMove = (e: PointerEvent) => {
+			if (!experiencesPanelEl || !hoverCapable || prefersReducedMotion()) return;
+			magnetX = e.clientX;
+			magnetY = e.clientY;
+			if (magnetRaf != null) return;
+			magnetRaf = requestAnimationFrame(() => {
+				magnetRaf = null;
+				if (experiencesPanelEl) updateExperienceMagnet(experiencesPanelEl, magnetX, magnetY);
+			});
+		};
+
+		const onExpPointerLeave = () => {
+			if (magnetRaf != null) {
+				cancelAnimationFrame(magnetRaf);
+				magnetRaf = null;
+			}
+			resetExperienceMagnet(experiencesPanelEl);
+		};
+
+		if (experiencesPanelEl && hoverCapable && !prefersReducedMotion()) {
+			experiencesPanelEl.addEventListener('pointermove', onExpPointerMove, { passive: true });
+			experiencesPanelEl.addEventListener('pointerleave', onExpPointerLeave, { passive: true });
+		}
+
 		return () => {
 			scroller?.removeEventListener('wheel', wheel as EventListener);
 			scroller?.removeEventListener('scroll', onScroll);
@@ -608,47 +695,59 @@
 			cancelScrollAnim();
 			if (greetingDotsTimer != null) window.clearTimeout(greetingDotsTimer);
 			greetingDotsTimer = null;
+			if (magnetRaf != null) cancelAnimationFrame(magnetRaf);
+			experiencesPanelEl?.removeEventListener('pointermove', onExpPointerMove as EventListener);
+			experiencesPanelEl?.removeEventListener('pointerleave', onExpPointerLeave as EventListener);
+			resetExperienceMagnet(experiencesPanelEl);
 		};
 	});
 
 </script>
 
 <div class="stage" class:intro-locked={greetingScrollLocked}>
+	<PanelNavScrollbar />
 	<main
 		class="scroller"
 		bind:this={scroller}
 		aria-label="Horizontally scrolling panels"
 	>
-		<!-- Scrolls natively with the strip (no JS pan); sits above wash, below panels. -->
-		<Ribbon bind:this={ribbonCmp} />
-		<!-- Full-width wash scrolls with panels; scroller bg is transparent so ribbon can sit above wash, below panels. -->
-		<div class="scroller-wash" aria-hidden="true" style={`width:${ribbonScrollTrackW}px`}></div>
+		<div class="scroll-track" style:width={`${scrollTrackW}px`}>
+			<!-- Scrolls natively with the strip (no JS pan); sits above wash, below panels. -->
+			<Ribbon bind:this={ribbonCmp} />
+			<!-- Full-width wash scrolls with panels; scroller bg is transparent so ribbon can sit above wash, below panels. -->
+			<div class="scroller-wash" aria-hidden="true" style:width={`${ribbonScrollTrackW}px`}></div>
 
-		{#each panels as panel}
-			<section
-				id={panel.id}
-				class="panel"
-				aria-label={panel.title}
-			>
+			{#each panels as panel, i}
+				<section
+					id={panel.id}
+					class="panel"
+					aria-label={panel.title}
+					style:left={`${panelTrackLeft(i, panels.length)}px`}
+				>
 				{#if panel.id === 'greeting'}
 					{@const parts = splitTitle(panel.title)}
 					{@const firstParts = splitSuffixFade(parts.first, 'ton')}
 					{@const lastParts = splitHeadFadeRest(parts.last, 1)}
-					<div class="greeting" class:greeting--animate={greetingTimelineOn}>
-						{#if panel.kicker}
-							<p class="kicker greeting-kicker">{panel.kicker}</p>
-						{/if}
-						<h1 class="title title--greeting">
-							<span class="title-first"
-								><span class="first-static">{firstParts.prefix}</span
-								>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
-							>{#if parts.last}<span class="title-last"><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span>{/if}
-						</h1>
-						<p class="body greeting-body">
-							{panel.body}<span class="jump-dots" class:jump-dots--on={greetingDotsOn} aria-hidden="true"
-								><span>.</span><span>.</span><span>.</span></span
-							>
-						</p>
+					<div class="greeting-layout">
+						<div class="greeting-contact">
+							<ContactFanout {linkedinHref} {githubHref} {emailHref} />
+						</div>
+						<div class="greeting" class:greeting--animate={greetingTimelineOn}>
+							{#if panel.kicker}
+								<p class="kicker greeting-kicker">{panel.kicker}</p>
+							{/if}
+							<h1 class="title title--greeting">
+								<span class="title-first"
+									><span class="first-static">{firstParts.prefix}</span
+									>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
+								>{#if parts.last}<span class="title-last"><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span>{/if}
+							</h1>
+							<p class="body greeting-body">
+								{panel.body}<span class="jump-dots" class:jump-dots--on={greetingDotsOn} aria-hidden="true"
+									><span>.</span><span>.</span><span>.</span></span
+								>
+							</p>
+						</div>
 					</div>
 				{:else}
 					<div class="panel-inner">
@@ -659,12 +758,22 @@
 						{/if}
 
 						{#if panel.id !== 'awards'}
-							{#if panel.kicker}
-								<p class="kicker">{panel.kicker}</p>
-							{/if}
-							<h1 class="title">{panel.title}</h1>
+							{#if panel.id === 'interests'}
+								<div class="interests-copy">
+									{#if panel.kicker}
+										<p class="kicker">{panel.kicker}</p>
+									{/if}
+									<h1 class="title">{panel.title}</h1>
+									<p class="body">{panel.body}</p>
+								</div>
+							{:else}
+								{#if panel.kicker}
+									<p class="kicker">{panel.kicker}</p>
+								{/if}
+								<h1 class="title">{panel.title}</h1>
 
-							<p class="body">{panel.body}</p>
+								<p class="body">{panel.body}</p>
+							{/if}
 						{/if}
 
 						{#if panel.id === 'experiences'}
@@ -789,13 +898,17 @@
 						{/if}
 					</div>
 				{/if}
+				{#if panel.id === 'interests'}
+					<div class="repo-note">
+						<span>Like my website? The code can be found </span>
+						<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a>
+						<span>.</span>
+					</div>
+				{/if}
 			</section>
 		{/each}
+		</div>
 	</main>
-
-	<header class="chrome">
-		<ContactFanout {linkedinHref} {githubHref} {emailHref} />
-	</header>
 
 	<nav class="dots" bind:this={dotsNavEl} aria-label="Panel navigation dots">
 		{#each panels as p, i}
@@ -823,7 +936,7 @@
 		width: 100vw;
 		overflow: hidden;
 		overscroll-behavior: none;
-		/* Shared sizing vars for the chrome + ContactFanout + panel padding */
+		/* Shared sizing vars for ContactFanout + panel padding */
 		--menu-pad: 8px;
 		--menu-control-h: 34px;
 	}
@@ -841,6 +954,35 @@
 		overscroll-behavior: none;
 		-webkit-overflow-scrolling: touch;
 		touch-action: pan-x;
+	}
+
+	.scroll-track {
+		position: relative;
+		flex: 0 0 auto;
+		height: 100vh;
+	}
+
+	.repo-note {
+		position: absolute;
+		right: 5px;
+		bottom: 5px;
+		z-index: 20;
+		font-size: 12px;
+		line-height: 1.25;
+		text-align: right;
+		white-space: nowrap;
+		color: rgba(11, 18, 32, 0.72);
+		pointer-events: auto;
+	}
+
+	.repo-note__link {
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+	}
+
+	.repo-note__link:hover {
+		color: rgba(11, 18, 32, 0.9);
 	}
 
 	.scroller-wash {
@@ -867,23 +1009,6 @@
 		display: none; /* Chrome/Safari */
 	}
 
-	.chrome {
-		position: absolute;
-		inset: 0 0 auto 0;
-		z-index: 10;
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
-		gap: 12px;
-		padding: 18px 18px 0 18px;
-		pointer-events: none; /* allow drag/scroll anywhere */
-		opacity: 1;
-		transform: translateY(0);
-		transition:
-			opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1),
-			transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
-	}
-
 	.dots {
 		position: absolute;
 		left: 50%;
@@ -892,18 +1017,27 @@
 		z-index: 10;
 		display: inline-flex;
 		gap: 12px;
-		opacity: 1;
-		transition: opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
-	/* During the greeting intro, keep UI chrome invisible */
-	.intro-locked .chrome {
+	/* During the greeting intro, keep contact invisible */
+	.intro-locked .greeting-contact {
 		opacity: 0;
 		transform: translateY(-10px);
 	}
 
-	.intro-locked .dots {
-		opacity: 0;
+	.greeting-contact {
+		flex: 0 0 auto;
+		align-self: center;
+		pointer-events: auto;
+		opacity: 1;
+		transform: translateY(0);
+		transition:
+			opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1),
+			transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	.greeting-contact :global(.contact-menu) {
+		transform-origin: center left;
 	}
 
 	.dot-btn {
@@ -992,13 +1126,14 @@
 	}
 
 	.panel {
-		flex: 0 0 100vw;
+		position: absolute;
+		top: 0;
+		width: 100vw;
 		height: 100vh;
 		display: grid;
 		/* Keep content below the top-right diagonal contact bubbles */
 		place-items: start center;
 		padding: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 110px) 18px 24px;
-		position: relative;
 		z-index: 3;
 	}
 
@@ -1009,7 +1144,7 @@
 
 	/* Projects: move the whole glass box up via a bottom offset (instead of changing slide padding). */
 	#projects.panel {
-		/* Lift Projects above other panel content/decoration layers (but keep below chrome/dots at z=10). */
+		/* Lift Projects above other panel content/decoration layers (but keep below dots at z=10). */
 		z-index: 6;
 	}
 
@@ -1084,7 +1219,8 @@
 
 	/* Interests slide: right-align and anchor to the right edge */
 	#interests.panel {
-		place-items: stretch;
+		place-items: start end;
+		padding-right: 0;
 	}
 
 	#interests.panel .panel-inner {
@@ -1093,14 +1229,22 @@
 		inset: 0;
 		width: 100%;
 		height: 100%;
-		/* keep the Interests copy comfortably lower in the slide */
-		padding: clamp(110px, 14vh, 170px) 18px 24px;
+		padding: 0;
 		border: 0;
 		background: transparent;
 		backdrop-filter: none;
 		box-shadow: none;
-		text-align: right;
 		transform: none;
+	}
+
+	.interests-copy {
+		position: absolute;
+		top: clamp(110px, 14vh, 170px);
+		right: 0;
+		z-index: 3;
+		max-width: min(980px, 100%);
+		padding-right: 20px;
+		text-align: right;
 	}
 
 	.interests-content {
@@ -1111,13 +1255,6 @@
 
 		/* size should be a percent (with min/max guardrails) */
 		--float-card-w: clamp(180px, 22%, 260px);
-	}
-
-	/* Keep slide copy above the floating polaroids */
-	#interests.panel .kicker,
-	#interests.panel .title,
-	#interests.panel .body {
-		position: relative;
 	}
 
 	.interest-ski {
@@ -1185,9 +1322,12 @@
 	}
 
 	@media (max-width: 720px) {
-		#interests.panel .panel-inner {
+		.interests-copy {
+			right: auto;
+			left: 50%;
+			transform: translateX(-50%);
+			top: clamp(90px, 12vh, 140px);
 			text-align: center;
-			padding-top: clamp(90px, 12vh, 140px);
 		}
 		.interests-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1334,7 +1474,7 @@
 		position: relative;
 		margin-bottom: 0;
 		margin-top: 18px;
-		min-height: clamp(380px, 56vh, 560px);
+		min-height: clamp(420px, 62vh, 620px);
 	}
 
 	.experience-item {
@@ -1358,20 +1498,27 @@
 
 	/* Explicit stacking order so overlapping cards don't steal hover */
 	#experiences .experience-item:nth-child(1) {
-		z-index: 30;
+		z-index: 40;
 	}
 	#experiences .experience-item:nth-child(2) {
-		z-index: 20;
+		z-index: 30;
 	}
 	#experiences .experience-item:nth-child(3) {
+		z-index: 20;
+	}
+	#experiences .experience-item:nth-child(4) {
 		z-index: 10;
 	}
 	#experiences .experience-item:hover {
 		z-index: 40;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		/* (hover + motion handled inside InfoCard) */
+	/* Magnetic pull toward cursor (translate on inner card; fan-in stays on .experience-item) */
+	#experiences .experience-item :global(.hover-polaroid-scale) {
+		--mag-x: 0px;
+		--mag-y: 0px;
+		transform: translate3d(var(--mag-x), var(--mag-y), 0) scale(var(--scale, 1));
+		transition: none;
 	}
 
 	@media (min-width: 720px) {
@@ -1391,21 +1538,28 @@
 			margin: 0;
 		}
 
-		/* Benevolent AI — top right */
+		/* CESTA — bottom middle, below Castle Creek */
 		#experiences .experience-item:nth-child(1) {
-			--spread-x: 180px;
-			--spread-y: -80px;
-			/* Lift it above the Experiences title */
+			--spread-x: 140px;
+			--spread-y: 90px;
+			top: 150px;
+			left: -60px;
+			right: auto;
+			z-index: 5;
+		}
+
+		/* Benevolent AI — top right */
+		#experiences .experience-item:nth-child(2) {
+			--spread-x: -180px;
+			--spread-y: -150px;
 			top: -90px;
-			/* Always finish next to Castle Creek (which is anchored at left: 0) */
 			left: calc(var(--exp-card-w) + 100px);
 			right: auto;
 			z-index: 5;
 		}
 
 		/* Castle Creek — middle */
-		#experiences .experience-item:nth-child(2) {
-			/* Keep this non-negative so it can't visually bleed into the previous slide */
+		#experiences .experience-item:nth-child(3) {
 			--spread-x: 0px;
 			--spread-y: 120px;
 			top: 0;
@@ -1415,25 +1569,50 @@
 		}
 
 		/* City of San Diego — bottom right */
-		#experiences .experience-item:nth-child(3) {
-			--spread-x: 240px;
-			--spread-y: 140px;
-			/* Move it up: slightly below Castle Creek's height, while keeping Benevolent's right alignment */
+		#experiences .experience-item:nth-child(4) {
+			--spread-x: 40px;
+			--spread-y: 240px;
 			top: 44px;
-			/* Always finish next to Castle Creek (which is anchored at left: 0) */
 			left: calc(var(--exp-card-w) + 28px);
 			right: auto;
 			bottom: auto;
 		}
 	}
 
+	.greeting-layout {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: clamp(28px, 4vw, 56px);
+		width: min(980px, 100%);
+		margin-top: 170px;
+	}
+
 	.greeting {
 		width: min(860px, 100%);
 		padding: 6px;
+		flex: 1 1 auto;
+		min-width: 0;
+		--title-outer-glow:
+			0 0 18px rgba(255, 255, 255, 0.9),
+			0 0 36px rgba(255, 255, 255, 0.6),
+			0 0 64px rgba(255, 255, 255, 0.35);
+		--greeting-sub-glow:
+			0 0 28px rgba(255, 255, 255, 1),
+			0 0 56px rgba(255, 255, 255, 1),
+			0 0 100px rgba(255, 255, 255, 0.98),
+			0 0 160px rgba(255, 255, 255, 0.6);
 	}
 
 	.title--greeting {
 		white-space: nowrap;
+	}
+
+	.title--greeting .first-static,
+	.title--greeting .first-fade,
+	.title--greeting .last-g,
+	.title--greeting .last-fade {
+		text-shadow: var(--title-outer-glow);
 	}
 
 	.title-first {
@@ -1474,6 +1653,7 @@
 		opacity: 0;
 		transform: translateY(10px);
 		will-change: transform, opacity;
+		text-shadow: var(--greeting-sub-glow);
 	}
 
 	.greeting-kicker {

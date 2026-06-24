@@ -1,9 +1,26 @@
-/** `static/background.svg` — path in viewBox 0 0 3200 300 */
+/** Path coordinate system — must match `static/background.svg` (only change if the path changes). */
 export const RIBBON_VIEWBOX_W = 3200;
 export const RIBBON_VIEWBOX_H = 300;
 
+/** On-screen painted size in px — change these to resize the ribbon. */
+export const RIBBON_RENDER_WIDTH_PX = 12000;
+export const RIBBON_RENDER_HEIGHT_PX = 1200;
+
+/** First panel anchor along the ribbon (px from scroll-track left). */
+export const PANEL_TRACK_ORIGIN_PX = 15;
+
+/** Horizontal start position for panel `sectionIndex` (0 = title) along the ribbon. */
+export function panelTrackLeft(sectionIndex: number, sectionCount = 6): number {
+	return PANEL_TRACK_ORIGIN_PX + (RIBBON_RENDER_WIDTH_PX / sectionCount) * sectionIndex;
+}
+
 /** Ribbon extends this far past each viewport edge (total +60px vs scroll track). */
 export const RIBBON_SIDE_BLEED_PX = 30;
+
+/** Painted ribbon width for a scroll track of `trackWidthPx` (includes both side bleeds). */
+export function ribbonLayerWidthPx(trackWidthPx: number) {
+	return trackWidthPx + 2 * RIBBON_SIDE_BLEED_PX;
+}
 
 /** Matches greeting intro: `greetingScrollLocked` clears after this (see `+page.svelte`). */
 export const GREETING_SCROLL_UNLOCK_MS = 1750;

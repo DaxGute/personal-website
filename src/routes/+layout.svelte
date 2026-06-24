@@ -3,8 +3,6 @@
 	import signatureFavicon from '$lib/assets/signature-favicon.svg';
 
 	let { children } = $props();
-
-	const sourceCodeHref = 'https://github.com/DaxGute/personal-website';
 </script>
 
 <svelte:head>
@@ -95,11 +93,6 @@
 
 <div class="desktop-app">
 	{@render children()}
-	<div class="repo-note">
-		<span>Like my website? The code can be found </span>
-		<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a>
-		<span>.</span>
-	</div>
 </div>
 
 <style>
@@ -183,26 +176,6 @@
 
 	.desktop-app {
 		display: block;
-	}
-
-	.repo-note {
-		position: fixed;
-		right: 14px;
-		bottom: 12px;
-		z-index: 50;
-		font-size: 12px;
-		line-height: 1.25;
-		color: rgba(11, 18, 32, 0.72);
-	}
-
-	.repo-note__link {
-		text-decoration: underline;
-		text-decoration-thickness: 1px;
-		text-underline-offset: 2px;
-	}
-
-	.repo-note__link:hover {
-		color: rgba(11, 18, 32, 0.9);
 	}
 
 	.mobile-gate {

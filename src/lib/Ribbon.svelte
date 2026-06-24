@@ -3,21 +3,23 @@
 	import {
 		GREETING_SCROLL_UNLOCK_MS,
 		RIBBON_PATH_D,
+		RIBBON_RENDER_HEIGHT_PX,
+		RIBBON_RENDER_WIDTH_PX,
+		RIBBON_SIDE_BLEED_PX,
 		RIBBON_VIEWBOX_H,
 		RIBBON_VIEWBOX_W,
 		buildRibbonDistanceAtNormalizedTime,
-		prefersReducedMotionRibbon
+		prefersReducedMotionRibbon,
+		ribbonLayerWidthPx
 	} from '$lib/ribbon';
 
 	/** Only the first 1/5 of normalized `t` passed to `buildRibbonDistanceAtNormalizedTime`. */
 	const REVEAL_FIRST_FIFTH = 0.25;
 
-	/** Painted width/height in px — set only from `measure()` via setLayout (resize). */
-	const layout = { trackW: 1, heightPx: 1 };
-
-	let layerEl: HTMLDivElement | null = null;
+	let ribbonLayerEl: HTMLDivElement | null = null;
 	let ribbonEl: SVGSVGElement | null = null;
 	let ribbonRevealMaskEl: SVGPathElement | null = null;
+	let ribbonPaintW = ribbonLayerWidthPx(RIBBON_RENDER_WIDTH_PX);
 	let revealIdleRaf: number | null = null;
 	let revealFinalized = false;
 
@@ -46,20 +48,18 @@
 		if (scrollLeft > 0 && !revealFinalized) finalizeReveal();
 	}
 
+	/** Match painted width to the scroll track (imperative — avoids reactive prop invalidation). */
+	export function syncLayout(trackWidthPx: number) {
+		const w = ribbonLayerWidthPx(trackWidthPx);
+		if (w === ribbonPaintW) return;
+		ribbonPaintW = w;
+		if (ribbonLayerEl) ribbonLayerEl.style.width = `${w}px`;
+		if (ribbonEl) ribbonEl.setAttribute('width', String(w));
+	}
+
 	function cancelRevealIdleLoop() {
 		if (revealIdleRaf != null) cancelAnimationFrame(revealIdleRaf);
 		revealIdleRaf = null;
-	}
-
-	export function setLayout(trackW: number, heightPx: number) {
-		layout.trackW = Math.max(1, trackW);
-		layout.heightPx = Math.max(1, heightPx);
-		if (layerEl) {
-			layerEl.style.width = `${layout.trackW}px`;
-		}
-		if (ribbonEl) {
-			ribbonEl.style.height = `${layout.heightPx}px`;
-		}
 	}
 
 	function cancelRevealAnim() {
@@ -122,12 +122,6 @@
 
 	onMount(() => {
 		void tick().then(() => {
-			if (layerEl && layout.trackW > 1) {
-				layerEl.style.width = `${layout.trackW}px`;
-			}
-			if (ribbonEl && layout.heightPx > 1) {
-				ribbonEl.style.height = `${layout.heightPx}px`;
-			}
 			requestAnimationFrame(() => {
 				scheduleRevealAfterIdle();
 			});
@@ -140,12 +134,19 @@
 </script>
 
 <!-- Absolutely positioned inside `.scroller`: moves with native horizontal scroll (no per-frame viewBox/transform). -->
-<div class="ribbon-layer" bind:this={layerEl} aria-hidden="true">
+<div
+	bind:this={ribbonLayerEl}
+	class="ribbon-layer"
+	aria-hidden="true"
+	style:left={`-${RIBBON_SIDE_BLEED_PX}px`}
+	style:width={`${ribbonPaintW}px`}
+>
 	<svg
 		bind:this={ribbonEl}
 		class="ribbon"
 		focusable="false"
-		width="100%"
+		width={ribbonPaintW}
+		height={RIBBON_RENDER_HEIGHT_PX}
 		viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
 		preserveAspectRatio="none"
 	>
@@ -178,7 +179,7 @@
 					d={RIBBON_PATH_D}
 					fill="none"
 					stroke="white"
-					stroke-width="4"
+					stroke-width="2"
 					stroke-linecap="butt"
 					stroke-linejoin="miter"
 					stroke-miterlimit="10"
@@ -194,24 +195,24 @@
 <style>
 	.ribbon-layer {
 		position: absolute;
-		left: -30px;
 		top: 0;
 		height: 100%;
 		z-index: 1;
 		pointer-events: none;
 		overflow: visible;
 		contain: paint;
+		display: flex;
+		align-items: center;
 	}
 
 	.ribbon {
 		display: block;
-		width: 100%;
-		min-height: 0;
+		flex: 0 0 auto;
 	}
 
 	.ribbon-path {
 		fill: none;
-		stroke-width: 4;
+		stroke-width: 2;
 		stroke-linecap: butt;
 		stroke-linejoin: miter;
 		stroke-miterlimit: 10;

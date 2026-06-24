@@ -191,7 +191,7 @@
 		/* Scale the entire control (button + fanout bubbles) */
 		--contact-scale: 1.35;
 		transform: scale(var(--contact-scale));
-		transform-origin: top right;
+		transform-origin: top left;
 	}
 
 	.contact-btn-wrap {
@@ -200,7 +200,7 @@
 		align-items: center;
 		justify-content: center;
 		isolation: isolate;
-		--pulse-dur: 6.6s;
+		--pulse-dur: 15s;
 		transform-origin: 50% 50%;
 		animation: contactWrapPulse 2.2s ease-in-out infinite;
 	}
@@ -228,12 +228,12 @@
 		z-index: 0;
 		background: radial-gradient(
 			closest-side at 55% 45%,
-			rgba(34, 211, 238, 0.22),
-			rgba(124, 58, 237, 0.14) 48%,
+			rgba(34, 211, 238, 0.069),
+			rgba(124, 58, 237, 0.044) 48%,
 			rgba(124, 58, 237, 0) 72%
 		);
 		filter: blur(9px);
-		opacity: 0.55;
+		opacity: 0.173;
 		transform: scale(0.96);
 		animation: tidalPulseGlow var(--pulse-dur) ease-in-out infinite;
 	}
@@ -250,8 +250,8 @@
 		background: radial-gradient(
 			circle at 50% 50%,
 			rgba(34, 211, 238, 0) 58%,
-			rgba(34, 211, 238, 0.34) 61%,
-			rgba(124, 58, 237, 0.24) 65%,
+			rgba(34, 211, 238, 0.106) 61%,
+			rgba(124, 58, 237, 0.075) 65%,
 			rgba(124, 58, 237, 0) 72%
 		);
 		filter: blur(0.35px);
@@ -340,7 +340,7 @@
 	.fanout {
 		position: absolute;
 		top: 0;
-		right: 0;
+		left: 0;
 		width: 0;
 		height: 0;
 	}
@@ -348,7 +348,7 @@
 	.bubble {
 		position: absolute;
 		top: 0;
-		right: 0;
+		left: 0;
 		width: calc(var(--menu-control-h) + (var(--menu-pad) * 2));
 		height: calc(var(--menu-control-h) + (var(--menu-pad) * 2));
 		display: inline-flex;
@@ -377,19 +377,19 @@
 		display: block;
 	}
 
-	/* Fan-out positions (top-right button, so we arc down-left) */
+	/* Fan-out positions (top-left button, arc down-right) */
 	.bubble-linkedin {
-		--tx: -96px;
+		--tx: 96px;
 		--ty: 12px;
 		transition-delay: 0ms;
 	}
 	.bubble-github {
-		--tx: -74px;
+		--tx: 74px;
 		--ty: 74px;
 		transition-delay: 40ms;
 	}
 	.bubble-email {
-		--tx: -12px;
+		--tx: 12px;
 		--ty: 96px;
 		transition-delay: 80ms;
 	}
@@ -430,11 +430,11 @@
 		0%,
 		100% {
 			transform: scale(0.96);
-			opacity: 0.46;
+			opacity: 0.25;
 		}
 		50% {
 			transform: scale(1.12);
-			opacity: 0.68;
+			opacity: 0.5;
 		}
 	}
 
@@ -453,10 +453,10 @@
 			opacity: 0;
 		}
 		8% {
-			opacity: 0.95;
+			opacity: 0.625;
 		}
 		55% {
-			opacity: 0.22;
+			opacity: 0.275;
 		}
 		100% {
 			/* ~50% more travel distance before fadeout */
