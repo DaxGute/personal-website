@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
 	import { experiences } from '$lib/experiences/experiences';
@@ -7,99 +6,9 @@
 	export let kicker: string | undefined = undefined;
 	export let title: string;
 	export let body: string;
-
-	const EXP_MAGNET_RADIUS = 280;
-	const EXP_MAGNET_STRENGTH = 0.22;
-	const EXP_MAGNET_MAX_PX = 24;
-
-	let rootEl: HTMLElement | null = null;
-
-	function prefersReducedMotion() {
-		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	}
-
-	function updateMagnet(panel: HTMLElement, clientX: number, clientY: number) {
-		const cards = panel.querySelectorAll<HTMLElement>('.experience-item .info-card');
-		for (const card of cards) {
-			const r = card.getBoundingClientRect();
-			const cx = r.left + r.width * 0.5;
-			const cy = r.top + r.height * 0.5;
-			const dx = clientX - cx;
-			const dy = clientY - cy;
-			const dist = Math.hypot(dx, dy);
-
-			if (dist > EXP_MAGNET_RADIUS) {
-				card.style.setProperty('--mag-x', '0px');
-				card.style.setProperty('--mag-y', '0px');
-				continue;
-			}
-
-			const t = 1 - dist / EXP_MAGNET_RADIUS;
-			const pull = t * t * EXP_MAGNET_STRENGTH;
-			let mx = dx * pull;
-			let my = dy * pull;
-			const mag = Math.hypot(mx, my);
-			if (mag > EXP_MAGNET_MAX_PX) {
-				const s = EXP_MAGNET_MAX_PX / mag;
-				mx *= s;
-				my *= s;
-			}
-
-			card.style.setProperty('--mag-x', `${mx.toFixed(2)}px`);
-			card.style.setProperty('--mag-y', `${my.toFixed(2)}px`);
-		}
-	}
-
-	function resetMagnet(panel: HTMLElement | null) {
-		panel?.querySelectorAll<HTMLElement>('.experience-item .info-card').forEach((card) => {
-			card.style.setProperty('--mag-x', '0px');
-			card.style.setProperty('--mag-y', '0px');
-		});
-	}
-
-	onMount(() => {
-		const panelEl = rootEl?.closest('#experiences') as HTMLElement | null;
-		const hoverCapable =
-			typeof window !== 'undefined' &&
-			window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-		let magnetRaf: number | null = null;
-		let magnetX = 0;
-		let magnetY = 0;
-
-		const onPointerMove = (e: PointerEvent) => {
-			if (!panelEl || !hoverCapable || prefersReducedMotion()) return;
-			magnetX = e.clientX;
-			magnetY = e.clientY;
-			if (magnetRaf != null) return;
-			magnetRaf = requestAnimationFrame(() => {
-				magnetRaf = null;
-				if (panelEl) updateMagnet(panelEl, magnetX, magnetY);
-			});
-		};
-
-		const onPointerLeave = () => {
-			if (magnetRaf != null) {
-				cancelAnimationFrame(magnetRaf);
-				magnetRaf = null;
-			}
-			resetMagnet(panelEl);
-		};
-
-		if (panelEl && hoverCapable && !prefersReducedMotion()) {
-			panelEl.addEventListener('pointermove', onPointerMove, { passive: true });
-			panelEl.addEventListener('pointerleave', onPointerLeave, { passive: true });
-		}
-
-		return () => {
-			if (magnetRaf != null) cancelAnimationFrame(magnetRaf);
-			panelEl?.removeEventListener('pointermove', onPointerMove as EventListener);
-			panelEl?.removeEventListener('pointerleave', onPointerLeave as EventListener);
-			resetMagnet(panelEl);
-		};
-	});
 </script>
 
-<div class="experiences-panel" bind:this={rootEl}>
+<div class="experiences-panel">
 	{#if kicker}
 		<p class="kicker">{kicker}</p>
 	{/if}
@@ -193,13 +102,6 @@
 	}
 	:global(#experiences) .experience-item:hover {
 		z-index: 40;
-	}
-
-	:global(#experiences) .experience-item :global(.hover-polaroid-scale) {
-		--mag-x: 0px;
-		--mag-y: 0px;
-		transform: translate3d(var(--mag-x), var(--mag-y), 0) scale(var(--scale, 1));
-		transition: none;
 	}
 
 	@media (min-width: 720px) {

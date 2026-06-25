@@ -300,6 +300,10 @@
 		z-index: 1;
 	}
 
+	.info-card-surface:global(.has-logo) > *:not(.holo-layer):not(.grid-base):not(.grid-cursor) {
+		z-index: 2;
+	}
+
 	:global(.hover-polaroid-scale:hover) .info-card-surface {
 		filter: brightness(1.12) saturate(1.15);
 	}

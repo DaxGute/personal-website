@@ -6,7 +6,7 @@
 	import { cubicOut, cubicIn } from 'svelte/easing';
 	import confcapLogo from '$lib/assets/project/confcap_logo.png';
 	import kbkLogo from '$lib/assets/project/kbk_logo.png';
-	import rscLogo from '$lib/assets/project/rsc_logo.png';
+	import raqiLogo from '$lib/assets/project/raqi_logo.png';
 
 	export let projects: Project[] = [];
 	export let initialId: string | null = null;
@@ -276,8 +276,8 @@
 				? { src: confcapLogo, alt: 'ConfCap logo' }
 				: (active.name ?? '').trim().toLowerCase() === 'kid by kid'
 					? { src: kbkLogo, alt: 'Kid By Kid logo' }
-					: (active.name ?? '').trim().toLowerCase() === 'rise south city'
-						? { src: rscLogo, alt: 'Rise South City logo' }
+					: (active.name ?? '').trim().toLowerCase() === 'riseaqi'
+						? { src: raqiLogo, alt: 'RiseAQI logo' }
 						: null;
 
 	function selectByIndex(idx: number) {

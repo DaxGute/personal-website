@@ -58,6 +58,8 @@
 	let lastNow = 0;
 	let phase = 0; // 0..1
 	let phaseAnim: { start: number; delta: number; startTime: number; durationMs: number } | null = null;
+	/** Accumulated button-nav burst: same-direction clicks extend the target instead of restarting. */
+	let navState: { direction: -1 | 1; originIdx: number; totalSteps: number } | null = null;
 	let snapTimer: number | null = null;
 	let didInitialSnap = false;
 
@@ -102,6 +104,10 @@
 		return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 	}
 
+	function easeOutCubic(t: number) {
+		return 1 - Math.pow(1 - clamp01(t), 3);
+	}
+
 	function shortestDelta(from: number, to: number) {
 		// returns delta in [-0.5, 0.5)
 		// NOTE: JS % can be negative, so we wrap explicitly.
@@ -136,11 +142,54 @@
 		return best;
 	}
 
+	function clearNavState() {
+		navState = null;
+	}
+
 	function animatePhaseTo(target: number, durationMs = 560) {
+		clearNavState();
 		entryImpulseVelocity = 0;
 		phaseAnim = {
 			start: phase,
 			delta: shortestDelta(phase, wrap01(target)),
+			startTime: typeof window !== 'undefined' ? performance.now() : Date.now(),
+			durationMs
+		};
+	}
+
+	/** Recompute phaseAnim from navState; repeated same-direction clicks extend distance and shorten duration. */
+	function applyNavAnimation() {
+		if (!navState) return;
+		const n = displayCount();
+		if (n <= 0) return;
+
+		const tip = tipPhase();
+		const stepSize = 1 / n;
+		const originPhase = wrap01(tip - navState.originIdx / n);
+		const signedTotalDelta = -navState.direction * navState.totalSteps * stepSize;
+		const targetPhase = wrap01(originPhase + signedTotalDelta);
+
+		// Continue in the nav direction (not shortest arc) so multi-step bursts feel continuous.
+		let delta = targetPhase - phase;
+		if (navState.direction === -1) {
+			if (delta <= 0) delta += 1;
+		} else if (delta >= 0) {
+			delta -= 1;
+		}
+
+		const perStepMs = 520;
+		const burstSpeed = (stepSize / perStepMs) * Math.sqrt(navState.totalSteps);
+		const durationMs = clamp(Math.abs(delta) / burstSpeed, 220, 680);
+
+		entryImpulseVelocity = 0;
+		if (snapTimer != null) {
+			window.clearTimeout(snapTimer);
+			snapTimer = null;
+		}
+
+		phaseAnim = {
+			start: phase,
+			delta,
 			startTime: typeof window !== 'undefined' ? performance.now() : Date.now(),
 			durationMs
 		};
@@ -154,12 +203,21 @@
 		animatePhaseTo(targetPhase, durationMs);
 	}
 
-	function stepCentered(steps: -1 | 1, durationMs = 560) {
+	function stepCentered(steps: -1 | 1) {
 		const n = displayCount();
 		if (n <= 0) return;
-		const cur = closestIndexToTip();
-		const next = (cur + steps + n) % n;
-		animateToCenteredIndex(next, durationMs);
+
+		if (navState && navState.direction === steps) {
+			navState.totalSteps += 1;
+		} else {
+			navState = {
+				direction: steps,
+				originIdx: closestIndexToTip(),
+				totalSteps: 1
+			};
+		}
+
+		applyNavAnimation();
 	}
 
 	function snapToNearest(durationMs = 420) {
@@ -187,6 +245,7 @@
 	}
 
 	function applyWheelToPhase(e: WheelEvent) {
+		clearNavState();
 		entryImpulseVelocity = 0;
 		phaseAnim = null;
 		const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
@@ -227,6 +286,13 @@
 		scheduleWheelCaptureIdle();
 	}
 
+	/** After the arc tip (p=0.5), fade out quickly and stay hidden for the rest of the arc. */
+	function arcExitOpacity(p: number, fadeStart = 0.5, fadeEnd = 0.57) {
+		if (p <= fadeStart) return 1;
+		if (p >= fadeEnd) return 0;
+		return 1 - (p - fadeStart) / (fadeEnd - fadeStart);
+	}
+
 	function shouldAnimate() {
 		if (typeof window === 'undefined') return false;
 		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
@@ -255,8 +321,12 @@
 
 			if (phaseAnim) {
 				const t = clamp01((now - phaseAnim.startTime) / phaseAnim.durationMs);
-				phase = wrap01(phaseAnim.start + phaseAnim.delta * easeInOutCubic(t));
-				if (t >= 1) phaseAnim = null;
+				const eased = navState ? easeOutCubic(t) : easeInOutCubic(t);
+				phase = wrap01(phaseAnim.start + phaseAnim.delta * eased);
+				if (t >= 1) {
+					phaseAnim = null;
+					clearNavState();
+				}
 			}
 
 			if (entryImpulseVelocity > 1e-6) {
@@ -308,10 +378,12 @@
 				const y = yPeak + (yBase - yPeak) * Math.pow(p, Math.max(0.3, fallExp));
 				const rot = 360 * (p - 0.5);
 
+				const opacity = arcExitOpacity(p);
+
 				el.style.visibility = 'visible';
-				el.style.pointerEvents = 'auto';
+				el.style.pointerEvents = opacity < 0.12 ? 'none' : 'auto';
 				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg)`;
-				if (surface) surface.style.opacity = '1';
+				if (surface) surface.style.opacity = String(opacity);
 			}
 
 			raf = requestAnimationFrame(tick);
@@ -366,6 +438,7 @@
 		const onPointerDown = (e: PointerEvent) => {
 			if (!shouldAnimate()) return;
 			if (hoverCapable && !allowManual) return;
+			clearNavState();
 			entryImpulseVelocity = 0;
 			phaseAnim = null;
 			dragging = true;
@@ -569,17 +642,19 @@
 	}
 
 	.award-card-surface {
-		width: min(360px, 42vw);
+		width: min(390px, 44vw);
 		position: relative;
 		opacity: 1;
+		will-change: opacity;
 	}
 
 	.awards-header {
 		position: absolute;
 		left: 50%;
 		top: 50%;
+		z-index: 2;
 		/* Keep copy just below the arc focal point */
-		transform: translate(-50%, clamp(48px, 7vh, 96px));
+		transform: translate(-50%, calc(clamp(48px, 7vh, 96px) + 20px));
 		text-align: center;
 		width: min(520px, 92%);
 	}
@@ -658,7 +733,7 @@
 			transform: none;
 		}
 		.award-card-surface {
-			width: min(540px, 92vw);
+			width: min(560px, 92vw);
 			margin-inline: auto;
 		}
 	}
@@ -692,7 +767,7 @@
 			transform: none;
 		}
 		.award-card-surface {
-			width: min(540px, 92vw);
+			width: min(560px, 92vw);
 			margin-inline: auto;
 		}
 	}

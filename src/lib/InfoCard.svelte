@@ -23,8 +23,12 @@
 	export let links: ProjectLink[] = [];
 
 	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
-	$: websiteLink = links.find((l) => (l.label ?? '').trim().toLowerCase() === 'website') ?? null;
-	$: otherLinks = links.filter((l) => l !== websiteLink);
+	$: primaryLink =
+		links.find((l) => {
+			const label = (l.label ?? '').trim().toLowerCase();
+			return label === 'website' || label === 'app store';
+		}) ?? null;
+	$: otherLinks = links.filter((l) => l !== primaryLink);
 </script>
 
 <CardShell
@@ -43,7 +47,12 @@
 			<div class="experience-header">
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
-					<p class="experience-sub" class:wrap-sub={variant !== 'experience'}>{subheading}</p>
+					<p
+						class="experience-sub"
+						class:wrap-sub={variant !== 'experience' && variant !== 'education'}
+					>
+						{subheading}
+					</p>
 				</div>
 				{#if dates || (variant === 'education' && logoSrc)}
 					<div class="experience-side">
@@ -76,10 +85,10 @@
 					<p class="project-body">{body}</p>
 				{/if}
 
-				{#if websiteLink}
+				{#if primaryLink}
 					<p class="project-website">
-						<a class="project-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
-							Website.
+						<a class="project-website-link" href={primaryLink.href} target="_blank" rel="noreferrer">
+							{primaryLink.label}.
 						</a>
 					</p>
 				{/if}
@@ -157,6 +166,9 @@
 	}
 
 	.card-logo {
+		position: relative;
+		z-index: 2;
+		isolation: isolate;
 		flex: 0 0 clamp(64px, 18%, 120px);
 		display: flex;
 		align-items: center;
@@ -168,6 +180,9 @@
 	}
 
 	.card-logo img {
+		position: relative;
+		z-index: 1;
+		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
@@ -207,6 +222,11 @@
 		min-width: 0;
 	}
 
+	:global(.info-card--blue) .experience-sub {
+		overflow: visible;
+		text-overflow: unset;
+	}
+
 	.experience-dates {
 		margin: 0;
 		color: #e8f2ff;
@@ -221,6 +241,9 @@
 	}
 
 	.education-logo {
+		position: relative;
+		z-index: 2;
+		isolation: isolate;
 		width: clamp(28px, 3.2vw, 44px);
 		height: clamp(28px, 3.2vw, 44px);
 		display: grid;
@@ -235,6 +258,9 @@
 	}
 
 	.education-logo img {
+		position: relative;
+		z-index: 1;
+		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;

@@ -18,25 +18,32 @@ export const projects: Project[] = [
 		description:
 			'Through free online one-on-one tutoring, Kid By Kid Middle and High School student Mentors work with under-served Elementary and Middle School-aged immigrant, refugee, and ESL Learners to provide life-changing academic opportunity, and support.',
 		highlights: [
-			'13,000+ hours of 1-on-1 tutoring',
-			'Hundreds of tutor/learner matches',
-			'Free online tutoring for underserved students'
 		],
-		tech: ['Nonprofit leadership', 'Program design', 'Volunteer operations'],
+		tech: ['Nonprofit Leadership', 'Program Design'],
 		links: [{ label: 'Website', href: 'https://kidbykid.org' }]
 	},
+
 	{
 		id: 'project-2',
+		name: 'RiseAQI',
+		blurb: 'Built a Real-Time Community Air Quality Platform Serving South San Francisco Residents',
+		description:
+			'Designed and developed a bilingual web and mobile platform that integrates PurpleAir and Clarity sensor networks with spatial interpolation, wind forecasting, historical trends, and personalized alerts to deliver hyperlocal air quality information for South San Francisco in partnership with Rise South City.',
+		highlights: [
+		],
+		tech: [
+			'Full-Stack Development',
+			'Data Visualization',
+		],
+		links: [
+			{ label: 'App Store', href: 'https://apps.apple.com/us/app/rise-aqi/id6776097049' }
+		]
+	},
+	{
+		id: 'project-3',
 		name: 'ConfCap',
 		blurb: 'Designed and Built a Conference Bounty App from Ground Up',
 		description:
 			'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations. ⚠️ WIP ⚠️'
 	},
-	{
-		id: 'project-3',
-		name: 'Rise South City',
-		blurb: 'Redesigning the AQI Data Pipeline for SSF',
-		description:
-			'As part of an ongoing partnership with Rise South City, I have recently built a ground-up pipeline of gathering air quality information from the San Francisco PurpleAir sensors. ⚠️ WIP ⚠️'
-	}
 ];
