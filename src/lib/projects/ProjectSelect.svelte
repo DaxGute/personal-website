@@ -1,5 +1,6 @@
 <script lang="ts">
-	import type { Project } from '$lib/projects';
+	import InfoCard from '$lib/InfoCard.svelte';
+	import type { Project } from '$lib/projects/projects';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { cubicOut, cubicIn } from 'svelte/easing';
@@ -31,9 +32,6 @@
 	let dragStartScrollTop = 0;
 	let descDir: 1 | -1 = 1;
 	let lastActiveId: string | null = null;
-	let headTextEl: HTMLDivElement | null = null;
-	let headTextHeightPx = 0;
-	let headTextResizeObs: ResizeObserver | null = null;
 
 	let scrollbarThumbTop = 0;
 	let scrollbarThumbHeight = 16;
@@ -269,9 +267,6 @@
 	}
 
 	$: active = projects.find((p) => p.id === activeId) ?? null;
-	$: websiteLink =
-		active?.links?.find((l) => (l.label ?? '').trim().toLowerCase() === 'website') ?? null;
-	$: otherLinks = active?.links?.filter((l) => l !== websiteLink) ?? [];
 	$: motionOff = prefersReducedMotion();
 	$: descKey = active?.id ?? 'empty';
 	$: projectLogo =
@@ -370,20 +365,6 @@
 		};
 	});
 
-	onMount(() => {
-		// Keep the project logo height locked to the two-line title+blurb block.
-		if (typeof ResizeObserver === 'undefined') return;
-		headTextResizeObs = new ResizeObserver(() => {
-			headTextHeightPx = headTextEl?.clientHeight ?? 0;
-		});
-		if (headTextEl) headTextResizeObs.observe(headTextEl);
-		headTextHeightPx = headTextEl?.clientHeight ?? 0;
-		return () => {
-			headTextResizeObs?.disconnect();
-			headTextResizeObs = null;
-		};
-	});
-
 	onDestroy(() => {
 		if (scrollRaf) cancelAnimationFrame(scrollRaf);
 		resizeObs?.disconnect();
@@ -392,8 +373,6 @@
 		intersectObs = null;
 		viewportFadeObs?.disconnect();
 		viewportFadeObs = null;
-		headTextResizeObs?.disconnect();
-		headTextResizeObs = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = null;
 	});
@@ -454,56 +433,17 @@
 				out:fly={{ y: -6 * descDir, duration: motionOff ? 0 : 130, easing: cubicIn }}
 			>
 				{#if active}
-					<div class="desc-head">
-						<div class="desc-head-text" bind:this={headTextEl}>
-							<h2 class="desc-title">{active.name}</h2>
-							<p class="desc-blurb">{active.blurb}</p>
-						</div>
-						{#if projectLogo}
-							<img
-								class="desc-logo"
-								src={projectLogo.src}
-								alt={projectLogo.alt}
-								style={`height:${Math.max(0, headTextHeightPx)}px;`}
-							/>
-						{/if}
-					</div>
-
-					<p class="desc-body">{active.description}</p>
-
-					{#if websiteLink}
-						<p class="desc-website">
-							<a class="desc-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
-								Website.
-							</a>
-						</p>
-					{/if}
-
-					{#if active.highlights?.length}
-						<ul class="desc-list" aria-label="Project highlights">
-							{#each active.highlights as h (h)}
-								<li>{h}</li>
-							{/each}
-						</ul>
-					{/if}
-
-					{#if active.tech?.length}
-						<div class="chips" aria-label="Tech stack">
-							{#each active.tech as t (t)}
-								<span class="chip">{t}</span>
-							{/each}
-						</div>
-					{/if}
-
-					{#if otherLinks.length}
-						<div class="links" aria-label="Project links">
-							{#each otherLinks as link (link.href)}
-								<a class="link" href={link.href} target="_blank" rel="noreferrer">
-									{link.label}
-								</a>
-							{/each}
-						</div>
-					{/if}
+					<InfoCard
+						variant="project"
+						heading={active.name}
+						subheading={active.blurb}
+						body={active.description}
+						items={active.highlights ?? []}
+						tech={active.tech ?? []}
+						links={active.links ?? []}
+						logoSrc={projectLogo?.src ?? null}
+						logoAlt={projectLogo?.alt ?? null}
+					/>
 				{:else}
 					<p class="desc-empty">Add some projects to see details here.</p>
 				{/if}
@@ -520,6 +460,11 @@
 		align-items: stretch;
 		--selector-h: 240px;
 		--slot-h: 56px;
+		/* aquamarine accents — matches InfoCard project theme */
+		--select-border: rgba(30, 110, 95, 0.42);
+		--select-border-strong: rgba(22, 95, 82, 0.55);
+		--select-accent: rgba(30, 110, 95, 0.12);
+		--select-shadow: 45, 125, 110;
 	}
 
 	.wrap.js-viewport-fade .reel:not(.viewport-revealed),
@@ -538,155 +483,33 @@
 	}
 
 	.desc {
-		border-radius: 16px;
-		border: 1px solid rgba(11, 18, 32, 0.14);
-		background:
-			linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(34, 211, 238, 0.08)),
-			rgba(255, 255, 255, 0.28);
-		backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.25);
-		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
-		/* Fixed height, and never scrollable: clip overflow instead */
-		height: var(--selector-h);
-		overflow: hidden; /* fallback */
-		overflow: clip;
 		position: relative;
+		height: var(--selector-h);
+		overflow: visible;
 	}
 
 	.desc-inner {
 		position: absolute;
 		inset: 0;
-		padding: 14px 14px;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
 	}
 
-	.desc-title {
-		margin: 0;
-		font-size: 18px;
-		line-height: 1.1;
-		letter-spacing: -0.02em;
-	}
-
-	.desc-blurb {
-		margin: 0;
-		color: rgba(11, 18, 32, 0.78);
-		font-weight: 650;
-		line-height: 1.35;
-	}
-
-	.desc-head {
-		display: flex;
-		align-items: flex-start;
-		justify-content: flex-start;
-		gap: 12px;
-		margin: 0 0 10px;
-	}
-
-	.desc-head-text {
-		min-width: 0;
-		display: grid;
-		gap: 6px;
-	}
-
-	.desc-logo {
-		width: auto;
-		max-width: min(160px, 34%);
-		margin-left: auto;
-		object-fit: contain;
-		flex: 0 0 auto;
-		filter: drop-shadow(0 10px 22px rgba(11, 18, 32, 0.12));
-	}
-
-	.desc-body {
-		margin: 0 0 10px;
-		color: var(--muted);
-		line-height: 1.6;
-	}
-
-	.desc-website {
-		margin: 0 0 10px;
-		color: var(--muted);
-		line-height: 1.6;
-	}
-
-	.desc-website-link {
-		color: rgba(11, 18, 32, 0.86);
-		text-decoration: underline;
-		text-underline-offset: 2px;
-	}
-
-	.desc-website-link:hover {
-		text-decoration-thickness: 2px;
-	}
-
-	.desc-list {
-		margin: 0 0 10px;
-		padding-left: 18px;
-		color: rgba(11, 18, 32, 0.78);
-		line-height: 1.5;
-	}
-
-	.chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin: 0 0 10px;
-	}
-
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		height: 26px;
-		padding: 0 10px;
-		border-radius: 999px;
-		border: 1px solid rgba(11, 18, 32, 0.12);
-		background: rgba(255, 255, 255, 0.34);
-		color: rgba(11, 18, 32, 0.78);
-		font-size: 12px;
-		font-weight: 650;
-	}
-
-	.links {
-		display: flex;
-		gap: 10px;
-		flex-wrap: wrap;
-	}
-
-	.link {
-		display: inline-flex;
-		align-items: center;
-		height: 28px;
-		padding: 0 10px;
-		border-radius: 10px;
-		border: 1px solid rgba(11, 18, 32, 0.14);
-		background: rgba(255, 255, 255, 0.32);
-		text-decoration: none;
-		font-weight: 700;
-		color: rgba(11, 18, 32, 0.86);
-		transition:
-			transform 140ms ease,
-			background 140ms ease,
-			border-color 140ms ease;
-	}
-
-	.link:hover {
-		transform: translateY(-1px);
-		background: rgba(255, 255, 255, 0.42);
-		border-color: rgba(11, 18, 32, 0.18);
-	}
-
-	.link:focus-visible {
-		outline: 3px solid rgba(124, 58, 237, 0.25);
-		outline-offset: 2px;
+	.desc-inner :global(.info-card) {
+		height: 100%;
 	}
 
 	.listbox {
 		position: relative;
 		border-radius: 16px;
-		border: 1px solid var(--card-border);
+		border: 2px solid var(--select-border);
 		background: rgba(255, 255, 255, 0.22);
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
-		box-shadow: 0 18px 50px rgba(11, 18, 32, 0.10);
+		box-shadow:
+			0 18px 50px rgba(11, 18, 32, 0.1),
+			0 0 16px rgba(var(--select-shadow), 0.1);
 		padding: calc(var(--selector-h) / 2 - var(--slot-h) / 2) 22px  calc(var(--selector-h) / 2 - var(--slot-h) / 2) 10px;
 		height: var(--selector-h);
 		overflow-y: scroll;
@@ -725,19 +548,19 @@
 	.scrollbar-thumb {
 		width: 10px;
 		border-radius: 14px;
-		border: 1px solid rgba(124, 58, 237, 0.30);
-		background: rgba(255, 255, 255, 0.14);
+		border: 1px solid var(--select-border);
+		background: rgba(255, 255, 255, 0.22);
 		box-shadow:
-			inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-			0 10px 24px rgba(11, 18, 32, 0.12);
+			inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+			0 4px 12px rgba(var(--select-shadow), 0.14);
 	}
 
 	.scrollbar-thumb:hover {
-		background: rgba(255, 255, 255, 0.22);
+		background: rgba(255, 255, 255, 0.32);
 	}
 
 	.listbox:focus-visible {
-		outline: 3px solid rgba(124, 58, 237, 0.25);
+		outline: 3px solid rgba(var(--select-shadow), 0.28);
 		outline-offset: 2px;
 	}
 
@@ -757,21 +580,18 @@
 		transition:
 			background 140ms ease,
 			border-color 140ms ease,
-			transform 140ms ease,
-			filter 140ms ease;
-		filter: saturate(0.95);
+			transform 140ms ease;
 	}
 
 	.opt:hover {
-		background: rgba(255, 255, 255, 0.24);
-		border-color: rgba(11, 18, 32, 0.10);
+		background: rgba(255, 255, 255, 0.22);
+		border-color: rgba(var(--select-shadow), 0.22);
 	}
 
 	.opt[aria-selected='true'] {
-		background: rgba(124, 58, 237, 0.12);
-		border-color: rgba(124, 58, 237, 0.18);
+		background: var(--select-accent);
+		border-color: var(--select-border-strong);
 		transform: scale(1.02);
-		filter: saturate(1.1);
 	}
 
 	.opt-title {
@@ -793,12 +613,12 @@
 		top: 50%;
 		transform: translateY(-50%);
 		height: var(--slot-h);
-		border-radius: 10px;
-		border: 1px solid rgba(124, 58, 237, 0.30);
-		background: rgba(255, 255, 255, 0.14);
+		border-radius: 4px;
+		border: 2px solid var(--select-border-strong);
+		background: rgba(255, 255, 255, 0.18);
 		box-shadow:
-			inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-			0 10px 24px rgba(11, 18, 32, 0.12);
+			inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+			0 0 12px rgba(var(--select-shadow), 0.14);
 		pointer-events: none;
 	}
 
@@ -827,7 +647,8 @@
 
 	.desc-empty {
 		margin: 0;
-		color: var(--muted);
+		padding: 14px;
+		color: rgba(216, 226, 242, 0.82);
 	}
 
 	@media (max-width: 760px) {

@@ -1,5 +1,15 @@
 <script lang="ts">
-	type CardVariant = 'experience' | 'education' | 'award';
+	import CardShell from '$lib/CardShell.svelte';
+	import type { ProjectLink } from '$lib/projects/projects';
+
+	type CardVariant = 'experience' | 'education' | 'award' | 'project';
+
+	function themeForVariant(variant: CardVariant): 'periwinkle' | 'blue' | 'teal' | 'aquamarine' {
+		if (variant === 'experience') return 'periwinkle';
+		if (variant === 'education') return 'blue';
+		if (variant === 'award') return 'teal';
+		return 'aquamarine';
+	}
 
 	export let heading: string;
 	export let subheading: string;
@@ -8,144 +18,135 @@
 	export let items: string[] = [];
 	export let logoSrc: string | null = null;
 	export let logoAlt: string | null = null;
+	export let body: string | null = null;
+	export let tech: string[] = [];
+	export let links: ProjectLink[] = [];
 
-	let rootEl: HTMLElement | null = null;
-	let tiltEl: HTMLElement | null = null;
-
-	function prefersReducedMotion() {
-		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	}
-
-	// Match Polaroid hover tilt
-	const MAX_TILT_DEG = 9;
-	const HOVER_SCALE = 1.035;
-
-	function setTilt(e: PointerEvent) {
-		if (!rootEl || !tiltEl) return;
-		if (prefersReducedMotion()) return;
-
-		const r = rootEl.getBoundingClientRect();
-		const x = (e.clientX - r.left) / r.width;
-		const y = (e.clientY - r.top) / r.height;
-
-		const dx = x - 0.5;
-		const dy = y - 0.5;
-
-		const rotX = (dy * 2 * MAX_TILT_DEG).toFixed(3);
-		const rotY = (-dx * 2 * MAX_TILT_DEG).toFixed(3);
-
-		tiltEl.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
-		rootEl.style.setProperty('--scale', `${HOVER_SCALE}`);
-		rootEl.style.setProperty('--hover', '1');
-	}
-
-	function resetTilt() {
-		if (!rootEl) return;
-
-		if (tiltEl) tiltEl.style.transform = `perspective(900px) rotateX(0deg) rotateY(0deg)`;
-		rootEl.style.setProperty('--scale', `1`);
-		rootEl.style.setProperty('--hover', '0');
-	}
+	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
+	$: websiteLink = links.find((l) => (l.label ?? '').trim().toLowerCase() === 'website') ?? null;
+	$: otherLinks = links.filter((l) => l !== websiteLink);
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div
-	class="info-card hover-polaroid-scale"
-	data-variant={variant}
-	bind:this={rootEl}
-	on:pointerenter={setTilt}
-	on:pointermove={setTilt}
-	on:pointerleave={resetTilt}
+<CardShell
+	theme={themeForVariant(variant)}
+	class={variant === 'project' ? 'info-card--project' : ''}
+	surfaceClass={hasSideLogo ? 'has-logo' : ''}
 >
-	<div class="info-card-tilt hover-polaroid-tilt" bind:this={tiltEl}>
-		<div
-			class="info-card-surface hover-polaroid-surface"
-			class:has-logo={variant === 'experience' && !!logoSrc}
-		>
-			<div class="card-row">
-				{#if variant === 'experience' && logoSrc}
-					<div class="card-logo" aria-hidden={logoAlt ? undefined : 'true'}>
-						<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
-					</div>
-				{/if}
+	<div class="card-row">
+		{#if hasSideLogo && logoSrc}
+			<div class="card-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+				<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+			</div>
+		{/if}
 
-				<div class="card-content">
-					<div class="experience-header">
-						<div class="experience-meta">
-							<p class="experience-company">{heading}</p>
-							<p class="experience-sub" class:wrap-sub={variant !== 'experience'}>{subheading}</p>
-						</div>
-						{#if dates || (variant === 'education' && logoSrc)}
-							<div class="experience-side">
-								{#if dates}
-									<p class="experience-dates">{dates}</p>
-								{/if}
-								{#if variant === 'education' && logoSrc}
-									<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
-										<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
-									</div>
-								{/if}
+		<div class="card-content">
+			<div class="experience-header">
+				<div class="experience-meta">
+					<p class="experience-company">{heading}</p>
+					<p class="experience-sub" class:wrap-sub={variant !== 'experience'}>{subheading}</p>
+				</div>
+				{#if dates || (variant === 'education' && logoSrc)}
+					<div class="experience-side">
+						{#if dates}
+							<p class="experience-dates">{dates}</p>
+						{/if}
+						{#if variant === 'education' && logoSrc}
+							<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
 							</div>
 						{/if}
 					</div>
-
-					{#if variant === 'experience'}
-						<ul class="experience-highlights">
-							{#each items as item}
-								<li>{item}</li>
-							{/each}
-						</ul>
-					{:else if variant === 'education'}
-						<div class="education-details">
-							{#each items as item}
-								<p>{item}</p>
-							{/each}
-						</div>
-					{:else}
-						<div class="award-details">
-							{#each items as item}
-								<p>{item}</p>
-							{/each}
-						</div>
-					{/if}
-				</div>
+				{/if}
 			</div>
+
+			{#if variant === 'experience'}
+				<ul class="experience-highlights">
+					{#each items as item}
+						<li>{item}</li>
+					{/each}
+				</ul>
+			{:else if variant === 'education'}
+				<div class="education-details">
+					{#each items as item}
+						<p>{item}</p>
+					{/each}
+				</div>
+			{:else if variant === 'project'}
+				{#if body}
+					<p class="project-body">{body}</p>
+				{/if}
+
+				{#if websiteLink}
+					<p class="project-website">
+						<a class="project-website-link" href={websiteLink.href} target="_blank" rel="noreferrer">
+							Website.
+						</a>
+					</p>
+				{/if}
+
+				{#if items.length}
+					<ul class="experience-highlights" aria-label="Project highlights">
+						{#each items as item}
+							<li>{item}</li>
+						{/each}
+					</ul>
+				{/if}
+
+				{#if tech.length}
+					<div class="project-chips" aria-label="Tech stack">
+						{#each tech as t}
+							<span class="project-chip">{t}</span>
+						{/each}
+					</div>
+				{/if}
+
+				{#if otherLinks.length}
+					<div class="project-links" aria-label="Project links">
+						{#each otherLinks as link}
+							<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
+								{link.label}
+							</a>
+						{/each}
+					</div>
+				{/if}
+			{:else}
+				<div class="award-details">
+					{#each items as item}
+						<p>{item}</p>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
-</div>
+</CardShell>
 
 <style>
-	/* Glass surface (apply to every InfoCard) */
-	.info-card {
-		width: 100%;
-		height: 100%;
+	:global(.hover-polaroid-scale:hover) .card-content {
+		background: transparent;
+		box-shadow: none;
 	}
 
-	.info-card-tilt {
-		width: 100%;
-		height: 100%;
-	}
-
-	.info-card-surface {
-		--hp-border: rgba(11, 18, 32, 0.18);
-		--hp-border-hover: rgba(11, 18, 32, 0.22);
-		--hp-bg: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(34, 211, 238, 0.1)),
-			rgba(255, 255, 255, 0.86);
-		--hp-bg-hover: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(34, 211, 238, 0.14)),
-			rgba(255, 255, 255, 0.92);
-		--hp-shadow: 0 22px 70px rgba(11, 18, 32, 0.16);
-		--hp-shadow-hover: 0 28px 84px rgba(11, 18, 32, 0.18);
-		position: relative;
-		width: 100%;
+	:global(.info-card--project) .card-row {
 		height: 100%;
 		overflow: hidden;
-		border-radius: 16px;
-		backface-visibility: hidden;
-		padding: 14px 14px;
 	}
 
-	.info-card-surface.has-logo {
-		padding: 0;
+	:global(.info-card--project) .card-logo {
+		align-self: stretch;
+		align-items: center;
+		justify-content: center;
+	}
+
+	:global(.info-card--project) .card-logo img {
+		width: 100%;
+		height: auto;
+		max-height: 100%;
+		object-fit: contain;
+	}
+
+	:global(.info-card--project) .card-content {
+		min-height: 0;
+		overflow: hidden;
 	}
 
 	.card-row {
@@ -161,8 +162,9 @@
 		align-items: center;
 		justify-content: center;
 		padding: 12px 10px 12px 12px;
-		border-right: 1px solid rgba(11, 18, 32, 0.08);
-		background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+		border-right: 1px solid rgba(160, 190, 230, 0.28);
+		background: linear-gradient(180deg, rgba(160, 200, 240, 0.08), rgba(160, 200, 240, 0));
+		box-shadow: inset -10px 0 20px rgba(140, 180, 220, 0.06);
 	}
 
 	.card-logo img {
@@ -175,9 +177,13 @@
 		flex: 1 1 auto;
 		min-width: 0;
 		padding: 14px 14px;
+		border-radius: 3px;
+		background: transparent;
+		box-shadow: none;
+		transition:
+			background 0.28s ease,
+			box-shadow 0.28s ease;
 	}
-
-	/* hover surface polish handled by `.hover-polaroid-scale:hover .hover-polaroid-surface` */
 
 	.experience-header {
 		display: flex;
@@ -201,33 +207,17 @@
 		min-width: 0;
 	}
 
-	.experience-company {
-		margin: 0;
-		font-weight: 700;
-	}
-
-	.experience-sub {
-		margin: 0;
-		color: var(--muted);
-		font-size: 13px;
-		line-height: 1.2;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.experience-sub.wrap-sub {
-		white-space: normal;
-		overflow: visible;
-		text-overflow: unset;
-		overflow-wrap: anywhere;
-	}
-
 	.experience-dates {
 		margin: 0;
-		color: var(--muted);
+		color: #e8f2ff;
 		font-size: 13px;
 		white-space: nowrap;
+		letter-spacing: 0.05em;
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		text-shadow:
+			0 1px 2px rgba(11, 18, 32, 0.85),
+			0 0 12px rgba(170, 210, 255, 0.4);
 	}
 
 	.education-logo {
@@ -236,9 +226,12 @@
 		display: grid;
 		place-items: center;
 		padding: 2px;
-		border-radius: 10px;
-		background: rgba(255, 255, 255, 0.35);
-		border: 1px solid rgba(11, 18, 32, 0.08);
+		border-radius: 4px;
+		background: rgba(140, 180, 220, 0.1);
+		border: 1px solid rgba(176, 196, 228, 0.45);
+		box-shadow:
+			inset 0 0 12px rgba(140, 180, 220, 0.12),
+			0 0 14px rgba(140, 180, 220, 0.18);
 	}
 
 	.education-logo img {
@@ -274,10 +267,11 @@
 	.experience-highlights {
 		margin: 0;
 		padding-left: 0;
-		color: var(--muted);
+		color: rgba(216, 226, 242, 0.94);
 		font-size: 12px;
-		line-height: 1.35;
+		line-height: 1.4;
 		list-style: none;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
 	}
 
 	.experience-highlights li {
@@ -287,9 +281,10 @@
 	.education-details {
 		display: grid;
 		gap: 6px;
-		color: var(--muted);
+		color: rgba(216, 226, 242, 0.94);
 		line-height: 1.6;
 		overflow-wrap: anywhere;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
 	}
 
 	.education-details p {
@@ -299,12 +294,204 @@
 	.award-details {
 		display: grid;
 		gap: 6px;
-		color: var(--muted);
+		color: rgba(216, 226, 242, 0.94);
 		line-height: 1.55;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
 	}
 
 	.award-details p {
 		margin: 0;
 	}
-</style>
 
+	.project-body {
+		margin: 0 0 8px;
+		color: rgba(216, 226, 242, 0.94);
+		font-size: 12px;
+		line-height: 1.55;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+	}
+
+	.project-website {
+		margin: 0 0 8px;
+		color: rgba(216, 226, 242, 0.94);
+		font-size: 12px;
+		line-height: 1.55;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+	}
+
+	.project-website-link {
+		color: #e8f2ff;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.project-website-link:hover {
+		text-decoration-thickness: 2px;
+	}
+
+	.project-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 0 0 8px;
+	}
+
+	.project-chip {
+		display: inline-flex;
+		align-items: center;
+		height: 24px;
+		padding: 0 9px;
+		border-radius: 999px;
+		border: 1px solid rgba(176, 196, 228, 0.45);
+		background: rgba(140, 180, 220, 0.12);
+		color: rgba(228, 236, 248, 0.96);
+		font-size: 11px;
+		font-weight: 650;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+	}
+
+	.project-links {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+
+	.project-link {
+		display: inline-flex;
+		align-items: center;
+		height: 26px;
+		padding: 0 9px;
+		border-radius: 6px;
+		border: 1px solid rgba(176, 196, 228, 0.45);
+		background: rgba(140, 180, 220, 0.1);
+		text-decoration: none;
+		font-size: 11px;
+		font-weight: 700;
+		color: #e8f2ff;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+		transition:
+			transform 140ms ease,
+			background 140ms ease,
+			border-color 140ms ease;
+	}
+
+	.project-link:hover {
+		transform: translateY(-1px);
+		background: rgba(140, 180, 220, 0.18);
+		border-color: rgba(200, 220, 255, 0.62);
+	}
+
+	.project-link:focus-visible {
+		outline: 2px solid rgba(200, 220, 255, 0.55);
+		outline-offset: 2px;
+	}
+
+	:global(.info-card--green) .card-logo,
+	:global(.info-card--teal) .card-logo,
+	:global(.info-card--aquamarine) .card-logo,
+	:global(.info-card--blue) .card-logo,
+	:global(.info-card--periwinkle) .card-logo {
+		border-right-color: rgba(var(--tone-border), 0.24);
+		background: var(--tone-inset);
+		box-shadow: inset -10px 0 20px rgba(var(--tone-border), 0.06);
+	}
+
+	:global(.info-card--green) .experience-dates,
+	:global(.info-card--teal) .experience-dates,
+	:global(.info-card--aquamarine) .experience-dates,
+	:global(.info-card--blue) .experience-dates,
+	:global(.info-card--periwinkle) .experience-dates {
+		color: var(--tone-accent);
+		text-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.75),
+			0 0 10px rgba(var(--tone-glow-2), 0.2);
+	}
+
+	:global(.info-card--green) .education-logo,
+	:global(.info-card--teal) .education-logo,
+	:global(.info-card--aquamarine) .education-logo,
+	:global(.info-card--blue) .education-logo,
+	:global(.info-card--periwinkle) .education-logo {
+		background: rgba(255, 255, 255, 0.22);
+		border-color: rgba(var(--tone-border), 0.35);
+		box-shadow:
+			inset 0 0 12px rgba(255, 255, 255, 0.12),
+			0 0 14px rgba(var(--tone-shadow), 0.1);
+	}
+
+	:global(.info-card--green) .experience-highlights,
+	:global(.info-card--teal) .experience-highlights,
+	:global(.info-card--aquamarine) .experience-highlights,
+	:global(.info-card--blue) .experience-highlights,
+	:global(.info-card--periwinkle) .experience-highlights,
+	:global(.info-card--green) .education-details,
+	:global(.info-card--teal) .education-details,
+	:global(.info-card--aquamarine) .education-details,
+	:global(.info-card--blue) .education-details,
+	:global(.info-card--periwinkle) .education-details,
+	:global(.info-card--green) .award-details,
+	:global(.info-card--teal) .award-details,
+	:global(.info-card--aquamarine) .award-details,
+	:global(.info-card--blue) .award-details,
+	:global(.info-card--periwinkle) .award-details,
+	:global(.info-card--green) .project-body,
+	:global(.info-card--teal) .project-body,
+	:global(.info-card--aquamarine) .project-body,
+	:global(.info-card--blue) .project-body,
+	:global(.info-card--periwinkle) .project-body,
+	:global(.info-card--green) .project-website,
+	:global(.info-card--teal) .project-website,
+	:global(.info-card--aquamarine) .project-website,
+	:global(.info-card--blue) .project-website,
+	:global(.info-card--periwinkle) .project-website {
+		color: rgba(var(--tone-sub), 0.92);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	:global(.info-card--green) .project-website-link,
+	:global(.info-card--teal) .project-website-link,
+	:global(.info-card--aquamarine) .project-website-link,
+	:global(.info-card--blue) .project-website-link,
+	:global(.info-card--periwinkle) .project-website-link {
+		color: var(--tone-accent);
+	}
+
+	:global(.info-card--green) .project-chip,
+	:global(.info-card--teal) .project-chip,
+	:global(.info-card--aquamarine) .project-chip,
+	:global(.info-card--blue) .project-chip,
+	:global(.info-card--periwinkle) .project-chip {
+		border-color: rgba(var(--tone-border), 0.38);
+		background: rgba(255, 255, 255, 0.22);
+		color: rgba(var(--tone-sub), 0.96);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	:global(.info-card--green) .project-link,
+	:global(.info-card--teal) .project-link,
+	:global(.info-card--aquamarine) .project-link,
+	:global(.info-card--blue) .project-link,
+	:global(.info-card--periwinkle) .project-link {
+		border-color: rgba(var(--tone-border), 0.38);
+		background: rgba(255, 255, 255, 0.18);
+		color: var(--tone-accent);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	:global(.info-card--green) .project-link:hover,
+	:global(.info-card--teal) .project-link:hover,
+	:global(.info-card--aquamarine) .project-link:hover,
+	:global(.info-card--blue) .project-link:hover,
+	:global(.info-card--periwinkle) .project-link:hover {
+		background: rgba(255, 255, 255, 0.32);
+		border-color: rgba(var(--tone-border-hover), 0.55);
+	}
+
+	:global(.info-card--green) .project-link:focus-visible,
+	:global(.info-card--teal) .project-link:focus-visible,
+	:global(.info-card--aquamarine) .project-link:focus-visible,
+	:global(.info-card--blue) .project-link:focus-visible,
+	:global(.info-card--periwinkle) .project-link:focus-visible {
+		outline-color: rgba(var(--tone-border-hover), 0.55);
+	}
+</style>

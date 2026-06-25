@@ -6,12 +6,48 @@
 	export let emailHref: string;
 
 	let open = false;
+	let bubblesReady = false;
 	let pulsesDisabled = false;
 	let root: HTMLDivElement | null = null;
 	let pulse1: HTMLSpanElement | null = null;
 	let pulse2: HTMLSpanElement | null = null;
 	let pulse3: HTMLSpanElement | null = null;
 	let ringFinishAnims: Animation[] = [];
+	let fanoutTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// Match bubble transform duration + longest open stagger in CSS.
+	const FANOUT_ANIM_MS = 390;
+
+	function clearFanoutTimer() {
+		if (fanoutTimer == null) return;
+		clearTimeout(fanoutTimer);
+		fanoutTimer = null;
+	}
+
+	function fanoutAnimMs() {
+		if (typeof window === 'undefined') return FANOUT_ANIM_MS;
+		return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : FANOUT_ANIM_MS;
+	}
+
+	function scheduleBubblesReady() {
+		clearFanoutTimer();
+		const delay = fanoutAnimMs();
+		if (delay === 0) {
+			bubblesReady = true;
+			return;
+		}
+		fanoutTimer = setTimeout(() => {
+			if (open) bubblesReady = true;
+			fanoutTimer = null;
+		}, delay);
+	}
+
+	function blockBubbleClick(e: MouseEvent) {
+		if (!bubblesReady) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+	}
 
 	function stopRingPulsesButLetCurrentFinish() {
 		for (const a of ringFinishAnims) a.cancel();
@@ -48,12 +84,20 @@
 		e.preventDefault();
 		e.stopPropagation();
 		const next = !open;
+		clearFanoutTimer();
+		bubblesReady = false;
 		open = next;
-		if (open && !pulsesDisabled) stopRingPulsesButLetCurrentFinish();
-		if (!open) pulsesDisabled = true;
+		if (open) {
+			scheduleBubblesReady();
+			if (!pulsesDisabled) stopRingPulsesButLetCurrentFinish();
+		} else {
+			pulsesDisabled = true;
+		}
 	}
 
 	function close() {
+		clearFanoutTimer();
+		bubblesReady = false;
 		if (open) pulsesDisabled = true;
 		open = false;
 	}
@@ -61,6 +105,7 @@
 	onMount(() => {
 		// Ensure hot-reloads don't preserve disabled state.
 		open = false;
+		bubblesReady = false;
 		pulsesDisabled = false;
 
 		const onPointerDown = (e: PointerEvent) => {
@@ -78,6 +123,7 @@
 		document.addEventListener('pointerdown', onPointerDown, { capture: true });
 		window.addEventListener('keydown', onKeyDown);
 		return () => {
+			clearFanoutTimer();
 			document.removeEventListener('pointerdown', onPointerDown, { capture: true } as any);
 			window.removeEventListener('keydown', onKeyDown);
 		};
@@ -88,6 +134,7 @@
 	class="contact-menu"
 	bind:this={root}
 	data-open={open ? 'true' : 'false'}
+	data-bubbles-ready={bubblesReady ? 'true' : 'false'}
 	data-pulse-disabled={pulsesDisabled ? 'true' : 'false'}
 >
 	<div class="contact-btn-wrap">
@@ -134,7 +181,7 @@
 		</button>
 	</div>
 
-	<div id="contact-fanout" class="fanout" aria-hidden={!open}>
+	<div id="contact-fanout" class="fanout" aria-hidden={!open || !bubblesReady}>
 		<a
 			class="bubble bubble-linkedin"
 			href={linkedinHref}
@@ -142,6 +189,8 @@
 			rel="noreferrer"
 			aria-label="LinkedIn"
 			title="LinkedIn"
+			tabindex={open && bubblesReady ? undefined : -1}
+			onclick={blockBubbleClick}
 		>
 			<svg viewBox="0 0 24 24" aria-hidden="true">
 				<path
@@ -158,6 +207,8 @@
 			rel="noreferrer"
 			aria-label="GitHub"
 			title="GitHub"
+			tabindex={open && bubblesReady ? undefined : -1}
+			onclick={blockBubbleClick}
 		>
 			<svg viewBox="0 0 24 24" aria-hidden="true">
 				<path
@@ -167,7 +218,14 @@
 			</svg>
 		</a>
 
-		<a class="bubble bubble-email" href={emailHref} aria-label="Email" title="Email">
+		<a
+			class="bubble bubble-email"
+			href={emailHref}
+			aria-label="Email"
+			title="Email"
+			tabindex={open && bubblesReady ? undefined : -1}
+			onclick={blockBubbleClick}
+		>
 			<svg
 				viewBox="0 0 24 24"
 				fill="none"
@@ -190,6 +248,10 @@
 		pointer-events: auto;
 		/* Scale the entire control (button + fanout bubbles) */
 		--contact-scale: 1.35;
+		--contact-ease: cubic-bezier(0.2, 0.85, 0.25, 1);
+		--contact-ease-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+		--contact-hover-dur: 280ms;
+		--contact-color-dur: 240ms;
 		transform: scale(var(--contact-scale));
 		transform-origin: top left;
 	}
@@ -285,12 +347,26 @@
 		cursor: pointer;
 		position: relative;
 		z-index: 1; /* ensure it sits above the wave layers */
+		transform: scale(1);
+		transition:
+			transform var(--contact-hover-dur) var(--contact-ease),
+			color var(--contact-color-dur) var(--contact-ease),
+			background var(--contact-color-dur) var(--contact-ease),
+			border-color var(--contact-color-dur) var(--contact-ease),
+			box-shadow calc(var(--contact-hover-dur) + 20ms) var(--contact-ease);
 	}
 
 	.contact-btn:hover {
 		color: var(--fg);
 		background: var(--card-hover);
 		border-color: rgba(11, 18, 32, 0.36);
+		transform: scale(1.05);
+		box-shadow: 0 22px 58px rgba(11, 18, 32, 0.16);
+	}
+
+	.contact-btn:active {
+		transform: scale(0.98);
+		transition-duration: 140ms;
 	}
 
 	.contact-btn:focus-visible {
@@ -313,8 +389,8 @@
 		display: block;
 		transform-origin: 50% 50%;
 		transition:
-			transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+			transform 260ms var(--contact-ease-soft),
+			opacity 200ms var(--contact-ease-soft);
 	}
 
 	/* Closed state */
@@ -358,17 +434,21 @@
 		border: 1px solid var(--card-border);
 		background: var(--card-strong);
 		backdrop-filter: blur(var(--glass-blur));
-		color: var(--fg);
+		color: rgba(11, 18, 32, 0.82);
 		box-shadow: var(--shadow);
 		text-decoration: none;
 
 		opacity: 0;
 		transform: translate(0px, 0px) scale(0.75);
 		pointer-events: none;
+		--fan-delay: 0ms;
 		transition:
-			transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-			background 140ms ease;
+			transform 320ms var(--contact-ease-soft) var(--fan-delay),
+			opacity 260ms var(--contact-ease-soft) var(--fan-delay),
+			background var(--contact-color-dur) var(--contact-ease) 0ms,
+			border-color var(--contact-color-dur) var(--contact-ease) 0ms,
+			color var(--contact-color-dur) var(--contact-ease) 0ms,
+			box-shadow var(--contact-hover-dur) var(--contact-ease) 0ms;
 	}
 
 	.bubble svg {
@@ -381,27 +461,56 @@
 	.bubble-linkedin {
 		--tx: -96px;
 		--ty: 12px;
-		transition-delay: 0ms;
 	}
 	.bubble-github {
 		--tx: -74px;
 		--ty: 74px;
-		transition-delay: 40ms;
 	}
 	.bubble-email {
 		--tx: -12px;
 		--ty: 96px;
-		transition-delay: 80ms;
+	}
+
+	.contact-menu[data-open='true'] .bubble-linkedin {
+		--fan-delay: 0ms;
+	}
+	.contact-menu[data-open='true'] .bubble-github {
+		--fan-delay: 35ms;
+	}
+	.contact-menu[data-open='true'] .bubble-email {
+		--fan-delay: 70ms;
+	}
+
+	.contact-menu[data-open='false'] .bubble-linkedin {
+		--fan-delay: 70ms;
+	}
+	.contact-menu[data-open='false'] .bubble-github {
+		--fan-delay: 35ms;
+	}
+	.contact-menu[data-open='false'] .bubble-email {
+		--fan-delay: 0ms;
 	}
 
 	.contact-menu[data-open='true'] .bubble {
 		opacity: 1;
 		transform: translate(var(--tx), var(--ty)) scale(1);
+	}
+
+	.contact-menu[data-open='true'][data-bubbles-ready='true'] .bubble {
 		pointer-events: auto;
 	}
 
-	.bubble:hover {
+	.contact-menu[data-open='true'][data-bubbles-ready='true'] .bubble:hover {
 		background: var(--card-hover);
+		border-color: rgba(11, 18, 32, 0.22);
+		color: var(--fg);
+		transform: translate(var(--tx), var(--ty)) scale(1.08);
+		box-shadow: 0 24px 62px rgba(11, 18, 32, 0.17);
+	}
+
+	.contact-menu[data-open='true'][data-bubbles-ready='true'] .bubble:active {
+		transform: translate(var(--tx), var(--ty)) scale(1.02);
+		transition-duration: 140ms;
 	}
 
 	.bubble:focus-visible {
@@ -417,6 +526,9 @@
 		.pulse {
 			animation: none;
 			opacity: 0;
+		}
+		.contact-btn {
+			transition: none;
 		}
 		.swap-icon {
 			transition: none;
