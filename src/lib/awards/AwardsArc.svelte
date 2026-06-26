@@ -437,6 +437,8 @@
 
 		const onPointerDown = (e: PointerEvent) => {
 			if (!shouldAnimate()) return;
+			const target = e.target as HTMLElement | null;
+			if (target?.closest?.('.info-card')) return;
 			if (hoverCapable && !allowManual) return;
 			clearNavState();
 			entryImpulseVelocity = 0;
@@ -653,10 +655,17 @@
 		left: 50%;
 		top: 50%;
 		z-index: 2;
+		pointer-events: none;
 		/* Keep copy just below the arc focal point */
 		transform: translate(-50%, calc(clamp(48px, 7vh, 96px) + 20px));
 		text-align: center;
 		width: min(520px, 92%);
+	}
+
+	.awards-header .kicker,
+	.awards-header .title,
+	.awards-header .body {
+		pointer-events: none;
 	}
 
 	.awards-title-row {
@@ -664,6 +673,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 10px;
+		pointer-events: auto;
 	}
 
 	.awards-title-row .title {

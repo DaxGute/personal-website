@@ -133,6 +133,115 @@
 		box-sizing: border-box;
 	}
 
+	@property --vignette-clear {
+		syntax: '<percentage>';
+		inherits: true;
+		initial-value: 100%;
+	}
+
+	:global(html) {
+		--vignette-clear: 100%;
+		transition: --vignette-clear var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	:global(html.card-modal-vignette-open) {
+		--vignette-clear: 26%;
+	}
+
+	:global(.card-modal-backdrop) {
+		position: fixed;
+		inset: 0;
+		z-index: 9998;
+		pointer-events: none;
+		background: radial-gradient(
+			ellipse 88% 78% at 50% 50%,
+			transparent 0%,
+			transparent var(--vignette-clear),
+			rgba(11, 18, 32, 0.2) calc(var(--vignette-clear) + 14%),
+			rgba(11, 18, 32, 0.5) calc(var(--vignette-clear) + 32%),
+			rgba(11, 18, 32, 0.72) calc(var(--vignette-clear) + 48%)
+		);
+	}
+
+	:global(.card-modal-backdrop__blur) {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: rgba(255, 255, 255, 0.01);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		transform: translateZ(0);
+		-webkit-mask-image: radial-gradient(
+			ellipse 88% 78% at 50% 50%,
+			transparent 0%,
+			transparent var(--vignette-clear),
+			rgba(0, 0, 0, 0.4) calc(var(--vignette-clear) + 12%),
+			rgba(0, 0, 0, 0.82) calc(var(--vignette-clear) + 28%),
+			rgba(0, 0, 0, 1) calc(var(--vignette-clear) + 44%)
+		);
+		mask-image: radial-gradient(
+			ellipse 88% 78% at 50% 50%,
+			transparent 0%,
+			transparent var(--vignette-clear),
+			rgba(0, 0, 0, 0.4) calc(var(--vignette-clear) + 12%),
+			rgba(0, 0, 0, 0.82) calc(var(--vignette-clear) + 28%),
+			rgba(0, 0, 0, 1) calc(var(--vignette-clear) + 44%)
+		);
+	}
+
+	:global(.card-modal-backdrop.is-visible .card-modal-backdrop__blur) {
+		backdrop-filter: blur(40px) saturate(1.12);
+		-webkit-backdrop-filter: blur(40px) saturate(1.12);
+	}
+
+	:global(.card-modal-backdrop.is-visible) {
+		pointer-events: auto;
+		cursor: pointer;
+	}
+
+	:global(.card-modal-layer) {
+		position: fixed;
+		inset: 0;
+		z-index: 9999;
+		pointer-events: none;
+	}
+
+	:global(.card-modal-layer .info-card) {
+		pointer-events: auto;
+	}
+
+	:global(.card-modal-layer .info-card--modal-centered) {
+		transform: translate(-50%, -50%) !important;
+		transition: none;
+	}
+
+	:global(.card-modal-layer .info-card--modal .hover-polaroid-tilt) {
+		transition: none !important;
+	}
+
+	:global(.card-modal-layer .info-card--modal-flip .hover-polaroid-tilt) {
+		transition: transform var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1) !important;
+	}
+
+	:global(.stage) {
+		transition: transform var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	:global(html.card-modal-open .stage) {
+		pointer-events: none;
+		transform: scale(1);
+		transform-origin: center center;
+	}
+
+	:global(html.card-modal-vignette-open .stage) {
+		transform: scale(1.035);
+	}
+
+	:global(html.card-modal-open .scroller) {
+		overflow: hidden !important;
+		touch-action: none;
+	}
+
 	/* Shared Polaroid-style hover transforms (tilt vars set by JS)
 	   - scale: eased on enter/leave
 	   - tilt: instant on pointer move (no lag)
@@ -159,13 +268,30 @@
 		transition-timing-function: ease, ease, ease;
 	}
 
-	:global(.hover-polaroid-scale:hover .hover-polaroid-surface) {
+	:global(.hover-polaroid-scale:hover .hover-polaroid-surface),
+	:global(.info-card--modal.hover-polaroid-scale .hover-polaroid-surface) {
 		border-color: var(--hp-border-hover, var(--hp-border, rgba(11, 18, 32, 0.14)));
 		background: var(--hp-bg-hover, var(--hp-bg, rgba(255, 255, 255, 0.86)));
 		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
+		:global(html) {
+			transition: none;
+		}
+
+		:global(.stage) {
+			transition: none;
+		}
+
+		:global(html.card-modal-vignette-open) {
+			--vignette-clear: 26%;
+		}
+
+		:global(html.card-modal-vignette-open .stage) {
+			transform: scale(1.035);
+		}
+
 		:global(.hover-polaroid-scale),
 		:global(.hover-polaroid-tilt),
 		:global(.hover-polaroid-surface) {

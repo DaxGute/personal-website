@@ -1,13 +1,61 @@
 <script lang="ts">
+	import { onDestroy, onMount, tick } from 'svelte';
+	import {
+		claimCardModal,
+		dismissBackdrop,
+		lockCardModal,
+		modalMotionMs,
+		modalTransition,
+		portalCardToModalLayer,
+		releaseCardModal,
+		returnCardToAnchor,
+		unlockCardModal,
+		viewportCenter
+	} from '$lib/cardModal';
+
 	let className = '';
 	export { className as class };
 
 	export let surfaceClass = '';
 	export let theme: 'dark' | 'green' | 'teal' | 'aquamarine' | 'blue' | 'periwinkle' = 'dark';
+	export let expandOnClick = true;
+	export let onModalOpen: (() => void) | undefined = undefined;
 
+	let anchorEl: HTMLElement | null = null;
 	let rootEl: HTMLElement | null = null;
 	let tiltEl: HTMLElement | null = null;
 	let surfaceEl: HTMLElement | null = null;
+
+	let expanded = false;
+	let animating = false;
+	let spacerW = 0;
+	let spacerH = 0;
+	let lastPointerX = 0;
+	let lastPointerY = 0;
+
+	function trackPointer(clientX: number, clientY: number) {
+		lastPointerX = clientX;
+		lastPointerY = clientY;
+	}
+
+	function pointerEventAtLastPointer(): PointerEvent {
+		return { clientX: lastPointerX, clientY: lastPointerY } as PointerEvent;
+	}
+
+	function isPointerOverRoot() {
+		if (!rootEl) return false;
+		const hit = document.elementFromPoint(lastPointerX, lastPointerY);
+		return !!hit && rootEl.contains(hit);
+	}
+
+	function refreshHoverFromPointer() {
+		if (!rootEl || animating || !expanded) return;
+		if (!isPointerOverRoot()) {
+			resetTilt();
+			return;
+		}
+		setPointerGlow(pointerEventAtLastPointer());
+	}
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -16,9 +64,214 @@
 	const MAX_TILT_DEG = 9;
 	const HOVER_SCALE = 1.055;
 	const PERSPECTIVE_PX = 900;
+	const FLIP_OPEN_DEG = 360;
+	const FLIP_CLOSE_DEG = -360;
+
+	function isInteractiveTarget(target: EventTarget | null) {
+		return target instanceof Element && !!target.closest('a, button, input, textarea, select, label');
+	}
+
+	function flipTransform(deg: number) {
+		return `perspective(${PERSPECTIVE_PX}px) rotateX(0deg) rotateY(${deg}deg)`;
+	}
+
+	function resetFlipInstant() {
+		if (!tiltEl) return;
+		tiltEl.style.transition = 'none';
+		tiltEl.style.transform = flipTransform(0);
+		void tiltEl.offsetHeight;
+	}
+
+	function isModalIsolationRoot(el: HTMLElement) {
+		return (
+			el.classList.contains('card-modal-layer') || el.classList.contains('card-modal-backdrop')
+		);
+	}
+
+	function getTargetPlaneRotation(anchor: HTMLElement | null) {
+		if (!anchor) return 0;
+
+		let matrix = new DOMMatrix();
+		let el: HTMLElement | null = anchor.parentElement;
+
+		while (el && el !== document.documentElement) {
+			if (isModalIsolationRoot(el)) break;
+
+			const transform = getComputedStyle(el).transform;
+			if (transform && transform !== 'none') {
+				matrix = new DOMMatrix(transform).multiply(matrix);
+			}
+			el = el.parentElement;
+		}
+
+		return (Math.atan2(matrix.b, matrix.a) * 180) / Math.PI;
+	}
+
+	function readHoverScale() {
+		if (!rootEl) return 1;
+		return parseFloat(rootEl.style.getPropertyValue('--scale') || '1') || 1;
+	}
+
+	function readLiftPx() {
+		if (!rootEl) return 0;
+		return parseFloat(rootEl.style.getPropertyValue('--lift') || '0') || 0;
+	}
+
+	function modalRootTransform(rotZ: number, scale: number, liftPx: number) {
+		return `translate(-50%, calc(-50% + ${liftPx}px)) rotate(${rotZ}deg) scale(${scale})`;
+	}
+
+	function applyModalAtCenter(
+		cx: number,
+		cy: number,
+		width: number,
+		height: number,
+		{
+			rotZ = 0,
+			scale = 1,
+			liftPx = 0
+		}: { rotZ?: number; scale?: number; liftPx?: number } = {}
+	) {
+		if (!rootEl) return;
+		rootEl.classList.remove('info-card--modal-centered');
+		rootEl.style.position = 'fixed';
+		rootEl.style.top = `${cy}px`;
+		rootEl.style.left = `${cx}px`;
+		rootEl.style.right = 'auto';
+		rootEl.style.bottom = 'auto';
+		rootEl.style.width = `${width}px`;
+		rootEl.style.height = `${height}px`;
+		rootEl.style.margin = '0';
+		rootEl.style.transformOrigin = 'center center';
+		rootEl.style.transform = modalRootTransform(rotZ, scale, liftPx);
+	}
+
+	function captureCardVisualState() {
+		if (!rootEl || !anchorEl) {
+			return {
+				cx: 0,
+				cy: 0,
+				width: 0,
+				height: 0,
+				planeRot: 0,
+				scale: 1,
+				liftPx: 0
+			};
+		}
+
+		const rect = rootEl.getBoundingClientRect();
+		return {
+			cx: rect.left + rect.width / 2,
+			cy: rect.top + rect.height / 2,
+			width: rootEl.offsetWidth,
+			height: rootEl.offsetHeight,
+			planeRot: getTargetPlaneRotation(anchorEl),
+			scale: readHoverScale(),
+			liftPx: readLiftPx()
+		};
+	}
+
+	function beginFlipAnimation(toDeg: number) {
+		if (!rootEl || !tiltEl) return;
+		const motion = modalTransition();
+		rootEl.classList.add('info-card--modal-flip');
+		const current = tiltEl.style.transform || getComputedStyle(tiltEl).transform;
+		tiltEl.style.transition = 'none';
+		tiltEl.style.transform = !current || current === 'none' ? flipTransform(0) : current;
+		void tiltEl.offsetHeight;
+		tiltEl.style.transition = motion === 'none' ? 'none' : `transform ${motion}`;
+		tiltEl.style.transform = flipTransform(toDeg);
+	}
+
+	function endFlipAnimation() {
+		resetFlipInstant();
+		rootEl?.classList.remove('info-card--modal-flip');
+	}
+
+	function clearModalMotion() {
+		if (!rootEl || !tiltEl) return;
+		rootEl.style.transition = '';
+		tiltEl.style.transition = 'none';
+		rootEl.classList.remove('info-card--modal-flip');
+	}
+
+	function snapModalCentered(width: number, height: number) {
+		if (!rootEl) return;
+		const { x, y } = viewportCenter();
+		rootEl.style.transition = 'none';
+		rootEl.style.position = 'fixed';
+		rootEl.style.top = `${y}px`;
+		rootEl.style.left = `${x}px`;
+		rootEl.style.right = 'auto';
+		rootEl.style.bottom = 'auto';
+		rootEl.style.width = `${width}px`;
+		rootEl.style.height = `${height}px`;
+		rootEl.style.margin = '0';
+		rootEl.style.transform = '';
+		rootEl.style.setProperty('--modal-scale', '1');
+		rootEl.style.setProperty('--modal-lift', '0px');
+		rootEl.style.setProperty('--scale', '1');
+		rootEl.style.setProperty('--lift', '0px');
+		rootEl.classList.add('info-card--modal-centered');
+		void rootEl.offsetHeight;
+		rootEl.style.transition = '';
+	}
+
+	function clearModalRect() {
+		if (!rootEl) return;
+		rootEl.style.position = '';
+		rootEl.style.top = '';
+		rootEl.style.left = '';
+		rootEl.style.right = '';
+		rootEl.style.bottom = '';
+		rootEl.style.width = '';
+		rootEl.style.height = '';
+		rootEl.style.margin = '';
+		rootEl.style.transform = '';
+		rootEl.style.removeProperty('--modal-scale');
+		rootEl.style.removeProperty('--modal-lift');
+		rootEl.classList.remove('info-card--modal', 'info-card--modal-centered');
+	}
+
+	function focusTargetSize(width: number, height: number) {
+		const vv = window.visualViewport;
+		const viewW = vv?.width ?? window.innerWidth;
+		const viewH = vv?.height ?? window.innerHeight;
+		const maxW = viewW * 0.82;
+		const maxH = viewH * 0.82;
+		const scale = Math.min(1.75, maxW / width, maxH / height);
+		return {
+			width: width * scale,
+			height: height * scale
+		};
+	}
+
+	function centeredTargetSize(width: number, height: number) {
+		return focusTargetSize(width, height);
+	}
+
+	function waitModalTransition() {
+		return new Promise<void>((resolve) => {
+			window.setTimeout(resolve, modalMotionMs());
+		});
+	}
+
+	function setRectMotion() {
+		if (!rootEl) return;
+		const motion = modalTransition();
+		rootEl.style.transition =
+			motion === 'none'
+				? 'none'
+				: `top ${motion}, left ${motion}, width ${motion}, height ${motion}, transform ${motion}`;
+	}
+
+	function setHoverTilt(rotXDeg: number, rotYDeg: number) {
+		if (!tiltEl) return;
+		tiltEl.style.transform = `perspective(${PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
+	}
 
 	function setPointerGlow(e: PointerEvent) {
-		if (!surfaceEl || !rootEl) return;
+		if (!surfaceEl || !rootEl || animating) return;
 
 		const rootRect = rootEl.getBoundingClientRect();
 		const u = (e.clientX - rootRect.left) / rootRect.width;
@@ -30,7 +283,12 @@
 	}
 
 	function setTilt(e: PointerEvent) {
-		if (!rootEl || !tiltEl || !surfaceEl) return;
+		if (!rootEl || !tiltEl || !surfaceEl || animating) return;
+
+		if (expanded) {
+			setPointerGlow(e);
+			return;
+		}
 
 		setPointerGlow(e);
 
@@ -45,49 +303,218 @@
 		const rotXDeg = dy * 2 * MAX_TILT_DEG;
 		const rotYDeg = -dx * 2 * MAX_TILT_DEG;
 
-		tiltEl.style.transform = `perspective(${PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
+		setHoverTilt(rotXDeg, rotYDeg);
+
 		rootEl.style.setProperty('--scale', `${HOVER_SCALE}`);
 		rootEl.style.setProperty('--hover', '1');
 		rootEl.style.setProperty('--lift', '-10px');
 	}
 
 	function resetTilt() {
-		if (!rootEl) return;
+		if (!rootEl || animating) return;
 
-		if (tiltEl) tiltEl.style.transform = `perspective(${PERSPECTIVE_PX}px) rotateX(0deg) rotateY(0deg)`;
-		rootEl.style.setProperty('--scale', `1`);
-		rootEl.style.setProperty('--hover', '0');
-		rootEl.style.setProperty('--lift', '0px');
 		surfaceEl?.style.setProperty('--spotlight', '0');
 		surfaceEl?.style.setProperty('--pointer-u', '50%');
 		surfaceEl?.style.setProperty('--pointer-v', '50%');
+
+		if (expanded) return;
+
+		if (tiltEl) setHoverTilt(0, 0);
+		rootEl.style.setProperty('--scale', `1`);
+		rootEl.style.setProperty('--hover', '0');
+		rootEl.style.setProperty('--lift', '0px');
 	}
+
+	async function expandCard() {
+		if (!expandOnClick || !rootEl || !anchorEl || !tiltEl || expanded || animating) return;
+
+		const start = captureCardVisualState();
+		spacerW = start.width;
+		spacerH = start.height;
+
+		await claimCardModal(collapseCard);
+		expanded = true;
+		animating = true;
+		lockCardModal();
+		rootEl.classList.add('info-card--modal');
+		portalCardToModalLayer(rootEl);
+		onModalOpen?.();
+
+		applyModalAtCenter(start.cx, start.cy, start.width, start.height, {
+			rotZ: start.planeRot,
+			scale: start.scale,
+			liftPx: start.liftPx
+		});
+
+		await tick();
+
+		const targetSize = centeredTargetSize(start.width, start.height);
+		const { x, y } = viewportCenter();
+		setRectMotion();
+		beginFlipAnimation(FLIP_OPEN_DEG);
+
+		requestAnimationFrame(() => {
+			applyModalAtCenter(x, y, targetSize.width, targetSize.height, {
+				rotZ: 0,
+				scale: 1,
+				liftPx: 0
+			});
+		});
+
+		await waitModalTransition();
+		endFlipAnimation();
+		resetTilt();
+		snapModalCentered(targetSize.width, targetSize.height);
+		clearModalMotion();
+		animating = false;
+		requestAnimationFrame(() => refreshHoverFromPointer());
+	}
+
+	async function collapseCard() {
+		if (!rootEl || !anchorEl || !tiltEl || !expanded) return;
+		if (animating) return;
+
+		animating = true;
+		dismissBackdrop();
+		const anchorRect = anchorEl.getBoundingClientRect();
+		const anchorCx = anchorRect.left + anchorRect.width / 2;
+		const anchorCy = anchorRect.top + anchorRect.height / 2;
+		const anchorW = anchorEl.offsetWidth;
+		const anchorH = anchorEl.offsetHeight;
+		const planeRotTarget = getTargetPlaneRotation(anchorEl);
+		const { x, y } = viewportCenter();
+		const modalRect = rootEl.getBoundingClientRect();
+
+		rootEl.classList.remove('info-card--modal-centered');
+		applyModalAtCenter(
+			modalRect.left + modalRect.width / 2,
+			modalRect.top + modalRect.height / 2,
+			modalRect.width,
+			modalRect.height,
+			{ rotZ: 0, scale: 1, liftPx: 0 }
+		);
+		resetFlipInstant();
+
+		await tick();
+
+		setRectMotion();
+		beginFlipAnimation(FLIP_CLOSE_DEG);
+
+		requestAnimationFrame(() => {
+			applyModalAtCenter(anchorCx, anchorCy, anchorW, anchorH, {
+				rotZ: planeRotTarget,
+				scale: 1,
+				liftPx: 0
+			});
+		});
+
+		await waitModalTransition();
+		endFlipAnimation();
+		clearModalRect();
+		returnCardToAnchor(rootEl, anchorEl);
+		clearModalMotion();
+		resetTilt();
+		expanded = false;
+		animating = false;
+		spacerW = 0;
+		spacerH = 0;
+		unlockCardModal();
+		releaseCardModal(collapseCard);
+	}
+
+	function handleClick(e: MouseEvent) {
+		if (!expandOnClick || expanded || animating || isInteractiveTarget(e.target)) return;
+		trackPointer(e.clientX, e.clientY);
+		e.stopPropagation();
+		void expandCard();
+	}
+
+	function handlePointerLeave() {
+		resetTilt();
+	}
+
+	onMount(() => {
+		const onPointerMove = (e: PointerEvent) => trackPointer(e.clientX, e.clientY);
+		window.addEventListener('pointermove', onPointerMove, { passive: true });
+		return () => window.removeEventListener('pointermove', onPointerMove);
+	});
+
+	onDestroy(() => {
+		if (expanded && rootEl && anchorEl) {
+			returnCardToAnchor(rootEl, anchorEl);
+			clearModalRect();
+		}
+		if (expanded) {
+			unlockCardModal();
+			releaseCardModal(collapseCard);
+		}
+	});
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
-<div
-	class="info-card hover-polaroid-scale {theme !== 'dark' ? `info-card--${theme}` : ''} {className}"
-	bind:this={rootEl}
-	on:pointerenter={setTilt}
-	on:pointermove={setTilt}
-	on:pointerleave={resetTilt}
->
-	<div class="info-card-tilt hover-polaroid-tilt" bind:this={tiltEl}>
-		<div class="info-card-surface hover-polaroid-surface {surfaceClass}" bind:this={surfaceEl}>
-			<div class="holo-layer" aria-hidden="true"></div>
-			<div class="grid-base" aria-hidden="true"></div>
-			<div class="grid-cursor" aria-hidden="true"></div>
-			<slot />
+<div class="info-card-anchor" bind:this={anchorEl}>
+	{#if expanded}
+		<div
+			class="info-card-spacer"
+			style:width="{spacerW}px"
+			style:height="{spacerH}px"
+			aria-hidden="true"
+		></div>
+	{/if}
+
+	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+	<div
+		class="info-card hover-polaroid-scale {theme !== 'dark' ? `info-card--${theme}` : ''} {className}"
+		class:info-card--expanded={expanded}
+		bind:this={rootEl}
+		on:click={handleClick}
+		on:pointerenter={setTilt}
+		on:pointermove={setTilt}
+		on:pointerleave={handlePointerLeave}
+	>
+		<div class="info-card-tilt hover-polaroid-tilt" bind:this={tiltEl}>
+			<div class="info-card-surface hover-polaroid-surface {surfaceClass}" bind:this={surfaceEl}>
+				<div class="holo-layer" aria-hidden="true"></div>
+				<div class="grid-base" aria-hidden="true"></div>
+				<div class="grid-cursor" aria-hidden="true"></div>
+				<slot />
+			</div>
 		</div>
 	</div>
 </div>
 
 <style>
+	.info-card-anchor {
+		width: 100%;
+		height: 100%;
+	}
+
+	.info-card-spacer {
+		pointer-events: none;
+		visibility: hidden;
+	}
+
 	.info-card {
 		width: 100%;
 		height: 100%;
 		transform: scale(var(--scale, 1)) translateY(var(--lift, 0px));
 		transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+		cursor: pointer;
+	}
+
+	.info-card.info-card--modal,
+	.info-card.info-card--modal-centered {
+		pointer-events: auto;
+		cursor: default;
+	}
+
+	.info-card.info-card--modal-centered {
+		z-index: 1;
+	}
+
+	.info-card-tilt {
+		width: 100%;
+		height: 100%;
+		transform-style: preserve-3d;
 	}
 
 	.info-card:global(.info-card--project),
@@ -97,11 +524,6 @@
 
 	.info-card:global(.info-card--project) .info-card-surface {
 		overflow: hidden;
-	}
-
-	.info-card-tilt {
-		width: 100%;
-		height: 100%;
 	}
 
 	.info-card-surface {
@@ -304,22 +726,26 @@
 		z-index: 2;
 	}
 
-	:global(.hover-polaroid-scale:hover) .info-card-surface {
+	:global(.hover-polaroid-scale:hover) .info-card-surface,
+	:global(.info-card--modal.hover-polaroid-scale) .info-card-surface {
 		filter: brightness(1.12) saturate(1.15);
 	}
 
-	:global(.hover-polaroid-scale:hover) .info-card-surface::before {
+	:global(.hover-polaroid-scale:hover) .info-card-surface::before,
+	:global(.info-card--modal.hover-polaroid-scale) .info-card-surface::before {
 		border-color: rgba(220, 235, 255, 0.72);
 		box-shadow:
 			inset 0 0 48px rgba(180, 220, 255, 0.24),
 			0 0 32px rgba(180, 220, 255, 0.35);
 	}
 
-	:global(.hover-polaroid-scale:hover) .info-card-surface::after {
+	:global(.hover-polaroid-scale:hover) .info-card-surface::after,
+	:global(.info-card--modal.hover-polaroid-scale) .info-card-surface::after {
 		opacity: 0.92;
 	}
 
-	:global(.hover-polaroid-scale:hover) .holo-layer {
+	:global(.hover-polaroid-scale:hover) .holo-layer,
+	:global(.info-card--modal.hover-polaroid-scale) .holo-layer {
 		opacity: 1;
 		animation-duration: 2.8s;
 	}
@@ -350,7 +776,8 @@
 		transition: text-shadow 0.28s ease, color 0.28s ease;
 	}
 
-	:global(.hover-polaroid-scale:hover) :global(.experience-company) {
+	:global(.hover-polaroid-scale:hover) :global(.experience-company),
+	:global(.info-card--modal.hover-polaroid-scale) :global(.experience-company) {
 		color: #ffffff;
 		text-shadow:
 			0 1px 3px rgba(11, 18, 32, 0.85),
@@ -573,7 +1000,12 @@
 	:global(.info-card--teal.hover-polaroid-scale:hover) .info-card-surface,
 	:global(.info-card--aquamarine.hover-polaroid-scale:hover) .info-card-surface,
 	:global(.info-card--blue.hover-polaroid-scale:hover) .info-card-surface,
-	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface {
+	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface,
+	:global(.info-card--green.info-card--modal.hover-polaroid-scale) .info-card-surface,
+	:global(.info-card--teal.info-card--modal.hover-polaroid-scale) .info-card-surface,
+	:global(.info-card--aquamarine.info-card--modal.hover-polaroid-scale) .info-card-surface,
+	:global(.info-card--blue.info-card--modal.hover-polaroid-scale) .info-card-surface,
+	:global(.info-card--periwinkle.info-card--modal.hover-polaroid-scale) .info-card-surface {
 		filter: brightness(1.04) saturate(1.1);
 	}
 
@@ -581,7 +1013,12 @@
 	:global(.info-card--teal.hover-polaroid-scale:hover) .info-card-surface::before,
 	:global(.info-card--aquamarine.hover-polaroid-scale:hover) .info-card-surface::before,
 	:global(.info-card--blue.hover-polaroid-scale:hover) .info-card-surface::before,
-	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface::before {
+	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface::before,
+	:global(.info-card--green.info-card--modal.hover-polaroid-scale) .info-card-surface::before,
+	:global(.info-card--teal.info-card--modal.hover-polaroid-scale) .info-card-surface::before,
+	:global(.info-card--aquamarine.info-card--modal.hover-polaroid-scale) .info-card-surface::before,
+	:global(.info-card--blue.info-card--modal.hover-polaroid-scale) .info-card-surface::before,
+	:global(.info-card--periwinkle.info-card--modal.hover-polaroid-scale) .info-card-surface::before {
 		border-color: rgba(var(--tone-border-hover), 0.42);
 		box-shadow:
 			inset 0 0 48px rgba(255, 255, 255, 0.16),
@@ -592,7 +1029,12 @@
 	:global(.info-card--teal.hover-polaroid-scale:hover) .info-card-surface::after,
 	:global(.info-card--aquamarine.hover-polaroid-scale:hover) .info-card-surface::after,
 	:global(.info-card--blue.hover-polaroid-scale:hover) .info-card-surface::after,
-	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface::after {
+	:global(.info-card--periwinkle.hover-polaroid-scale:hover) .info-card-surface::after,
+	:global(.info-card--green.info-card--modal.hover-polaroid-scale) .info-card-surface::after,
+	:global(.info-card--teal.info-card--modal.hover-polaroid-scale) .info-card-surface::after,
+	:global(.info-card--aquamarine.info-card--modal.hover-polaroid-scale) .info-card-surface::after,
+	:global(.info-card--blue.info-card--modal.hover-polaroid-scale) .info-card-surface::after,
+	:global(.info-card--periwinkle.info-card--modal.hover-polaroid-scale) .info-card-surface::after {
 		opacity: 0.5;
 	}
 
@@ -608,7 +1050,12 @@
 	:global(.info-card--teal.hover-polaroid-scale:hover) :global(.experience-company),
 	:global(.info-card--aquamarine.hover-polaroid-scale:hover) :global(.experience-company),
 	:global(.info-card--blue.hover-polaroid-scale:hover) :global(.experience-company),
-	:global(.info-card--periwinkle.hover-polaroid-scale:hover) :global(.experience-company) {
+	:global(.info-card--periwinkle.hover-polaroid-scale:hover) :global(.experience-company),
+	:global(.info-card--green.info-card--modal.hover-polaroid-scale) :global(.experience-company),
+	:global(.info-card--teal.info-card--modal.hover-polaroid-scale) :global(.experience-company),
+	:global(.info-card--aquamarine.info-card--modal.hover-polaroid-scale) :global(.experience-company),
+	:global(.info-card--blue.info-card--modal.hover-polaroid-scale) :global(.experience-company),
+	:global(.info-card--periwinkle.info-card--modal.hover-polaroid-scale) :global(.experience-company) {
 		color: var(--tone-heading-hover);
 		text-shadow:
 			0 1px 0 rgba(255, 255, 255, 0.9),

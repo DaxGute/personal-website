@@ -20,7 +20,7 @@ export const experiences: Experience[] = [
 		title: 'Undergraduate Researcher',
 		dates: 'June 2026 - Aug 2026',
 		highlights: [
-			'Researching AI-human coauthorship through computational discourse analysis while developing policy frameworks for hybrid writing.'
+			'Researching AI-human coauthorship through computational discourse analysis while developing policy frameworks for hybrid text.'
 		],
 		logoSrc: cestaLogo,
 		logoAlt: 'CESTA logo'

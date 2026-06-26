@@ -12,30 +12,54 @@
 
 	let rootEl: HTMLElement | null = null;
 	let revealed = false;
+	let revealComplete = false;
 	let obs: IntersectionObserver | null = null;
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	}
 
+	function markRevealComplete() {
+		revealComplete = true;
+	}
+
+	function triggerReveal() {
+		if (revealed) return;
+		revealed = true;
+		obs?.disconnect();
+		obs = null;
+	}
+
+	function onCardModalOpen() {
+		if (revealed) {
+			markRevealComplete();
+			return;
+		}
+		triggerReveal();
+	}
+
+	function handleRevealAnimationEnd() {
+		markRevealComplete();
+	}
+
 	onMount(() => {
 		if (revealed) return;
 		if (prefersReducedMotion()) {
 			revealed = true;
+			revealComplete = true;
 			return;
 		}
 		if (!rootEl) return;
 		if (typeof IntersectionObserver === 'undefined') {
 			revealed = true;
+			revealComplete = true;
 			return;
 		}
 
 		obs = new IntersectionObserver(
 			(entries) => {
 				if (entries.some((e) => e.isIntersecting)) {
-					revealed = true;
-					obs?.disconnect();
-					obs = null;
+					triggerReveal();
 				}
 			},
 			{
@@ -54,15 +78,23 @@
 </script>
 
 <div class="polaroid-root" bind:this={rootEl}>
-	<CardShell theme="green" class="polaroid-card">
-		<figure class="polaroid-content" class:is-revealed={revealed}>
+	<CardShell theme="green" class="polaroid-card" onModalOpen={onCardModalOpen}>
+		<figure
+			class="polaroid-content"
+			class:is-revealed={revealed}
+			class:reveal-complete={revealComplete}
+		>
 			<div class="photo">
 				{#if src}
 					<img src={src} {alt} {loading} decoding="async" />
 				{:else}
 					<div class="placeholder" aria-hidden="true"></div>
 				{/if}
-				<div class="reveal-overlay" aria-hidden="true"></div>
+				<div
+					class="reveal-overlay"
+					aria-hidden="true"
+					on:animationend={handleRevealAnimationEnd}
+				></div>
 			</div>
 			<figcaption class="caption">
 				<span class="experience-company">{caption}</span>
@@ -146,8 +178,14 @@
 		opacity: 1;
 	}
 
-	.polaroid-content.is-revealed .reveal-overlay {
+	.polaroid-content.is-revealed:not(.reveal-complete) .reveal-overlay {
 		animation: revealFlash 1100ms ease forwards;
+	}
+
+	.polaroid-content.reveal-complete .reveal-overlay {
+		opacity: 0;
+		background: transparent;
+		animation: none;
 	}
 
 	@keyframes revealFlash {

@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
 	import SectionNav from '$lib/SectionNav.svelte';
+	import { isCardModalOpen, registerScrollContainer } from '$lib/cardModal';
 	import { panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import TitlePanel from '$lib/title/TitlePanel.svelte';
 	import ExperiencesPanel from '$lib/experiences/ExperiencesPanel.svelte';
@@ -338,6 +339,10 @@
 		};
 
 		const wheel = (e: WheelEvent) => {
+			if (isCardModalOpen()) {
+				e.preventDefault();
+				return;
+			}
 			if (greetingScrollLocked) {
 				e.preventDefault();
 				return;
@@ -373,6 +378,10 @@
 		};
 
 		const keyLock = (e: KeyboardEvent) => {
+			if (isCardModalOpen()) {
+				e.preventDefault();
+				return;
+			}
 			if (!greetingScrollLocked) return;
 			// Prevent keys that can trigger scroll.
 			const keys = [
@@ -391,6 +400,7 @@
 		};
 
 		measure();
+		if (scroller) registerScrollContainer(scroller);
 		// Always start on the title (first) panel.
 		// Use scrollTo(...behavior:'auto') to avoid smooth scrolling, and re-apply after rAF/timeout
 		// in case the browser restores scroll position after mount.

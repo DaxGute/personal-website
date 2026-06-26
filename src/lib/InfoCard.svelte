@@ -21,6 +21,7 @@
 	export let body: string | null = null;
 	export let tech: string[] = [];
 	export let links: ProjectLink[] = [];
+	export let expandOnClick = true;
 
 	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
 	$: primaryLink =
@@ -35,6 +36,7 @@
 	theme={themeForVariant(variant)}
 	class={variant === 'project' ? 'info-card--project' : ''}
 	surfaceClass={hasSideLogo ? 'has-logo' : ''}
+	{expandOnClick}
 >
 	<div class="card-row">
 		{#if hasSideLogo && logoSrc}
@@ -44,7 +46,7 @@
 		{/if}
 
 		<div class="card-content">
-			<div class="experience-header">
+			<div class="card-header experience-header">
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
 					<p
@@ -68,63 +70,74 @@
 				{/if}
 			</div>
 
-			{#if variant === 'experience'}
-				<ul class="experience-highlights">
-					{#each items as item}
-						<li>{item}</li>
-					{/each}
-				</ul>
-			{:else if variant === 'education'}
-				<div class="education-details">
-					{#each items as item}
-						<p>{item}</p>
-					{/each}
+			<div class="card-main">
+				<div class="card-main-content">
+					{#if variant === 'experience'}
+						<ul class="experience-highlights">
+							{#each items as item}
+								<li>{item}</li>
+							{/each}
+						</ul>
+					{:else if variant === 'education'}
+						<div class="education-details">
+							{#each items as item}
+								<p>{item}</p>
+							{/each}
+						</div>
+					{:else if variant === 'project'}
+						{#if body}
+							<p class="project-body">{body}</p>
+						{/if}
+
+						{#if primaryLink}
+							<p class="project-website">
+								<a
+									class="project-website-link"
+									href={primaryLink.href}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{primaryLink.label}.
+								</a>
+							</p>
+						{/if}
+
+						{#if items.length}
+							<ul class="experience-highlights" aria-label="Project highlights">
+								{#each items as item}
+									<li>{item}</li>
+								{/each}
+							</ul>
+						{/if}
+
+						{#if tech.length}
+							<div class="project-chips" aria-label="Tech stack">
+								{#each tech as t}
+									<span class="project-chip">{t}</span>
+								{/each}
+							</div>
+						{/if}
+
+						{#if otherLinks.length}
+							<div class="project-links" aria-label="Project links">
+								{#each otherLinks as link}
+									<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
+										{link.label}
+									</a>
+								{/each}
+							</div>
+						{/if}
+					{:else}
+						<div class="award-details">
+							{#each items as item}
+								<p>{item}</p>
+							{/each}
+						</div>
+					{/if}
 				</div>
-			{:else if variant === 'project'}
-				{#if body}
-					<p class="project-body">{body}</p>
-				{/if}
 
-				{#if primaryLink}
-					<p class="project-website">
-						<a class="project-website-link" href={primaryLink.href} target="_blank" rel="noreferrer">
-							{primaryLink.label}.
-						</a>
-					</p>
-				{/if}
-
-				{#if items.length}
-					<ul class="experience-highlights" aria-label="Project highlights">
-						{#each items as item}
-							<li>{item}</li>
-						{/each}
-					</ul>
-				{/if}
-
-				{#if tech.length}
-					<div class="project-chips" aria-label="Tech stack">
-						{#each tech as t}
-							<span class="project-chip">{t}</span>
-						{/each}
-					</div>
-				{/if}
-
-				{#if otherLinks.length}
-					<div class="project-links" aria-label="Project links">
-						{#each otherLinks as link}
-							<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
-								{link.label}
-							</a>
-						{/each}
-					</div>
-				{/if}
-			{:else}
-				<div class="award-details">
-					{#each items as item}
-						<p>{item}</p>
-					{/each}
-				</div>
-			{/if}
+				<p class="card-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
+			</div>
 		</div>
 	</div>
 </CardShell>
@@ -154,6 +167,11 @@
 	}
 
 	:global(.info-card--project) .card-content {
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	:global(.info-card--project) .card-main {
 		min-height: 0;
 		overflow: hidden;
 	}
@@ -191,6 +209,8 @@
 	.card-content {
 		flex: 1 1 auto;
 		min-width: 0;
+		display: flex;
+		flex-direction: column;
 		padding: 14px 14px;
 		border-radius: 3px;
 		background: transparent;
@@ -198,6 +218,55 @@
 		transition:
 			background 0.28s ease,
 			box-shadow 0.28s ease;
+	}
+
+	.card-main {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+
+	.card-main-content {
+		transition: opacity 0.28s ease;
+	}
+
+	.card-hover-hint {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0;
+		padding: 0 12px;
+		opacity: 0;
+		pointer-events: none;
+		color: #e8f2ff;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-align: center;
+		text-shadow:
+			0 1px 2px rgba(11, 18, 32, 0.85),
+			0 0 12px rgba(170, 210, 255, 0.4);
+		transition: opacity 0.28s ease;
+	}
+
+	:global(.hover-polaroid-scale:hover) .card-main-content {
+		opacity: 0;
+	}
+
+	:global(.hover-polaroid-scale:hover) .card-hover-hint {
+		opacity: 1;
+	}
+
+	:global(.info-card--expanded) .card-main-content,
+	:global(.info-card--expanded:hover) .card-main-content {
+		opacity: 1;
+	}
+
+	:global(.info-card--expanded) .card-hover-hint,
+	:global(.info-card--expanded:hover) .card-hover-hint {
+		opacity: 0;
 	}
 
 	.experience-header {
@@ -519,5 +588,23 @@
 	:global(.info-card--blue) .project-link:focus-visible,
 	:global(.info-card--periwinkle) .project-link:focus-visible {
 		outline-color: rgba(var(--tone-border-hover), 0.55);
+	}
+
+	:global(.info-card--green) .card-hover-hint,
+	:global(.info-card--teal) .card-hover-hint,
+	:global(.info-card--aquamarine) .card-hover-hint,
+	:global(.info-card--blue) .card-hover-hint,
+	:global(.info-card--periwinkle) .card-hover-hint {
+		color: var(--tone-accent);
+		text-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.75),
+			0 0 10px rgba(var(--tone-glow-2), 0.2);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.card-main-content,
+		.card-hover-hint {
+			transition: none;
+		}
 	}
 </style>

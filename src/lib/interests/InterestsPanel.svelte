@@ -29,7 +29,7 @@
 
 <div class="interests-content" aria-label="Interests">
 	{#each featured as item (item.caption)}
-		<div class={layoutClass[item.layout ?? '']} aria-label={item.caption}>
+		<div class="{layoutClass[item.layout ?? '']} interest-float" aria-label={item.caption}>
 			<Polaroid
 				src={item.src ?? null}
 				alt={item.alt ?? item.caption}
