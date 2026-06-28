@@ -82,7 +82,7 @@
 
 	const MAX_TILT_DEG = 9;
 	const HOVER_SCALE = 1.055;
-	const PERSPECTIVE_PX = 900;
+	const TILT_PERSPECTIVE_PX = 900;
 	const FLIP_OPEN_DEG = 180;
 	const FLIP_CLOSED_DEG = 0;
 
@@ -91,7 +91,7 @@
 	}
 
 	function tiltTransform(rotXDeg: number, rotYDeg: number) {
-		return `perspective(${PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
+		return `perspective(${TILT_PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
 	}
 
 	function resetTiltInstant() {
@@ -150,13 +150,19 @@
 		return Math.min(targetW / shellW, targetH / shellH);
 	}
 
-	function readCardRect(el: HTMLElement, anchor: HTMLElement | null = anchorEl) {
-		const rect = el.getBoundingClientRect();
+	function readCardRect(
+		el: HTMLElement,
+		anchor: HTMLElement | null = anchorEl,
+		{ visual = false, layout = false }: { visual?: boolean; layout?: boolean } = {}
+	) {
+		const measure =
+			visual ? (el.querySelector<HTMLElement>('.info-card-hover-lift') ?? el) : el;
+		const rect = measure.getBoundingClientRect();
 		return {
 			cx: rect.left + rect.width / 2,
 			cy: rect.top + rect.height / 2,
-			width: rect.width,
-			height: rect.height,
+			width: layout ? el.offsetWidth : rect.width,
+			height: layout ? el.offsetHeight : rect.height,
 			planeRot: getTargetPlaneRotation(anchor)
 		};
 	}
@@ -164,16 +170,88 @@
 	function setMotionTransition(
 		el: HTMLElement,
 		enabled: boolean,
-		{ includeSize = false }: { includeSize?: boolean } = {}
+		{
+			includeSize = false,
+			includeOpacity = false,
+			includeZIndex = false
+		}: { includeSize?: boolean; includeOpacity?: boolean; includeZIndex?: boolean } = {}
 	) {
 		const motion = modalTransition();
 		if (!enabled || motion === 'none') {
 			el.style.transition = 'none';
 			return;
 		}
-		el.style.transition = includeSize
-			? `transform ${motion}, width ${motion}, height ${motion}`
-			: `transform ${motion}`;
+		const parts = [`transform ${motion}`];
+		if (includeSize) {
+			parts.push(`width ${motion}`, `height ${motion}`);
+		}
+		if (includeOpacity) {
+			parts.push(`opacity ${motion}`);
+		}
+		if (includeZIndex) {
+			parts.push(`z-index ${motion}`);
+		}
+		el.style.transition = parts.join(', ');
+	}
+
+	function readCardOpacity(el: HTMLElement) {
+		const wrapped = el.closest('.award-card-surface');
+		if (wrapped instanceof HTMLElement) {
+			const opacity = Number.parseFloat(getComputedStyle(wrapped).opacity);
+			return Number.isFinite(opacity) ? opacity : 1;
+		}
+		const opacity = Number.parseFloat(getComputedStyle(el).opacity);
+		return Number.isFinite(opacity) ? opacity : 1;
+	}
+
+	const STACK_PARENT_SELECTOR =
+		'.experience-item, .education-card, .award-item, .polaroid-root';
+
+	function readStackParent(anchor: HTMLElement | null) {
+		if (!anchor) return null;
+		const parent = anchor.closest(STACK_PARENT_SELECTOR);
+		return parent instanceof HTMLElement ? parent : null;
+	}
+
+	function findCloneStackParent() {
+		const cloneAnchor = document.querySelector(
+			'.card-modal-stage-clone .info-card-anchor[data-modal-slot="true"]'
+		);
+		const parent = cloneAnchor?.closest(STACK_PARENT_SELECTOR);
+		return parent instanceof HTMLElement ? parent : null;
+	}
+
+	function captureStackZIndex(anchor: HTMLElement | null) {
+		const parent = readStackParent(anchor);
+		if (!parent) return null;
+		const z = getComputedStyle(parent).zIndex;
+		return z === 'auto' ? null : z;
+	}
+
+	function applyStackZIndex(anchor: HTMLElement | null, zIndex: string | null) {
+		if (!zIndex) return;
+		const parent = readStackParent(anchor);
+		if (parent instanceof HTMLElement) parent.style.zIndex = zIndex;
+		const cloneParent = findCloneStackParent();
+		if (cloneParent instanceof HTMLElement) cloneParent.style.zIndex = zIndex;
+	}
+
+	function transitionStackZIndex(anchor: HTMLElement | null, zIndex: string | null) {
+		if (!zIndex) return;
+		const motion = modalTransition();
+		for (const parent of [readStackParent(anchor), findCloneStackParent()]) {
+			if (!(parent instanceof HTMLElement)) continue;
+			parent.style.transition = motion === 'none' ? 'none' : `z-index ${motion}`;
+			parent.style.zIndex = zIndex;
+		}
+	}
+
+	function clearAppliedStackZIndex(anchor: HTMLElement | null) {
+		for (const parent of [readStackParent(anchor), findCloneStackParent()]) {
+			if (!(parent instanceof HTMLElement)) continue;
+			parent.style.removeProperty('z-index');
+			parent.style.removeProperty('transition');
+		}
 	}
 
 	function setMotionRect(el: HTMLElement, cx: number, cy: number, width: number, height: number) {
@@ -256,13 +334,16 @@
 	async function waitModalMotion(
 		el: HTMLElement,
 		flipTarget: HTMLElement | null,
-		{ includeSize = false }: { includeSize?: boolean } = {}
+		{ includeSize = false, includeOpacity = false }: { includeSize?: boolean; includeOpacity?: boolean } = {}
 	) {
 		const ms = modalMotionMs();
 		const waits = [waitTransition(el, 'transform', ms)];
 		if (includeSize) {
 			waits.push(waitTransition(el, 'width', ms));
 			waits.push(waitTransition(el, 'height', ms));
+		}
+		if (includeOpacity) {
+			waits.push(waitTransition(el, 'opacity', ms));
 		}
 		if (enableFlip && flipTarget) waits.push(waitTransition(flipTarget, 'transform', ms));
 		await Promise.all(waits);
@@ -290,6 +371,8 @@
 		el.style.height = '';
 		el.style.margin = '';
 		el.style.transform = '';
+		el.style.opacity = '';
+		el.style.zIndex = '';
 		el.classList.remove('info-card--modal', 'info-card--modal-centered', 'info-card--ghost');
 	}
 
@@ -349,26 +432,15 @@
 		return Math.abs(parseFloat(match[1])) > 90 ? FLIP_OPEN_DEG : FLIP_CLOSED_DEG;
 	}
 
-	function replaceGhostWithGridClone(width: number, height: number, flipDeg: number) {
-		if (!rootEl) return null;
-		if (ghostEl) removeFromModalLayer(ghostEl);
-
-		const ghost = rootEl.cloneNode(true) as HTMLElement;
-		ghost.classList.add(
-			'info-card--ghost',
-			'info-card--modal',
-			'info-card--expanded',
-			'info-card-motion',
-			'info-card--animating',
-			'info-card--dismissing'
-		);
+	function createDismissGhost(modalGhost: HTMLElement, flipDeg: number) {
+		const ghost = modalGhost.cloneNode(true) as HTMLElement;
+		ghost.classList.add('info-card--animating', 'info-card--dismissing');
 		if (enableFlip) ghost.classList.add('info-card--flip-dismiss');
-		ghost.classList.remove('info-card--grid-hidden', 'hover-polaroid-scale');
 		ghost.setAttribute('aria-hidden', 'true');
-		normalizeGhostForFlight(ghost);
-		mountInModalLayer(ghost);
-		bindGhostElements(ghost);
-		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, flipDeg);
+
+		const flip = ghost.querySelector('.info-card-flip');
+		if (enableFlip && flip instanceof HTMLElement) resetFlipInstant(flip, flipDeg);
+
 		return ghost;
 	}
 
@@ -384,7 +456,6 @@
 		ghost.classList.remove('info-card--grid-hidden', 'info-card--dismissing', 'hover-polaroid-scale');
 		ghost.setAttribute('aria-hidden', 'true');
 		normalizeGhostForFlight(ghost);
-		mountInModalLayer(ghost);
 		bindGhostElements(ghost);
 		return ghost;
 	}
@@ -493,19 +564,25 @@
 
 		await claimCardModal(collapseCard);
 
-		const start = readCardRect(rootEl, anchorEl);
 		openingScrollLeft = readScrollLeft();
-		const targetSize = centeredTargetSize(start.width, start.height);
-		const endCenter = viewportCenter();
+		const startVisual = readCardRect(rootEl, anchorEl, { visual: true });
+		const startLayout = readCardRect(rootEl, anchorEl, { layout: true });
 
 		expanded = true;
 		hideGridCard();
 		lockCardModal(openingScrollLeft);
+		await tick();
+
+		applyStackZIndex(anchorEl, captureStackZIndex(anchorEl));
+
+		const targetSize = centeredTargetSize(startLayout.width, startLayout.height);
+		const endCenter = viewportCenter();
 
 		const ghost = createGhostFromGrid();
 		if (!ghost || !ghostEl) {
 			showGridCard();
 			expanded = false;
+			clearAppliedStackZIndex(anchorEl);
 			unlockCardModal();
 			return;
 		}
@@ -517,13 +594,13 @@
 		resetGhostTiltInstant();
 		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, FLIP_CLOSED_DEG);
 
-		const startTx = start.cx - endCenter.x;
-		const startTy = start.cy - endCenter.y;
+		const startTx = startVisual.cx - endCenter.x;
+		const startTy = startVisual.cy - endCenter.y;
 		const startScale = uniformScaleToFit(
 			targetSize.width,
 			targetSize.height,
-			start.width,
-			start.height
+			startVisual.width,
+			startVisual.height
 		);
 
 		setMotionTransition(ghost, false);
@@ -531,9 +608,11 @@
 		applyMotionTransform(ghost, endCenter.x, endCenter.y, targetSize.width, targetSize.height, {
 			tx: startTx,
 			ty: startTy,
-			rotZ: start.planeRot,
+			rotZ: startVisual.planeRot,
 			scale: startScale
 		});
+		mountInModalLayer(ghost);
+		void ghost.offsetHeight;
 
 		await tick();
 
@@ -572,17 +651,30 @@
 		suppressHover = true;
 		hoverLocked = true;
 		hoverFrozen = false;
+
+		const modalVisual = readCardRect(ghostEl, null, { visual: true });
+		const pivotCx = modalVisual.cx;
+		const pivotCy = modalVisual.cy;
+		const startOpacity = readCardOpacity(ghostEl);
+		const flipDeg = readFlipDeg(ghostFlipEl);
+
 		hideGridCard();
 		resetGhostTiltInstant();
 
-		const modalVisual = ghostEl.getBoundingClientRect();
-		const pivotCx = modalVisual.left + modalVisual.width / 2;
-		const pivotCy = modalVisual.top + modalVisual.height / 2;
-		const flipDeg = readFlipDeg(ghostFlipEl);
+		const slotEnd = readCardRect(rootEl, anchorEl, { layout: true });
+		const endRotZ = slotEnd.planeRot;
+		const endOpacity = readCardOpacity(rootEl);
+		const endStackZ = captureStackZIndex(anchorEl);
+		const opacityMotion = Math.abs(startOpacity - endOpacity) > 0.001;
+		const zIndexMotion = !!endStackZ;
 
-		const slotEnd = readCardRect(rootEl, anchorEl);
-		const gridGhost = replaceGhostWithGridClone(slotEnd.width, slotEnd.height, flipDeg);
-		if (!gridGhost || !ghostEl) return;
+		applyStackZIndex(anchorEl, endStackZ);
+
+		const gridGhost = createDismissGhost(ghostEl, flipDeg);
+		if (!gridGhost) return;
+
+		if (ghostEl) removeFromModalLayer(ghostEl);
+		bindGhostElements(gridGhost);
 
 		const flipTarget = ghostFlipEl;
 		const startScale = uniformScaleToFit(
@@ -594,48 +686,67 @@
 		const endTx = slotEnd.cx - pivotCx;
 		const endTy = slotEnd.cy - pivotCy;
 
-		setMotionTransition(gridGhost, false);
+		setMotionTransition(gridGhost, false, {
+			includeOpacity: opacityMotion,
+			includeZIndex: zIndexMotion
+		});
 		setFlipTransition(flipTarget, false);
 		applyMotionTransform(gridGhost, pivotCx, pivotCy, slotEnd.width, slotEnd.height, {
 			tx: 0,
 			ty: 0,
-			rotZ: 0,
+			rotZ: modalVisual.planeRot,
 			scale: startScale
 		});
+		gridGhost.style.opacity = String(startOpacity);
+		if (endStackZ) gridGhost.style.zIndex = '1';
+		mountInModalLayer(gridGhost);
+		void gridGhost.offsetHeight;
 
 		await tick();
 
 		setMotionWillChange(gridGhost, flipTarget);
-		setMotionTransition(gridGhost, true);
+		setMotionTransition(gridGhost, true, {
+			includeOpacity: opacityMotion,
+			includeZIndex: zIndexMotion
+		});
 		setFlipTransition(flipTarget, true);
 
 		requestAnimationFrame(() => {
 			if (!ghostEl) return;
 			syncVignetteDismiss();
+			transitionStackZIndex(anchorEl, endStackZ);
 			applyMotionTransform(ghostEl, pivotCx, pivotCy, slotEnd.width, slotEnd.height, {
 				tx: endTx,
 				ty: endTy,
-				rotZ: 0,
+				rotZ: endRotZ,
 				scale: 1
 			});
+			ghostEl.style.opacity = String(endOpacity);
+			if (endStackZ) ghostEl.style.zIndex = endStackZ;
 			if (enableFlip && flipTarget) setFlipDeg(flipTarget, FLIP_CLOSED_DEG);
 		});
 
-		await Promise.all([waitModalMotion(gridGhost, flipTarget), waitVignetteMotion()]);
+		await Promise.all([
+			waitModalMotion(gridGhost, flipTarget, { includeOpacity: opacityMotion }),
+			waitVignetteMotion()
+		]);
 
-		const finalRect = readCardRect(rootEl, anchorEl);
+		const finalRect = readCardRect(rootEl, anchorEl, { layout: true });
 		gridGhost.style.transition = 'none';
 		applyMotionTransform(gridGhost, finalRect.cx, finalRect.cy, finalRect.width, finalRect.height, {
 			tx: 0,
 			ty: 0,
-			rotZ: 0,
+			rotZ: endRotZ,
 			scale: 1
 		});
+		gridGhost.style.opacity = String(endOpacity);
+		if (endStackZ) gridGhost.style.zIndex = endStackZ;
 		if (enableFlip && flipTarget) resetFlipInstant(flipTarget, FLIP_CLOSED_DEG);
 		void gridGhost.offsetHeight;
 
 		destroyGhost();
 		showGridCard();
+		applyStackZIndex(anchorEl, endStackZ);
 		expanded = false;
 		await tick();
 		dismissing = false;
@@ -644,6 +755,7 @@
 		suppressHover = true;
 		openingScrollLeft = 0;
 		unlockCardModal();
+		clearAppliedStackZIndex(anchorEl);
 		releaseCardModal(collapseCard);
 	}
 
@@ -671,6 +783,7 @@
 			destroyGhost();
 		}
 		showGridCard();
+		clearAppliedStackZIndex(anchorEl);
 		if (expanded) {
 			unlockCardModal();
 			releaseCardModal(collapseCard);
@@ -692,7 +805,8 @@
 		<div class="info-card-hover-lift">
 			<div class="info-card-tilt hover-polaroid-tilt" bind:this={tiltEl}>
 				{#if enableFlip}
-					<div class="info-card-flip" bind:this={flipEl}>
+					<div class="info-card-flip-stage">
+						<div class="info-card-flip" bind:this={flipEl}>
 						<div class="info-card-face info-card-face--front">
 							<div
 								class="info-card-surface hover-polaroid-surface {surfaceClass}"
@@ -714,6 +828,7 @@
 								<div class="grid-cursor" aria-hidden="true"></div>
 								<slot name="back" />
 							</div>
+						</div>
 						</div>
 					</div>
 				{:else}
@@ -751,8 +866,17 @@
 	}
 
 	.info-card.info-card--ghost.info-card--animating .info-card-surface,
-	.info-card.info-card--ghost.info-card--animating .info-card-surface--back {
+	.info-card.info-card--ghost.info-card--animating .info-card-surface--back,
+	.info-card.info-card--ghost.info-card--modal .info-card-surface,
+	.info-card.info-card--ghost.info-card--modal .info-card-surface--back {
 		overflow: hidden;
+	}
+
+	.info-card.info-card--ghost.info-card--modal .info-card-flip,
+	.info-card.info-card--ghost.info-card--modal .info-card-face,
+	.info-card.info-card--ghost.info-card--modal .info-card-surface {
+		box-sizing: border-box;
+		min-height: 0;
 	}
 
 	.info-card {
@@ -910,7 +1034,13 @@
 	.info-card-tilt {
 		width: 100%;
 		height: 100%;
-		perspective: 900px;
+		transform-style: preserve-3d;
+	}
+
+	.info-card-flip-stage {
+		width: 100%;
+		height: 100%;
+		perspective: 10000px;
 		transform-style: preserve-3d;
 	}
 
@@ -920,6 +1050,7 @@
 		height: 100%;
 		transform-style: preserve-3d;
 		transform: rotateY(0deg);
+		transform-origin: center center;
 	}
 
 	.info-card-face {
@@ -931,6 +1062,7 @@
 
 	.info-card-face--front {
 		position: relative;
+		width: 100%;
 		height: 100%;
 		transform: rotateY(0deg);
 	}
@@ -938,6 +1070,7 @@
 	.info-card-face--back {
 		position: absolute;
 		inset: 0;
+		width: 100%;
 		height: 100%;
 		transform: rotateY(180deg);
 	}
