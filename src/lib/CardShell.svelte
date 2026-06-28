@@ -63,14 +63,20 @@
 	function refreshHoverFromPointer() {
 		if (!ghostEl || animating || !expanded) return;
 		if (!isPointerOverGhost()) {
-			activeSurfaceEl()?.style.setProperty('--spotlight', '0');
+			for (const surface of ghostEl.querySelectorAll('.info-card-surface')) {
+				if (surface instanceof HTMLElement) clearSurfaceGlow(surface);
+			}
 			return;
 		}
 		setPointerGlow(pointerEventAtLastPointer());
 	}
 
 	function activeSurfaceEl(): HTMLElement | null {
-		if (!expanded || !enableFlip) return surfaceEl;
+		if (!expanded) return surfaceEl;
+		if (!enableFlip) {
+			const ghostFront = ghostEl?.querySelector('.info-card-surface:not(.info-card-surface--back)');
+			return ghostFront instanceof HTMLElement ? ghostFront : surfaceEl;
+		}
 		const ghostBack = ghostEl?.querySelector('.info-card-surface--back');
 		if (ghostBack instanceof HTMLElement) return ghostBack;
 		return backSurfaceEl ?? surfaceEl;
@@ -214,6 +220,7 @@
 	}
 
 	function findCloneStackParent() {
+		if (typeof document === 'undefined') return null;
 		const cloneAnchor = document.querySelector(
 			'.card-modal-stage-clone .info-card-anchor[data-modal-slot="true"]'
 		);
@@ -453,7 +460,7 @@
 			'info-card--expanded',
 			'info-card-motion'
 		);
-		ghost.classList.remove('info-card--grid-hidden', 'info-card--dismissing', 'hover-polaroid-scale');
+		ghost.classList.remove('info-card--grid-hidden', 'info-card--dismissing');
 		ghost.setAttribute('aria-hidden', 'true');
 		normalizeGhostForFlight(ghost);
 		bindGhostElements(ghost);
@@ -496,6 +503,12 @@
 		tiltEl.style.transform = tiltTransform(rotXDeg, rotYDeg);
 	}
 
+	function clearSurfaceGlow(surface: HTMLElement | null | undefined) {
+		surface?.style.setProperty('--spotlight', '0');
+		surface?.style.setProperty('--pointer-u', '50%');
+		surface?.style.setProperty('--pointer-v', '50%');
+	}
+
 	function setPointerGlow(e: PointerEvent) {
 		const surface = activeSurfaceEl();
 		const motionTarget = expanded ? ghostEl : rootEl;
@@ -504,6 +517,17 @@
 		const rootRect = motionTarget.getBoundingClientRect();
 		const u = (e.clientX - rootRect.left) / rootRect.width;
 		const v = (e.clientY - rootRect.top) / rootRect.height;
+
+		if (expanded && ghostEl) {
+			for (const candidate of ghostEl.querySelectorAll('.info-card-surface')) {
+				if (candidate !== surface && candidate instanceof HTMLElement) {
+					clearSurfaceGlow(candidate);
+				}
+			}
+		} else {
+			const inactive = surface === surfaceEl ? backSurfaceEl : surfaceEl;
+			clearSurfaceGlow(inactive);
+		}
 
 		surface.style.setProperty('--pointer-u', `${(u * 100).toFixed(3)}%`);
 		surface.style.setProperty('--pointer-v', `${(v * 100).toFixed(3)}%`);
@@ -537,9 +561,12 @@
 		if (!rootEl || animating) return;
 
 		for (const surface of [surfaceEl, backSurfaceEl]) {
-			surface?.style.setProperty('--spotlight', '0');
-			surface?.style.setProperty('--pointer-u', '50%');
-			surface?.style.setProperty('--pointer-v', '50%');
+			clearSurfaceGlow(surface);
+		}
+		if (ghostEl) {
+			for (const surface of ghostEl.querySelectorAll('.info-card-surface')) {
+				if (surface instanceof HTMLElement) clearSurfaceGlow(surface);
+			}
 		}
 
 		if (expanded || hoverLocked) return;
@@ -772,12 +799,17 @@
 	}
 
 	onMount(() => {
-		const onPointerMove = (e: PointerEvent) => trackPointer(e.clientX, e.clientY);
+		const onPointerMove = (e: PointerEvent) => {
+			trackPointer(e.clientX, e.clientY);
+			if (expanded && ghostEl && !animating) refreshHoverFromPointer();
+		};
 		window.addEventListener('pointermove', onPointerMove, { passive: true });
 		return () => window.removeEventListener('pointermove', onPointerMove);
 	});
 
 	onDestroy(() => {
+		if (typeof document === 'undefined') return;
+
 		if (ghostEl) {
 			clearGhostRect(ghostEl);
 			destroyGhost();

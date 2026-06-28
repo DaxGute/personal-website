@@ -57,8 +57,8 @@
 	.education-carousel {
 		position: relative;
 		isolation: isolate;
-		--edu-card-height: clamp(320px, 54vw, 520px);
-		--edu-card-width: calc(var(--edu-card-height) * 5 / 7);
+		--edu-card-width: clamp(229px, 38.6vw, 371px);
+		--edu-card-height: var(--edu-card-width);
 		--edu-base-x: clamp(40px, 10vw, 140px);
 		--edu-split: clamp(70px, 10vw, 130px);
 		--edu-stack-sep: clamp(4px, 0.5vw, 8px);
@@ -66,7 +66,7 @@
 		width: min(980px, 100%);
 		height: var(--edu-card-height);
 		margin: 18px auto 0;
-		top: -100px;
+		top: -71px;
 		left: 0;
 	}
 
@@ -124,9 +124,9 @@
 			position: relative;
 			left: auto;
 			width: 100%;
-			aspect-ratio: 5 / 7;
-			transform: none;
+			aspect-ratio: 1 / 1;
 			height: auto;
+			transform: none;
 		}
 	}
 </style>

@@ -231,6 +231,9 @@ function ensureModalRoot() {
 		document.body.appendChild(backdropEl);
 	}
 
+	backdropEl.querySelector('.card-modal-backdrop__shade')?.remove();
+	backdropEl.querySelector('.card-modal-backdrop__cutout')?.remove();
+
 	if (!modalLayerEl) {
 		modalLayerEl = document.createElement('div');
 		modalLayerEl.className = 'card-modal-layer';
@@ -257,6 +260,77 @@ function setVignetteOval(rx: string, ry: string) {
 function resetVignetteOval() {
 	backdropEl?.style.removeProperty('--vignette-rx');
 	backdropEl?.style.removeProperty('--vignette-ry');
+	backdropEl?.style.removeProperty('--vignette-cx');
+	backdropEl?.style.removeProperty('--vignette-cy');
+}
+
+const VIGNETTE_FOCUS_STYLE_ID = 'card-modal-vignette-focus-keyframes';
+
+let vignetteFocusStyleEl: HTMLStyleElement | null = null;
+
+function ensureVignetteFocusStyle() {
+	if (typeof document === 'undefined') return null;
+	if (!vignetteFocusStyleEl) {
+		vignetteFocusStyleEl = document.createElement('style');
+		vignetteFocusStyleEl.id = VIGNETTE_FOCUS_STYLE_ID;
+		document.head.appendChild(vignetteFocusStyleEl);
+	}
+	return vignetteFocusStyleEl;
+}
+
+function easeOutBack(t: number, overshoot = 2.35) {
+	const c1 = overshoot;
+	const c3 = c1 + 1;
+	return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+function buildFocusKeyframeRules(startAngle: number, startRadius: number, arcBulge: number) {
+	const steps = 32;
+	const lines: string[] = [];
+	const sinA = Math.sin(startAngle);
+	const cosA = Math.cos(startAngle);
+
+	for (let i = 0; i <= steps; i++) {
+		const t = i / steps;
+		const eased = easeOutBack(t);
+		const radius = startRadius * (1 - eased);
+		const arc = arcBulge * Math.sin(Math.PI * t);
+		const cx = 50 + radius * cosA + arc * sinA;
+		const cy = 50 + radius * sinA - arc * cosA;
+		lines.push(
+			`${(t * 100).toFixed(2)}% { --vignette-cx: ${cx.toFixed(3)}%; --vignette-cy: ${cy.toFixed(3)}%; }`
+		);
+	}
+
+	return lines.join('\n');
+}
+
+function startVignetteFocus() {
+	if (!backdropEl || modalMotionMs() === 0) return;
+
+	const startAngle = Math.random() * Math.PI * 2;
+	const startRadius = 108;
+	const arcBulge = 2.5 + Math.random() * 3.5;
+	const startCx = 50 + startRadius * Math.cos(startAngle);
+	const startCy = 50 + startRadius * Math.sin(startAngle);
+
+	const styleEl = ensureVignetteFocusStyle();
+	if (styleEl) {
+		styleEl.textContent = `@keyframes vignette-focus-in {\n${buildFocusKeyframeRules(startAngle, startRadius, arcBulge)}\n}`;
+	}
+
+	backdropEl.style.setProperty('--vignette-cx', `${startCx.toFixed(3)}%`);
+	backdropEl.style.setProperty('--vignette-cy', `${startCy.toFixed(3)}%`);
+	backdropEl.classList.remove('is-focusing');
+	void backdropEl.offsetHeight;
+	backdropEl.classList.add('is-focusing');
+}
+
+function stopVignetteFocus() {
+	if (!backdropEl) return;
+	backdropEl.classList.remove('is-focusing');
+	backdropEl.style.setProperty('--vignette-cx', '50%');
+	backdropEl.style.setProperty('--vignette-cy', '50%');
 }
 
 function setVignetteInteractive(interactive: boolean) {
@@ -269,6 +343,7 @@ function snapVignetteClosed() {
 	const transition = backdropEl.style.transition;
 	backdropEl.style.transition = 'none';
 	setVignetteInteractive(false);
+	stopVignetteFocus();
 	resetVignetteOval();
 	void backdropEl.offsetHeight;
 	backdropEl.style.transition = transition;
@@ -288,6 +363,7 @@ function prepareModalBackdrop() {
 export function syncVignetteOpen() {
 	ensureModalRoot();
 	if (!backdropEl) return;
+	startVignetteFocus();
 	setVignetteInteractive(false);
 	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
 	void backdropEl.offsetHeight;
@@ -305,6 +381,7 @@ export function syncVignetteDismiss() {
 	}
 
 	setStageCloneZoomed(false);
+	stopVignetteFocus();
 	if (!backdropEl.classList.contains('is-visible')) return;
 
 	setVignetteOval(VIGNETTE_OPEN_RX, VIGNETTE_OPEN_RY);
@@ -316,7 +393,8 @@ export function syncVignetteDismiss() {
 export function waitVignetteMotion() {
 	return new Promise<void>((resolve) => {
 		const ms = modalMotionMs();
-		if (!backdropEl || ms === 0) {
+		const backdrop = backdropEl;
+		if (!backdrop || ms === 0) {
 			resolve();
 			return;
 		}
@@ -325,17 +403,18 @@ export function waitVignetteMotion() {
 		const finish = () => {
 			if (settled) return;
 			settled = true;
-			backdropEl?.removeEventListener('transitionend', onEnd);
+			backdrop.removeEventListener('transitionend', onEnd);
 			window.clearTimeout(timer);
+			stopVignetteFocus();
 			resolve();
 		};
 		const onEnd = (e: TransitionEvent) => {
-			if (e.target !== backdropEl) return;
+			if (e.target !== backdrop) return;
 			if (e.propertyName !== '--vignette-rx' && e.propertyName !== '--vignette-ry') return;
 			finish();
 		};
 
-		backdropEl.addEventListener('transitionend', onEnd);
+		backdrop.addEventListener('transitionend', onEnd);
 		const timer = window.setTimeout(finish, ms + 50);
 	});
 }

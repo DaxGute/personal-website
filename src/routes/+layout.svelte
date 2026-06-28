@@ -145,6 +145,18 @@
 		initial-value: 120vmax;
 	}
 
+	@property --vignette-cx {
+		syntax: '<percentage>';
+		inherits: false;
+		initial-value: 50%;
+	}
+
+	@property --vignette-cy {
+		syntax: '<percentage>';
+		inherits: false;
+		initial-value: 50%;
+	}
+
 	:global(.card-modal-backdrop) {
 		position: fixed;
 		inset: 0;
@@ -152,18 +164,40 @@
 		pointer-events: none;
 		--vignette-rx: 120vmax;
 		--vignette-ry: 120vmax;
+		--vignette-cx: 50%;
+		--vignette-cy: 50%;
 		transition:
 			--vignette-rx var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
 			--vignette-ry var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
 		background: radial-gradient(
-			ellipse var(--vignette-rx) var(--vignette-ry) at 50% 50%,
-			transparent 0%,
-			transparent 100%,
-			rgba(11, 18, 32, 0.38) 100%,
-			rgba(11, 18, 32, 0.68) 112%,
-			rgba(11, 18, 32, 0.88) 128%,
-			rgba(7, 12, 22, 0.96) 145%
+			ellipse 120vmax 120vmax at 50% 50%,
+			rgba(11, 18, 32, 0.28) 0%,
+			rgba(11, 18, 32, 0.48) 58%,
+			rgba(11, 18, 32, 0.68) 78%,
+			rgba(7, 12, 22, 0.82) 100%
 		);
+		-webkit-mask-image:
+			linear-gradient(#fff, #fff),
+			radial-gradient(
+				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
+				#000 0%,
+				#000 100%,
+				transparent 100%
+			);
+		-webkit-mask-composite: xor;
+		mask-image:
+			linear-gradient(#fff, #fff),
+			radial-gradient(
+				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
+				#000 0%,
+				#000 100%,
+				transparent 100%
+			);
+		mask-composite: exclude;
+	}
+
+	:global(.card-modal-backdrop.is-focusing) {
+		animation: vignette-focus-in var(--card-modal-ms, 760ms) linear forwards;
 	}
 
 	:global(.card-modal-backdrop.is-visible) {
@@ -318,6 +352,10 @@
 
 		:global(.card-modal-backdrop) {
 			transition: none;
+		}
+
+		:global(.card-modal-backdrop.is-focusing) {
+			animation: none;
 		}
 
 		:global(html.card-modal-open .desktop-app > .stage) {
