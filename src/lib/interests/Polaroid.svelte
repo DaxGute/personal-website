@@ -78,7 +78,7 @@
 </script>
 
 <div class="polaroid-root" bind:this={rootEl}>
-	<CardShell theme="green" class="polaroid-card" onModalOpen={onCardModalOpen}>
+	<CardShell theme="green" class="polaroid-card" enableFlip={false} onModalOpen={onCardModalOpen}>
 		<figure
 			class="polaroid-content"
 			class:is-revealed={revealed}

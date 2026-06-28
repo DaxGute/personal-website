@@ -519,6 +519,7 @@
 		overflow-y: hidden;
 		display: flex;
 		background: transparent;
+		overflow-anchor: none;
 		/* Must stay `auto`: wheel handler sets scrollLeft every tick; `smooth` stacks animations and feels broken. */
 		scroll-behavior: auto;
 		overscroll-behavior: none;

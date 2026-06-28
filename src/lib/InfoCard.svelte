@@ -38,7 +38,7 @@
 	surfaceClass={hasSideLogo ? 'has-logo' : ''}
 	{expandOnClick}
 >
-	<div class="card-row">
+	<div slot="front" class="card-row">
 		{#if hasSideLogo && logoSrc}
 			<div class="card-logo" aria-hidden={logoAlt ? undefined : 'true'}>
 				<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
@@ -109,24 +109,6 @@
 								{/each}
 							</ul>
 						{/if}
-
-						{#if tech.length}
-							<div class="project-chips" aria-label="Tech stack">
-								{#each tech as t}
-									<span class="project-chip">{t}</span>
-								{/each}
-							</div>
-						{/if}
-
-						{#if otherLinks.length}
-							<div class="project-links" aria-label="Project links">
-								{#each otherLinks as link}
-									<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
-										{link.label}
-									</a>
-								{/each}
-							</div>
-						{/if}
 					{:else}
 						<div class="award-details">
 							{#each items as item}
@@ -137,6 +119,106 @@
 				</div>
 
 				<p class="card-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
+			</div>
+		</div>
+	</div>
+
+	<div slot="back" class="card-row card-row--back">
+		{#if hasSideLogo && logoSrc}
+			<div class="card-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+				<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+			</div>
+		{/if}
+
+		<div class="card-content">
+			<div class="card-header experience-header">
+				<div class="experience-meta">
+					<p class="experience-company">{heading}</p>
+					<p
+						class="experience-sub"
+						class:wrap-sub={variant !== 'experience' && variant !== 'education'}
+					>
+						{subheading}
+					</p>
+				</div>
+				{#if dates || (variant === 'education' && logoSrc)}
+					<div class="experience-side">
+						{#if dates}
+							<p class="experience-dates">{dates}</p>
+						{/if}
+						{#if variant === 'education' && logoSrc}
+							<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<div class="card-back-main">
+				<p class="card-back-marker">backside</p>
+				{#if variant === 'experience'}
+					<ul class="experience-highlights">
+						{#each items as item}
+							<li>{item}</li>
+						{/each}
+					</ul>
+				{:else if variant === 'education'}
+					<div class="education-details">
+						{#each items as item}
+							<p>{item}</p>
+						{/each}
+					</div>
+				{:else if variant === 'project'}
+					{#if body}
+						<p class="project-body">{body}</p>
+					{/if}
+
+					{#if primaryLink}
+						<p class="project-website">
+							<a
+								class="project-website-link"
+								href={primaryLink.href}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{primaryLink.label}.
+							</a>
+						</p>
+					{/if}
+
+					{#if items.length}
+						<ul class="experience-highlights" aria-label="Project highlights">
+							{#each items as item}
+								<li>{item}</li>
+							{/each}
+						</ul>
+					{/if}
+
+					{#if tech.length}
+						<div class="project-chips" aria-label="Tech stack">
+							{#each tech as t}
+								<span class="project-chip">{t}</span>
+							{/each}
+						</div>
+					{/if}
+
+					{#if otherLinks.length}
+						<div class="project-links" aria-label="Project links">
+							{#each otherLinks as link}
+								<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
+									{link.label}
+								</a>
+							{/each}
+						</div>
+					{/if}
+				{:else}
+					<div class="award-details">
+						{#each items as item}
+							<p>{item}</p>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -171,7 +253,8 @@
 		overflow: hidden;
 	}
 
-	:global(.info-card--project) .card-main {
+	:global(.info-card--project) .card-main,
+	:global(.info-card--project) .card-back-main {
 		min-height: 0;
 		overflow: hidden;
 	}
@@ -226,6 +309,22 @@
 		min-height: 0;
 	}
 
+	.card-back-main {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+	}
+
+	.card-back-marker {
+		margin: 0 0 8px;
+		color: rgba(216, 226, 242, 0.72);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: lowercase;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+	}
+
 	.card-main-content {
 		transition: opacity 0.28s ease;
 	}
@@ -259,14 +358,22 @@
 		opacity: 1;
 	}
 
-	:global(.info-card--expanded) .card-main-content,
-	:global(.info-card--expanded:hover) .card-main-content {
-		opacity: 1;
+	:global(.info-card--expanded) .card-hover-hint,
+	:global(.info-card--expanded:hover) .card-hover-hint,
+	:global(.info-card--animating) .card-hover-hint,
+	:global(.info-card--dismissing) .card-hover-hint,
+	:global(.info-card--dismissing:hover) .card-hover-hint,
+	:global(.info-card--hover-frozen) .card-hover-hint {
+		opacity: 0;
 	}
 
-	:global(.info-card--expanded) .card-hover-hint,
-	:global(.info-card--expanded:hover) .card-hover-hint {
-		opacity: 0;
+	:global(.info-card--expanded) .card-main-content,
+	:global(.info-card--expanded:hover) .card-main-content,
+	:global(.info-card--animating) .card-main-content,
+	:global(.info-card--animating:hover) .card-main-content,
+	:global(.info-card--dismissing) .card-main-content,
+	:global(.info-card--dismissing:hover) .card-main-content {
+		opacity: 1;
 	}
 
 	.experience-header {
@@ -275,6 +382,7 @@
 		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 8px;
+		flex: 0 0 auto;
 	}
 
 	.experience-side {
@@ -512,6 +620,15 @@
 		box-shadow:
 			inset 0 0 12px rgba(255, 255, 255, 0.12),
 			0 0 14px rgba(var(--tone-shadow), 0.1);
+	}
+
+	:global(.info-card--green) .card-back-marker,
+	:global(.info-card--teal) .card-back-marker,
+	:global(.info-card--aquamarine) .card-back-marker,
+	:global(.info-card--blue) .card-back-marker,
+	:global(.info-card--periwinkle) .card-back-marker {
+		color: rgba(var(--tone-sub), 0.72);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
 	}
 
 	:global(.info-card--green) .experience-highlights,

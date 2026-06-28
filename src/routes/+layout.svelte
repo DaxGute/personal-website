@@ -133,19 +133,16 @@
 		box-sizing: border-box;
 	}
 
-	@property --vignette-clear {
-		syntax: '<percentage>';
-		inherits: true;
-		initial-value: 100%;
+	@property --vignette-rx {
+		syntax: '<length>';
+		inherits: false;
+		initial-value: 120vmax;
 	}
 
-	:global(html) {
-		--vignette-clear: 100%;
-		transition: --vignette-clear var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1);
-	}
-
-	:global(html.card-modal-vignette-open) {
-		--vignette-clear: 26%;
+	@property --vignette-ry {
+		syntax: '<length>';
+		inherits: false;
+		initial-value: 120vmax;
 	}
 
 	:global(.card-modal-backdrop) {
@@ -153,45 +150,20 @@
 		inset: 0;
 		z-index: 9998;
 		pointer-events: none;
+		--vignette-rx: 120vmax;
+		--vignette-ry: 120vmax;
+		transition:
+			--vignette-rx var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
+			--vignette-ry var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
 		background: radial-gradient(
-			ellipse 88% 78% at 50% 50%,
+			ellipse var(--vignette-rx) var(--vignette-ry) at 50% 50%,
 			transparent 0%,
-			transparent var(--vignette-clear),
-			rgba(11, 18, 32, 0.2) calc(var(--vignette-clear) + 14%),
-			rgba(11, 18, 32, 0.5) calc(var(--vignette-clear) + 32%),
-			rgba(11, 18, 32, 0.72) calc(var(--vignette-clear) + 48%)
+			transparent 100%,
+			rgba(11, 18, 32, 0.38) 100%,
+			rgba(11, 18, 32, 0.68) 112%,
+			rgba(11, 18, 32, 0.88) 128%,
+			rgba(7, 12, 22, 0.96) 145%
 		);
-	}
-
-	:global(.card-modal-backdrop__blur) {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		background: rgba(255, 255, 255, 0.01);
-		backdrop-filter: none;
-		-webkit-backdrop-filter: none;
-		transform: translateZ(0);
-		-webkit-mask-image: radial-gradient(
-			ellipse 88% 78% at 50% 50%,
-			transparent 0%,
-			transparent var(--vignette-clear),
-			rgba(0, 0, 0, 0.4) calc(var(--vignette-clear) + 12%),
-			rgba(0, 0, 0, 0.82) calc(var(--vignette-clear) + 28%),
-			rgba(0, 0, 0, 1) calc(var(--vignette-clear) + 44%)
-		);
-		mask-image: radial-gradient(
-			ellipse 88% 78% at 50% 50%,
-			transparent 0%,
-			transparent var(--vignette-clear),
-			rgba(0, 0, 0, 0.4) calc(var(--vignette-clear) + 12%),
-			rgba(0, 0, 0, 0.82) calc(var(--vignette-clear) + 28%),
-			rgba(0, 0, 0, 1) calc(var(--vignette-clear) + 44%)
-		);
-	}
-
-	:global(.card-modal-backdrop.is-visible .card-modal-backdrop__blur) {
-		backdrop-filter: blur(40px) saturate(1.12);
-		-webkit-backdrop-filter: blur(40px) saturate(1.12);
 	}
 
 	:global(.card-modal-backdrop.is-visible) {
@@ -210,6 +182,14 @@
 		pointer-events: auto;
 	}
 
+	:global(.card-modal-layer .info-card--ghost.info-card--animating.info-card-motion) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+	}
+
+	:global(.card-modal-layer .info-card--ghost.info-card--animating.info-card-motion) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+	}
+
 	:global(.card-modal-layer .info-card--modal-centered) {
 		transform: translate(-50%, -50%) !important;
 		transition: none;
@@ -219,25 +199,59 @@
 		transition: none !important;
 	}
 
-	:global(.card-modal-layer .info-card--modal-flip .hover-polaroid-tilt) {
-		transition: transform var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1) !important;
+	:global(.card-modal-layer .info-card--animating .info-card-flip) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
 	}
 
-	:global(.stage) {
-		transition: transform var(--card-modal-ms, 380ms) cubic-bezier(0.22, 1, 0.36, 1);
+	:global(.card-modal-layer .info-card--animating.info-card-motion) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
 	}
 
-	:global(html.card-modal-open .stage) {
+	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+	}
+
+	/* Real stage stays untransformed while modal is open so slot rects stay stable. */
+	:global(html.card-modal-open .desktop-app > .stage) {
+		pointer-events: none;
+		visibility: hidden;
+	}
+
+	:global(.card-modal-stage-clone) {
+		position: fixed;
+		inset: 0;
+		z-index: 9997;
+		width: 100vw;
+		height: 100vh;
+		overflow: hidden;
+		visibility: visible;
 		pointer-events: none;
 		transform: scale(1);
 		transform-origin: center center;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
+		background:
+			radial-gradient(1000px 520px at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
+			radial-gradient(900px 500px at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
+			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
+			var(--bg);
 	}
 
-	:global(html.card-modal-vignette-open .stage) {
+	:global(.card-modal-stage-clone.is-zoomed) {
 		transform: scale(1.035);
 	}
 
-	:global(html.card-modal-open .scroller) {
+	:global(.card-modal-stage-clone > .stage) {
+		width: 100%;
+		height: 100%;
+	}
+
+	:global(.card-modal-stage-clone .panel-inner) {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		background: rgba(255, 255, 255, 0.92);
+	}
+
+	:global(html.card-modal-open .desktop-app > .stage .scroller) {
 		overflow: hidden !important;
 		touch-action: none;
 	}
@@ -249,14 +263,22 @@
 	:global(.hover-polaroid-scale) {
 		transform: scale(var(--scale, 1));
 		transition: transform 0.2s ease-in;
-		will-change: transform;
+	}
+
+	:global(.info-card-motion.hover-polaroid-scale:not(.info-card--ghost)) {
+		transform: none;
+		transition: none;
+	}
+
+	:global(.info-card-hover-lift) {
+		transform: scale(var(--scale, 1)) translateY(var(--lift, 0px));
+		transition: transform 0.2s ease-in;
 	}
 
 	:global(.hover-polaroid-tilt) {
 		transform: perspective(900px) rotateX(0deg) rotateY(0deg);
 		transform-style: preserve-3d;
 		transition: transform 120ms linear;
-		will-change: transform;
 	}
 
 	:global(.hover-polaroid-surface) {
@@ -275,24 +297,39 @@
 		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
 	}
 
+	:global(.info-card--dismissing.hover-polaroid-scale .info-card-face--front .hover-polaroid-surface),
+	:global(.info-card--dismissing.hover-polaroid-scale:hover .info-card-face--front .hover-polaroid-surface) {
+		border-color: var(--hp-border, rgba(11, 18, 32, 0.14));
+		background: var(--hp-bg, rgba(255, 255, 255, 0.86));
+		box-shadow: var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12));
+	}
+
+	:global(.info-card--dismissing.hover-polaroid-scale .info-card-face--front .hover-polaroid-surface),
+	:global(.info-card--dismissing.hover-polaroid-scale:hover .info-card-face--front .hover-polaroid-surface) {
+		border-color: var(--hp-border, rgba(11, 18, 32, 0.14));
+		background: var(--hp-bg, rgba(255, 255, 255, 0.86));
+		box-shadow: var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12));
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		:global(html) {
 			transition: none;
 		}
 
-		:global(.stage) {
+		:global(.card-modal-backdrop) {
 			transition: none;
 		}
 
-		:global(html.card-modal-vignette-open) {
-			--vignette-clear: 26%;
+		:global(html.card-modal-open .desktop-app > .stage) {
+			transition: none;
 		}
 
-		:global(html.card-modal-vignette-open .stage) {
-			transform: scale(1.035);
+		:global(.card-modal-stage-clone) {
+			transition: none;
 		}
 
 		:global(.hover-polaroid-scale),
+		:global(.info-card-hover-lift),
 		:global(.hover-polaroid-tilt),
 		:global(.hover-polaroid-surface) {
 			transition: none;

@@ -1,13 +1,16 @@
 type CollapseFn = () => void | Promise<void>;
 
 /** Shared duration for backdrop + card move/flip (keep in sync with layout CSS). */
-export const CARD_MODAL_MS = 380;
+export const CARD_MODAL_MS = 760;
+
+/** Visual-only stage zoom on the modal backdrop clone (not applied to the real .stage). */
+export const STAGE_VIGNETTE_SCALE = 1.035;
 
 const MODAL_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 let backdropEl: HTMLDivElement | null = null;
-let backdropBlurEl: HTMLDivElement | null = null;
 let modalLayerEl: HTMLDivElement | null = null;
+let stageCloneEl: HTMLDivElement | null = null;
 let lockCount = 0;
 let activeCollapse: CollapseFn | null = null;
 let scrollContainer: HTMLElement | null = null;
@@ -15,6 +18,27 @@ let savedScrollLeft = 0;
 
 export function registerScrollContainer(el: HTMLElement) {
 	scrollContainer = el;
+}
+
+export function readScrollLeft() {
+	return scrollContainer?.scrollLeft ?? 0;
+}
+
+export function writeScrollLeft(left: number) {
+	if (scrollContainer) scrollContainer.scrollLeft = left;
+}
+
+/** Keep horizontal scroll pinned through modal DOM/class changes (scroll anchoring). */
+export function pinScrollLeft(left: number) {
+	writeScrollLeft(left);
+	requestAnimationFrame(() => {
+		writeScrollLeft(left);
+		requestAnimationFrame(() => writeScrollLeft(left));
+	});
+}
+
+function restoreSavedScroll() {
+	pinScrollLeft(savedScrollLeft);
 }
 
 export function isCardModalOpen() {
@@ -42,20 +66,160 @@ export function viewportCenter() {
 	};
 }
 
-function ensureBackdropLayers() {
-	if (!backdropEl) return;
+function findStageEl() {
+	return document.querySelector('.desktop-app > .stage') ?? document.querySelector('.stage');
+}
 
-	const existingBlur = backdropEl.querySelector('.card-modal-backdrop__blur');
-	if (existingBlur instanceof HTMLDivElement) {
-		backdropBlurEl = existingBlur;
-		backdropEl.querySelector('.card-modal-backdrop__shade')?.remove();
-		return;
+const STAGE_CLONE_ID_SUFFIX = '-stage-clone';
+
+function rewriteSvgUrlRefs(value: string, idMap: Map<string, string>) {
+	return value.replace(/url\(#([^)]+)\)/g, (match, id: string) => {
+		const mapped = idMap.get(id);
+		return mapped ? `url(#${mapped})` : match;
+	});
+}
+
+function patchCloneSvgIds(clone: HTMLElement, suffix: string) {
+	const idMap = new Map<string, string>();
+
+	clone.querySelectorAll('svg [id]').forEach((el) => {
+		const nextId = `${el.id}${suffix}`;
+		idMap.set(el.id, nextId);
+		el.id = nextId;
+	});
+
+	clone.querySelectorAll('svg, svg *').forEach((node) => {
+		if (!(node instanceof Element)) return;
+
+		for (const attr of ['mask', 'fill', 'stroke', 'filter', 'clip-path', 'href', 'xlink:href']) {
+			const value = node.getAttribute(attr);
+			if (!value?.includes('url(#')) continue;
+			node.setAttribute(attr, rewriteSvgUrlRefs(value, idMap));
+		}
+
+		if (node instanceof SVGElement && node.hasAttribute('style')) {
+			const style = node.getAttribute('style');
+			if (style?.includes('url(#')) {
+				node.setAttribute('style', rewriteSvgUrlRefs(style, idMap));
+			}
+		}
+	});
+
+	if (idMap.has('ribbonStroke')) {
+		const style = document.createElement('style');
+		style.textContent = `
+			.card-modal-stage-clone .ribbon-path--base {
+				stroke: url(#ribbonStroke${suffix});
+				opacity: 0.14;
+			}
+			.card-modal-stage-clone .ribbon-path--bright {
+				stroke: url(#ribbonStroke${suffix});
+				opacity: 1;
+			}
+		`;
+		clone.insertBefore(style, clone.firstChild);
+	}
+}
+
+function mirrorInlineStyle(source: Element | null, target: Element | null, props: string[]) {
+	if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) return;
+	for (const prop of props) {
+		const value = source.style.getPropertyValue(prop);
+		if (value) target.style.setProperty(prop, value);
+	}
+}
+
+function mirrorInlineStylesTree(source: Element, target: Element) {
+	if (source instanceof HTMLElement && target instanceof HTMLElement && source.style.cssText) {
+		target.style.cssText = source.style.cssText;
 	}
 
-	backdropBlurEl = document.createElement('div');
-	backdropBlurEl.className = 'card-modal-backdrop__blur';
-	backdropBlurEl.setAttribute('aria-hidden', 'true');
-	backdropEl.replaceChildren(backdropBlurEl);
+	const sourceChildren = source.children;
+	const targetChildren = target.children;
+	for (let i = 0; i < sourceChildren.length; i++) {
+		const targetChild = targetChildren[i];
+		if (targetChild) mirrorInlineStylesTree(sourceChildren[i]!, targetChild);
+	}
+}
+
+function syncStageCloneLayout(source: HTMLElement, clone: HTMLElement) {
+	const sourceScroller = source.querySelector('.scroller');
+	const cloneScroller = clone.querySelector('.scroller');
+	if (sourceScroller instanceof HTMLElement && cloneScroller instanceof HTMLElement) {
+		const scrollLeft = scrollContainer?.scrollLeft ?? sourceScroller.scrollLeft;
+		cloneScroller.scrollLeft = scrollLeft;
+		cloneScroller.scrollTop = sourceScroller.scrollTop;
+	}
+
+	mirrorInlineStyle(
+		source.querySelector('.scroll-track'),
+		clone.querySelector('.scroll-track'),
+		['width']
+	);
+	mirrorInlineStyle(
+		source.querySelector('.scroller-wash'),
+		clone.querySelector('.scroller-wash'),
+		['width']
+	);
+	mirrorInlineStyle(
+		source.querySelector('.ribbon-layer'),
+		clone.querySelector('.ribbon-layer'),
+		['width', 'left']
+	);
+
+	const sourcePanels = source.querySelectorAll<HTMLElement>('.panel');
+	const clonePanels = clone.querySelectorAll<HTMLElement>('.panel');
+	for (let i = 0; i < sourcePanels.length; i++) {
+		mirrorInlineStyle(sourcePanels[i], clonePanels[i], ['left', '--exp-t', '--edu-t']);
+	}
+}
+
+function stripModalCardFromClone(clone: HTMLElement) {
+	clone.querySelectorAll('.info-card-anchor[data-modal-slot="true"]').forEach((anchor) => {
+		anchor.querySelector('.info-card')?.remove();
+	});
+}
+
+function prepareStageClone(source: HTMLElement, clone: HTMLElement) {
+	mirrorInlineStylesTree(source, clone);
+	syncStageCloneLayout(source, clone);
+	stripModalCardFromClone(clone);
+}
+
+function mountStageClone() {
+	if (stageCloneEl) return;
+	const stage = findStageEl();
+	if (!(stage instanceof HTMLElement)) return;
+
+	const stageCopy = stage.cloneNode(true) as HTMLDivElement;
+	patchCloneSvgIds(stageCopy, STAGE_CLONE_ID_SUFFIX);
+
+	const wrapper = document.createElement('div');
+	wrapper.className = 'card-modal-stage-clone';
+	wrapper.setAttribute('aria-hidden', 'true');
+	wrapper.inert = true;
+	wrapper.appendChild(stageCopy);
+	stageCloneEl = wrapper;
+
+	ensureModalRoot();
+	if (backdropEl) {
+		document.body.insertBefore(wrapper, backdropEl);
+	} else {
+		document.body.appendChild(wrapper);
+	}
+
+	const sync = () => prepareStageClone(stage, stageCopy);
+	sync();
+	requestAnimationFrame(sync);
+}
+
+function removeStageClone() {
+	stageCloneEl?.remove();
+	stageCloneEl = null;
+}
+
+function setStageCloneZoomed(zoomed: boolean) {
+	stageCloneEl?.classList.toggle('is-zoomed', zoomed);
 }
 
 function ensureModalRoot() {
@@ -66,8 +230,6 @@ function ensureModalRoot() {
 		backdropEl.addEventListener('click', onBackdropClick);
 		document.body.appendChild(backdropEl);
 	}
-
-	ensureBackdropLayers();
 
 	if (!modalLayerEl) {
 		modalLayerEl = document.createElement('div');
@@ -81,53 +243,140 @@ function onBackdropClick() {
 	void activeCollapse?.();
 }
 
-const VIGNETTE_OPEN_CLASS = 'card-modal-vignette-open';
+const VIGNETTE_OPEN_RX = '18vmax';
+const VIGNETTE_OPEN_RY = '14vmax';
+const VIGNETTE_CLOSED_RX = '120vmax';
+const VIGNETTE_CLOSED_RY = '120vmax';
 
-function setVignetteVisible(visible: boolean) {
-	backdropEl?.classList.toggle('is-visible', visible);
-	document.documentElement.classList.toggle(VIGNETTE_OPEN_CLASS, visible);
+function setVignetteOval(rx: string, ry: string) {
+	if (!backdropEl) return;
+	backdropEl.style.setProperty('--vignette-rx', rx);
+	backdropEl.style.setProperty('--vignette-ry', ry);
 }
 
-function showBackdrop() {
-	ensureModalRoot();
-	document.documentElement.classList.add('card-modal-open');
-	document.documentElement.style.setProperty('--card-modal-ms', `${CARD_MODAL_MS}ms`);
-	if (!backdropEl) return;
+function resetVignetteOval() {
+	backdropEl?.style.removeProperty('--vignette-rx');
+	backdropEl?.style.removeProperty('--vignette-ry');
+}
 
-	setVignetteVisible(false);
-	void document.documentElement.offsetHeight;
-	requestAnimationFrame(() => {
-		setVignetteVisible(true);
+function setVignetteInteractive(interactive: boolean) {
+	backdropEl?.classList.toggle('is-visible', interactive);
+}
+
+/** Jump to closed with no transition (unlock / prepare). */
+function snapVignetteClosed() {
+	if (!backdropEl) return;
+	const transition = backdropEl.style.transition;
+	backdropEl.style.transition = 'none';
+	setVignetteInteractive(false);
+	resetVignetteOval();
+	void backdropEl.offsetHeight;
+	backdropEl.style.transition = transition;
+}
+
+function prepareModalBackdrop() {
+	ensureModalRoot();
+	document.documentElement.style.setProperty('--card-modal-ms', `${CARD_MODAL_MS}ms`);
+	document.documentElement.style.setProperty('--card-modal-easing', MODAL_EASING);
+	mountStageClone();
+	document.documentElement.classList.add('card-modal-open');
+	setStageCloneZoomed(false);
+	snapVignetteClosed();
+}
+
+/** Contract vignette oval (same frame as card flight). */
+export function syncVignetteOpen() {
+	ensureModalRoot();
+	if (!backdropEl) return;
+	setVignetteInteractive(false);
+	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
+	void backdropEl.offsetHeight;
+	setVignetteInteractive(true);
+	setVignetteOval(VIGNETTE_OPEN_RX, VIGNETTE_OPEN_RY);
+	setStageCloneZoomed(true);
+}
+
+/** Expand vignette oval out while stage unzooms. */
+export function syncVignetteDismiss() {
+	ensureModalRoot();
+	if (!backdropEl) {
+		setStageCloneZoomed(false);
+		return;
+	}
+
+	setStageCloneZoomed(false);
+	if (!backdropEl.classList.contains('is-visible')) return;
+
+	setVignetteOval(VIGNETTE_OPEN_RX, VIGNETTE_OPEN_RY);
+	void backdropEl.offsetHeight;
+	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
+	setVignetteInteractive(false);
+}
+
+export function waitVignetteMotion() {
+	return new Promise<void>((resolve) => {
+		const ms = modalMotionMs();
+		if (!backdropEl || ms === 0) {
+			resolve();
+			return;
+		}
+
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			backdropEl?.removeEventListener('transitionend', onEnd);
+			window.clearTimeout(timer);
+			resolve();
+		};
+		const onEnd = (e: TransitionEvent) => {
+			if (e.target !== backdropEl) return;
+			if (e.propertyName !== '--vignette-rx' && e.propertyName !== '--vignette-ry') return;
+			finish();
+		};
+
+		backdropEl.addEventListener('transitionend', onEnd);
+		const timer = window.setTimeout(finish, ms + 50);
 	});
 }
 
+/** Reset vignette after unlock — collapse animation already expanded the oval. */
+export function dismissVignette() {
+	setStageCloneZoomed(false);
+}
+
 export function dismissBackdrop() {
-	setVignetteVisible(false);
+	dismissVignette();
 }
 
-export function portalCardToModalLayer(cardEl: HTMLElement) {
+export function mountInModalLayer(el: HTMLElement) {
 	ensureModalRoot();
-	modalLayerEl?.appendChild(cardEl);
+	modalLayerEl?.appendChild(el);
 }
 
-export function returnCardToAnchor(cardEl: HTMLElement, anchorEl: HTMLElement) {
-	anchorEl.appendChild(cardEl);
+export function removeFromModalLayer(el: HTMLElement) {
+	el.remove();
 }
 
-export function lockCardModal() {
+export function lockCardModal(preScrollLeft?: number) {
 	lockCount++;
 	if (lockCount === 1) {
-		if (scrollContainer) savedScrollLeft = scrollContainer.scrollLeft;
-		showBackdrop();
+		if (scrollContainer) {
+			savedScrollLeft = preScrollLeft ?? scrollContainer.scrollLeft;
+		}
+		prepareModalBackdrop();
+		restoreSavedScroll();
 	}
 }
 
 export function unlockCardModal() {
 	lockCount = Math.max(0, lockCount - 1);
 	if (lockCount === 0) {
-		document.documentElement.classList.remove('card-modal-open', VIGNETTE_OPEN_CLASS);
+		document.documentElement.classList.remove('card-modal-open');
 		dismissBackdrop();
-		if (scrollContainer) scrollContainer.scrollLeft = savedScrollLeft;
+		snapVignetteClosed();
+		removeStageClone();
+		restoreSavedScroll();
 	}
 }
 
