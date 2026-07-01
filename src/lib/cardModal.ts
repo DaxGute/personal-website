@@ -6,7 +6,8 @@ export const CARD_MODAL_MS = 760;
 /** Visual-only stage zoom on the modal backdrop clone (not applied to the real .stage). */
 export const STAGE_VIGNETTE_SCALE = 1.035;
 
-const MODAL_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const MODAL_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
+const VIGNETTE_SIZE_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
 
 let backdropEl: HTMLDivElement | null = null;
 let modalLayerEl: HTMLDivElement | null = null;
@@ -246,10 +247,15 @@ function onBackdropClick() {
 	void activeCollapse?.();
 }
 
-const VIGNETTE_OPEN_RX = '18vmax';
-const VIGNETTE_OPEN_RY = '14vmax';
+const VIGNETTE_OPEN_RX = '0vmax';
+const VIGNETTE_OPEN_RY = '0vmax';
 const VIGNETTE_CLOSED_RX = '120vmax';
 const VIGNETTE_CLOSED_RY = '120vmax';
+
+export type VignetteOrigin = {
+	x: number;
+	y: number;
+};
 
 function setVignetteOval(rx: string, ry: string) {
 	if (!backdropEl) return;
@@ -257,80 +263,37 @@ function setVignetteOval(rx: string, ry: string) {
 	backdropEl.style.setProperty('--vignette-ry', ry);
 }
 
-function resetVignetteOval() {
-	backdropEl?.style.removeProperty('--vignette-rx');
-	backdropEl?.style.removeProperty('--vignette-ry');
+function setVignetteCenter(x: number, y: number) {
+	if (!backdropEl) return;
+	backdropEl.style.setProperty('--vignette-cx', `${x}px`);
+	backdropEl.style.setProperty('--vignette-cy', `${y}px`);
+}
+
+function resetVignetteCenter() {
 	backdropEl?.style.removeProperty('--vignette-cx');
 	backdropEl?.style.removeProperty('--vignette-cy');
 }
 
-const VIGNETTE_FOCUS_STYLE_ID = 'card-modal-vignette-focus-keyframes';
+function dismissStartRadii() {
+	return { rx: '0px', ry: '0px' };
+}
 
-let vignetteFocusStyleEl: HTMLStyleElement | null = null;
-
-function ensureVignetteFocusStyle() {
-	if (typeof document === 'undefined') return null;
-	if (!vignetteFocusStyleEl) {
-		vignetteFocusStyleEl = document.createElement('style');
-		vignetteFocusStyleEl.id = VIGNETTE_FOCUS_STYLE_ID;
-		document.head.appendChild(vignetteFocusStyleEl);
+function dismissEndRadii(origin?: VignetteOrigin) {
+	if (!origin) {
+		return { rx: VIGNETTE_CLOSED_RX, ry: VIGNETTE_CLOSED_RY };
 	}
-	return vignetteFocusStyleEl;
+	const reach = Math.hypot(
+		Math.max(origin.x, window.innerWidth - origin.x),
+		Math.max(origin.y, window.innerHeight - origin.y)
+	);
+	const radius = `${(reach * 1.15).toFixed(2)}px`;
+	return { rx: radius, ry: radius };
 }
 
-function easeOutBack(t: number, overshoot = 2.35) {
-	const c1 = overshoot;
-	const c3 = c1 + 1;
-	return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
-}
-
-function buildFocusKeyframeRules(startAngle: number, startRadius: number, arcBulge: number) {
-	const steps = 32;
-	const lines: string[] = [];
-	const sinA = Math.sin(startAngle);
-	const cosA = Math.cos(startAngle);
-
-	for (let i = 0; i <= steps; i++) {
-		const t = i / steps;
-		const eased = easeOutBack(t);
-		const radius = startRadius * (1 - eased);
-		const arc = arcBulge * Math.sin(Math.PI * t);
-		const cx = 50 + radius * cosA + arc * sinA;
-		const cy = 50 + radius * sinA - arc * cosA;
-		lines.push(
-			`${(t * 100).toFixed(2)}% { --vignette-cx: ${cx.toFixed(3)}%; --vignette-cy: ${cy.toFixed(3)}%; }`
-		);
-	}
-
-	return lines.join('\n');
-}
-
-function startVignetteFocus() {
-	if (!backdropEl || modalMotionMs() === 0) return;
-
-	const startAngle = Math.random() * Math.PI * 2;
-	const startRadius = 108;
-	const arcBulge = 2.5 + Math.random() * 3.5;
-	const startCx = 50 + startRadius * Math.cos(startAngle);
-	const startCy = 50 + startRadius * Math.sin(startAngle);
-
-	const styleEl = ensureVignetteFocusStyle();
-	if (styleEl) {
-		styleEl.textContent = `@keyframes vignette-focus-in {\n${buildFocusKeyframeRules(startAngle, startRadius, arcBulge)}\n}`;
-	}
-
-	backdropEl.style.setProperty('--vignette-cx', `${startCx.toFixed(3)}%`);
-	backdropEl.style.setProperty('--vignette-cy', `${startCy.toFixed(3)}%`);
-	backdropEl.classList.remove('is-focusing');
-	void backdropEl.offsetHeight;
-	backdropEl.classList.add('is-focusing');
-}
-
-function stopVignetteFocus() {
-	if (!backdropEl) return;
-	backdropEl.classList.remove('is-focusing');
-	backdropEl.style.setProperty('--vignette-cx', '50%');
-	backdropEl.style.setProperty('--vignette-cy', '50%');
+function resetVignetteOval() {
+	backdropEl?.style.removeProperty('--vignette-rx');
+	backdropEl?.style.removeProperty('--vignette-ry');
+	resetVignetteCenter();
 }
 
 function setVignetteInteractive(interactive: boolean) {
@@ -343,7 +306,6 @@ function snapVignetteClosed() {
 	const transition = backdropEl.style.transition;
 	backdropEl.style.transition = 'none';
 	setVignetteInteractive(false);
-	stopVignetteFocus();
 	resetVignetteOval();
 	void backdropEl.offsetHeight;
 	backdropEl.style.transition = transition;
@@ -353,9 +315,7 @@ function prepareModalBackdrop() {
 	ensureModalRoot();
 	document.documentElement.style.setProperty('--card-modal-ms', `${CARD_MODAL_MS}ms`);
 	document.documentElement.style.setProperty('--card-modal-easing', MODAL_EASING);
-	mountStageClone();
-	document.documentElement.classList.add('card-modal-open');
-	setStageCloneZoomed(false);
+	document.documentElement.style.setProperty('--vignette-size-easing', VIGNETTE_SIZE_EASING);
 	snapVignetteClosed();
 }
 
@@ -363,7 +323,10 @@ function prepareModalBackdrop() {
 export function syncVignetteOpen() {
 	ensureModalRoot();
 	if (!backdropEl) return;
-	startVignetteFocus();
+	mountStageClone();
+	document.documentElement.classList.add('card-modal-open');
+	restoreSavedScroll();
+	resetVignetteCenter();
 	setVignetteInteractive(false);
 	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
 	void backdropEl.offsetHeight;
@@ -372,8 +335,8 @@ export function syncVignetteOpen() {
 	setStageCloneZoomed(true);
 }
 
-/** Expand vignette oval out while stage unzooms. */
-export function syncVignetteDismiss() {
+/** Expand vignette oval out from a viewport point while stage unzooms. */
+export function syncVignetteDismiss(origin?: VignetteOrigin) {
 	ensureModalRoot();
 	if (!backdropEl) {
 		setStageCloneZoomed(false);
@@ -381,12 +344,18 @@ export function syncVignetteDismiss() {
 	}
 
 	setStageCloneZoomed(false);
-	stopVignetteFocus();
 	if (!backdropEl.classList.contains('is-visible')) return;
 
-	setVignetteOval(VIGNETTE_OPEN_RX, VIGNETTE_OPEN_RY);
+	const start = dismissStartRadii();
+	const end = dismissEndRadii(origin);
+	const transition = backdropEl.style.transition;
+	backdropEl.style.transition = 'none';
+	if (origin) setVignetteCenter(origin.x, origin.y);
+	setVignetteOval(start.rx, start.ry);
 	void backdropEl.offsetHeight;
-	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
+	backdropEl.style.transition = transition;
+	void backdropEl.offsetHeight;
+	setVignetteOval(end.rx, end.ry);
 	setVignetteInteractive(false);
 }
 
@@ -405,7 +374,6 @@ export function waitVignetteMotion() {
 			settled = true;
 			backdrop.removeEventListener('transitionend', onEnd);
 			window.clearTimeout(timer);
-			stopVignetteFocus();
 			resolve();
 		};
 		const onEnd = (e: TransitionEvent) => {

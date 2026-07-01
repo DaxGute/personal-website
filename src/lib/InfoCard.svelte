@@ -358,6 +358,28 @@
 		opacity: 1;
 	}
 
+	:global(.info-card--preserve-grid-hover) .card-content {
+		background: transparent;
+		box-shadow: none;
+	}
+
+	:global(.info-card--preserve-grid-hover) .card-main-content,
+	:global(.info-card--preserve-grid-hover:hover) .card-main-content {
+		opacity: 0;
+	}
+
+	:global(.info-card--preserve-grid-hover) .card-hover-hint,
+	:global(.info-card--preserve-grid-hover:hover) .card-hover-hint,
+	:global(.info-card--preserve-grid-hover.info-card--animating) .card-hover-hint,
+	:global(.info-card--preserve-grid-hover.info-card--animating:hover) .card-hover-hint {
+		opacity: 1;
+	}
+
+	:global(.info-card--preserve-grid-hover.info-card--animating) .card-main-content,
+	:global(.info-card--preserve-grid-hover.info-card--animating:hover) .card-main-content {
+		opacity: 0;
+	}
+
 	:global(.info-card--expanded) .card-hover-hint,
 	:global(.info-card--expanded:hover) .card-hover-hint,
 	:global(.info-card--animating) .card-hover-hint,

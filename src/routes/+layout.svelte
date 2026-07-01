@@ -146,13 +146,13 @@
 	}
 
 	@property --vignette-cx {
-		syntax: '<percentage>';
+		syntax: '<length-percentage>';
 		inherits: false;
 		initial-value: 50%;
 	}
 
 	@property --vignette-cy {
-		syntax: '<percentage>';
+		syntax: '<length-percentage>';
 		inherits: false;
 		initial-value: 50%;
 	}
@@ -167,8 +167,8 @@
 		--vignette-cx: 50%;
 		--vignette-cy: 50%;
 		transition:
-			--vignette-rx var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
-			--vignette-ry var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
+			--vignette-rx var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.76, 0, 0.24, 1)),
+			--vignette-ry var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.76, 0, 0.24, 1));
 		background: radial-gradient(
 			ellipse 120vmax 120vmax at 50% 50%,
 			rgba(11, 18, 32, 0.28) 0%,
@@ -196,10 +196,6 @@
 		mask-composite: exclude;
 	}
 
-	:global(.card-modal-backdrop.is-focusing) {
-		animation: vignette-focus-in var(--card-modal-ms, 760ms) linear forwards;
-	}
-
 	:global(.card-modal-backdrop.is-visible) {
 		pointer-events: auto;
 		cursor: pointer;
@@ -217,16 +213,23 @@
 	}
 
 	:global(.card-modal-layer .info-card--ghost.info-card--animating.info-card-motion) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
-	}
-
-	:global(.card-modal-layer .info-card--ghost.info-card--animating.info-card-motion) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transition:
+			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
+			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transform-style: preserve-3d;
 	}
 
 	:global(.card-modal-layer .info-card--modal-centered) {
-		transform: translate(-50%, -50%) !important;
 		transition: none;
+	}
+
+	:global(.card-modal-layer .info-card--ghost.info-card--modal-crisp) {
+		transition: none !important;
+	}
+
+	:global(.card-modal-layer .info-card--modal:not(.info-card--ghost)),
+	:global(.card-modal-layer .info-card--ghost.info-card--modal) {
+		transform-style: preserve-3d;
 	}
 
 	:global(.card-modal-layer .info-card--modal .hover-polaroid-tilt) {
@@ -242,6 +245,12 @@
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss) {
+		transition:
+			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
+			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+	}
+
+	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss .info-card-flip) {
 		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
 	}
 
@@ -331,6 +340,17 @@
 		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
 	}
 
+	:global(.info-card--ghost.info-card--modal.hover-polaroid-scale .hover-polaroid-surface) {
+		transition: none !important;
+	}
+
+	:global(.info-card--ghost.info-card--modal-crisp.hover-polaroid-scale .hover-polaroid-surface) {
+		background: var(--hp-bg-hover) !important;
+		box-shadow: var(--hp-shadow-hover) !important;
+		border-color: var(--hp-border-hover) !important;
+		transition: none !important;
+	}
+
 	:global(.info-card--dismissing.hover-polaroid-scale .info-card-face--front .hover-polaroid-surface),
 	:global(.info-card--dismissing.hover-polaroid-scale:hover .info-card-face--front .hover-polaroid-surface) {
 		border-color: var(--hp-border, rgba(11, 18, 32, 0.14));
@@ -352,10 +372,6 @@
 
 		:global(.card-modal-backdrop) {
 			transition: none;
-		}
-
-		:global(.card-modal-backdrop.is-focusing) {
-			animation: none;
 		}
 
 		:global(html.card-modal-open .desktop-app > .stage) {

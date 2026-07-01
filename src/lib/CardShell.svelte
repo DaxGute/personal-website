@@ -54,16 +54,24 @@
 		return { clientX: lastPointerX, clientY: lastPointerY } as PointerEvent;
 	}
 
-	function isPointerOverGhost() {
-		if (!ghostEl) return false;
+	function isPointerOverModal() {
+		const el = modalEl();
+		if (!el) return false;
 		const hit = document.elementFromPoint(lastPointerX, lastPointerY);
-		return !!hit && ghostEl.contains(hit);
+		return !!hit && el.contains(hit);
+	}
+
+	function modalEl() {
+		if (!expanded) return rootEl;
+		return ghostEl ?? rootEl;
 	}
 
 	function refreshHoverFromPointer() {
-		if (!ghostEl || animating || !expanded) return;
-		if (!isPointerOverGhost()) {
-			for (const surface of ghostEl.querySelectorAll('.info-card-surface')) {
+		if (animating || !expanded) return;
+		const el = modalEl();
+		if (!el) return;
+		if (!isPointerOverModal()) {
+			for (const surface of el.querySelectorAll('.info-card-surface')) {
 				if (surface instanceof HTMLElement) clearSurfaceGlow(surface);
 			}
 			return;
@@ -77,9 +85,13 @@
 			const ghostFront = ghostEl?.querySelector('.info-card-surface:not(.info-card-surface--back)');
 			return ghostFront instanceof HTMLElement ? ghostFront : surfaceEl;
 		}
-		const ghostBack = ghostEl?.querySelector('.info-card-surface--back');
-		if (ghostBack instanceof HTMLElement) return ghostBack;
-		return backSurfaceEl ?? surfaceEl;
+		if (readFlipDeg(ghostFlipEl) === FLIP_OPEN_DEG) {
+			const ghostBack = ghostEl?.querySelector('.info-card-surface--back');
+			if (ghostBack instanceof HTMLElement) return ghostBack;
+			return backSurfaceEl ?? surfaceEl;
+		}
+		const ghostFront = ghostEl?.querySelector('.info-card-surface:not(.info-card-surface--back)');
+		return ghostFront instanceof HTMLElement ? ghostFront : surfaceEl;
 	}
 
 	function prefersReducedMotion() {
@@ -117,6 +129,16 @@
 		void flipTarget.offsetHeight;
 	}
 
+	function resetCardFlipClosed(card: HTMLElement) {
+		if (!enableFlip) return;
+		const flip = card.querySelector('.info-card-flip');
+		if (!(flip instanceof HTMLElement)) return;
+		flip.style.transition = 'none';
+		flip.style.transform = '';
+		void flip.offsetHeight;
+		flip.style.removeProperty('transition');
+	}
+
 	function isModalIsolationRoot(el: HTMLElement) {
 		return (
 			el.classList.contains('card-modal-layer') || el.classList.contains('card-modal-backdrop')
@@ -146,14 +168,14 @@
 		return `translate(-50%, -50%) translate3d(${tx}px, ${ty}px, 0) rotate(${rotZ}deg) scale(${scale})`;
 	}
 
-	function uniformScaleToFit(
-		shellW: number,
-		shellH: number,
-		targetW: number,
-		targetH: number
+	function visualScaleFromLayout(
+		layoutW: number,
+		layoutH: number,
+		visualW: number,
+		visualH: number
 	) {
-		if (shellW <= 0 || shellH <= 0) return 1;
-		return Math.min(targetW / shellW, targetH / shellH);
+		if (layoutW <= 0 || layoutH <= 0) return 1;
+		return Math.min(visualW / layoutW, visualH / layoutH);
 	}
 
 	function readCardRect(
@@ -356,16 +378,42 @@
 		await Promise.all(waits);
 	}
 
-	function finishGhostModalPose(el: HTMLElement, width: number, height: number) {
-		const { x, y } = viewportCenter();
+	function finishGhostModalPose(
+		el: HTMLElement,
+		cx: number,
+		cy: number,
+		width: number,
+		height: number,
+		scale = 1
+	) {
 		el.style.transition = 'none';
-		applyMotionTransform(el, x, y, width, height, {
+		applyMotionTransform(el, cx, cy, width, height, {
 			tx: 0,
 			ty: 0,
 			rotZ: 0,
-			scale: 1
+			scale
 		});
 		void el.offsetHeight;
+	}
+
+	/** Snap to true modal layout (crisp text) while scaled grid tokens preserve warp tiling. */
+	function settleGhostModalCrisp(el: HTMLElement, flipTarget: HTMLElement | null) {
+		// Flight CSS uses transition:!important on .info-card--animating — strip it before the snap.
+		el.classList.remove('info-card--animating');
+		el.style.setProperty('transition', 'none', 'important');
+		flipTarget?.style.setProperty('transition', 'none', 'important');
+		void el.offsetHeight;
+
+		const rect = el.getBoundingClientRect();
+		const cx = rect.left + rect.width / 2;
+		const cy = rect.top + rect.height / 2;
+		applyMotionTransform(el, cx, cy, rect.width, rect.height, { tx: 0, ty: 0, rotZ: 0, scale: 1 });
+		void el.offsetHeight;
+		el.classList.add('info-card--modal-crisp');
+		void el.offsetHeight;
+
+		el.style.removeProperty('transition');
+		flipTarget?.style.removeProperty('transition');
 	}
 
 	function clearGhostRect(el: HTMLElement) {
@@ -380,15 +428,19 @@
 		el.style.transform = '';
 		el.style.opacity = '';
 		el.style.zIndex = '';
-		el.classList.remove('info-card--modal', 'info-card--modal-centered', 'info-card--ghost');
+		el.style.removeProperty('--modal-rest-scale');
+		el.classList.remove(
+			'info-card--modal',
+			'info-card--modal-centered',
+			'info-card--modal-crisp',
+			'info-card--ghost'
+		);
 	}
 
 	function hideGridCard() {
 		if (!rootEl || !anchorEl) return;
-		clearHoverVisuals();
-		resetTiltInstant();
-		rootEl.classList.add('info-card--grid-hidden');
 		anchorEl.dataset.modalSlot = 'true';
+		rootEl.classList.add('info-card--grid-hidden');
 	}
 
 	function showGridCard() {
@@ -398,22 +450,25 @@
 		resetTiltInstant();
 	}
 
+	function isGridHovered() {
+		if (!rootEl) return false;
+		const hover =
+			rootEl.style.getPropertyValue('--hover') || getComputedStyle(rootEl).getPropertyValue('--hover');
+		return hover.trim() === '1';
+	}
+
 	function bindGhostElements(ghost: HTMLElement) {
 		ghostEl = ghost;
 		ghostFlipEl = ghost.querySelector('.info-card-flip');
 		ghostTiltEl = ghost.querySelector('.info-card-tilt');
 	}
 
-	function normalizeGhostForFlight(ghost: HTMLElement) {
+	function prepareGhostForFlight(ghost: HTMLElement) {
 		ghost.classList.add('info-card--animating');
-		ghost.style.setProperty('--scale', '1');
-		ghost.style.setProperty('--hover', '0');
-		ghost.style.setProperty('--lift', '0px');
 
 		const lift = ghost.querySelector('.info-card-hover-lift');
 		if (lift instanceof HTMLElement) {
 			lift.style.transition = 'none';
-			lift.style.transform = 'scale(1) translateY(0)';
 			void lift.offsetHeight;
 			lift.style.transition = '';
 		}
@@ -421,7 +476,6 @@
 		const tilt = ghost.querySelector('.info-card-tilt');
 		if (tilt instanceof HTMLElement) {
 			tilt.style.transition = 'none';
-			tilt.style.transform = tiltTransform(0, 0);
 			void tilt.offsetHeight;
 		}
 	}
@@ -451,18 +505,21 @@
 		return ghost;
 	}
 
-	function createGhostFromGrid() {
+	function createGhostFromGrid({ preserveHover = false }: { preserveHover?: boolean } = {}) {
 		if (!rootEl) return null;
 		const ghost = rootEl.cloneNode(true) as HTMLElement;
-		ghost.classList.add(
-			'info-card--ghost',
-			'info-card--modal',
-			'info-card--expanded',
-			'info-card-motion'
+		ghost.classList.add('info-card--ghost', 'info-card-motion', 'info-card--modal');
+		ghost.classList.remove(
+			'info-card--grid-hidden',
+			'info-card--dismissing',
+			'info-card--expanded'
 		);
-		ghost.classList.remove('info-card--grid-hidden', 'info-card--dismissing');
+		if (preserveHover) {
+			ghost.classList.add('info-card--hover-frozen', 'info-card--preserve-grid-hover');
+		}
 		ghost.setAttribute('aria-hidden', 'true');
-		normalizeGhostForFlight(ghost);
+		resetCardFlipClosed(ghost);
+		prepareGhostForFlight(ghost);
 		bindGhostElements(ghost);
 		return ghost;
 	}
@@ -511,15 +568,15 @@
 
 	function setPointerGlow(e: PointerEvent) {
 		const surface = activeSurfaceEl();
-		const motionTarget = expanded ? ghostEl : rootEl;
+		const motionTarget = modalEl();
 		if (!surface || !motionTarget || animating) return;
 
 		const rootRect = motionTarget.getBoundingClientRect();
 		const u = (e.clientX - rootRect.left) / rootRect.width;
 		const v = (e.clientY - rootRect.top) / rootRect.height;
 
-		if (expanded && ghostEl) {
-			for (const candidate of ghostEl.querySelectorAll('.info-card-surface')) {
+		if (expanded && modalEl()) {
+			for (const candidate of modalEl()!.querySelectorAll('.info-card-surface')) {
 				if (candidate !== surface && candidate instanceof HTMLElement) {
 					clearSurfaceGlow(candidate);
 				}
@@ -594,6 +651,39 @@
 		openingScrollLeft = readScrollLeft();
 		const startVisual = readCardRect(rootEl, anchorEl, { visual: true });
 		const startLayout = readCardRect(rootEl, anchorEl, { layout: true });
+		const preserveHover = isGridHovered();
+
+		const ghost = createGhostFromGrid({ preserveHover });
+		if (!ghost || !ghostEl) {
+			return;
+		}
+
+		const targetSize = centeredTargetSize(startLayout.width, startLayout.height);
+		const endCenter = viewportCenter();
+		const shellW = startLayout.width;
+		const shellH = startLayout.height;
+		const startScale = visualScaleFromLayout(
+			shellW,
+			shellH,
+			startVisual.width,
+			startVisual.height
+		);
+		const endScale = visualScaleFromLayout(shellW, shellH, targetSize.width, targetSize.height);
+		const startTx = startVisual.cx - endCenter.x;
+		const startTy = startVisual.cy - endCenter.y;
+
+		ghost.style.setProperty('--modal-rest-scale', String(endScale));
+
+		setMotionTransition(ghost, false);
+		setFlipTransition(ghostFlipEl, false);
+		applyMotionTransform(ghost, endCenter.x, endCenter.y, shellW, shellH, {
+			tx: startTx,
+			ty: startTy,
+			rotZ: startVisual.planeRot,
+			scale: startScale
+		});
+		mountInModalLayer(ghost);
+		void ghost.offsetHeight;
 
 		expanded = true;
 		hideGridCard();
@@ -602,44 +692,12 @@
 
 		applyStackZIndex(anchorEl, captureStackZIndex(anchorEl));
 
-		const targetSize = centeredTargetSize(startLayout.width, startLayout.height);
-		const endCenter = viewportCenter();
-
-		const ghost = createGhostFromGrid();
-		if (!ghost || !ghostEl) {
-			showGridCard();
-			expanded = false;
-			clearAppliedStackZIndex(anchorEl);
-			unlockCardModal();
-			return;
-		}
-
 		animating = true;
 		hoverLocked = true;
 		onModalOpen?.();
 
-		resetGhostTiltInstant();
 		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, FLIP_CLOSED_DEG);
-
-		const startTx = startVisual.cx - endCenter.x;
-		const startTy = startVisual.cy - endCenter.y;
-		const startScale = uniformScaleToFit(
-			targetSize.width,
-			targetSize.height,
-			startVisual.width,
-			startVisual.height
-		);
-
-		setMotionTransition(ghost, false);
-		setFlipTransition(ghostFlipEl, false);
-		applyMotionTransform(ghost, endCenter.x, endCenter.y, targetSize.width, targetSize.height, {
-			tx: startTx,
-			ty: startTy,
-			rotZ: startVisual.planeRot,
-			scale: startScale
-		});
-		mountInModalLayer(ghost);
-		void ghost.offsetHeight;
+		resetGhostTiltInstant();
 
 		await tick();
 
@@ -650,11 +708,11 @@
 		requestAnimationFrame(() => {
 			if (!ghostEl) return;
 			syncVignetteOpen();
-			applyMotionTransform(ghostEl, endCenter.x, endCenter.y, targetSize.width, targetSize.height, {
+			applyMotionTransform(ghostEl, endCenter.x, endCenter.y, shellW, shellH, {
 				tx: 0,
 				ty: 0,
 				rotZ: 0,
-				scale: 1
+				scale: endScale
 			});
 			if (enableFlip && ghostFlipEl) setFlipDeg(ghostFlipEl, FLIP_OPEN_DEG);
 		});
@@ -662,8 +720,7 @@
 		await waitModalMotion(ghost, ghostFlipEl);
 		resetGhostTiltInstant();
 		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, FLIP_OPEN_DEG);
-		finishGhostModalPose(ghost, targetSize.width, targetSize.height);
-		ghost.classList.remove('info-card--animating');
+		settleGhostModalCrisp(ghost, ghostFlipEl);
 		clearGhostMotion(ghost, ghostFlipEl);
 		animating = false;
 		requestAnimationFrame(() => refreshHoverFromPointer());
@@ -689,27 +746,28 @@
 		resetGhostTiltInstant();
 
 		const slotEnd = readCardRect(rootEl, anchorEl, { layout: true });
+		const slotVisual = readCardRect(rootEl, anchorEl, { visual: true });
+		const shellW = slotEnd.width;
+		const shellH = slotEnd.height;
 		const endRotZ = slotEnd.planeRot;
 		const endOpacity = readCardOpacity(rootEl);
 		const endStackZ = captureStackZIndex(anchorEl);
 		const opacityMotion = Math.abs(startOpacity - endOpacity) > 0.001;
 		const zIndexMotion = !!endStackZ;
+		const startScale = visualScaleFromLayout(shellW, shellH, modalVisual.width, modalVisual.height);
+		const endScale = visualScaleFromLayout(shellW, shellH, slotVisual.width, slotVisual.height);
 
 		applyStackZIndex(anchorEl, endStackZ);
 
 		const gridGhost = createDismissGhost(ghostEl, flipDeg);
 		if (!gridGhost) return;
 
+		gridGhost.classList.remove('info-card--modal-crisp');
+
 		if (ghostEl) removeFromModalLayer(ghostEl);
 		bindGhostElements(gridGhost);
 
 		const flipTarget = ghostFlipEl;
-		const startScale = uniformScaleToFit(
-			slotEnd.width,
-			slotEnd.height,
-			modalVisual.width,
-			modalVisual.height
-		);
 		const endTx = slotEnd.cx - pivotCx;
 		const endTy = slotEnd.cy - pivotCy;
 
@@ -718,7 +776,7 @@
 			includeZIndex: zIndexMotion
 		});
 		setFlipTransition(flipTarget, false);
-		applyMotionTransform(gridGhost, pivotCx, pivotCy, slotEnd.width, slotEnd.height, {
+		applyMotionTransform(gridGhost, pivotCx, pivotCy, shellW, shellH, {
 			tx: 0,
 			ty: 0,
 			rotZ: modalVisual.planeRot,
@@ -742,11 +800,11 @@
 			if (!ghostEl) return;
 			syncVignetteDismiss();
 			transitionStackZIndex(anchorEl, endStackZ);
-			applyMotionTransform(ghostEl, pivotCx, pivotCy, slotEnd.width, slotEnd.height, {
+			applyMotionTransform(ghostEl, pivotCx, pivotCy, shellW, shellH, {
 				tx: endTx,
 				ty: endTy,
 				rotZ: endRotZ,
-				scale: 1
+				scale: endScale
 			});
 			ghostEl.style.opacity = String(endOpacity);
 			if (endStackZ) ghostEl.style.zIndex = endStackZ;
@@ -760,7 +818,7 @@
 
 		const finalRect = readCardRect(rootEl, anchorEl, { layout: true });
 		gridGhost.style.transition = 'none';
-		applyMotionTransform(gridGhost, finalRect.cx, finalRect.cy, finalRect.width, finalRect.height, {
+		applyMotionTransform(gridGhost, finalRect.cx, finalRect.cy, shellW, shellH, {
 			tx: 0,
 			ty: 0,
 			rotZ: endRotZ,
@@ -801,7 +859,7 @@
 	onMount(() => {
 		const onPointerMove = (e: PointerEvent) => {
 			trackPointer(e.clientX, e.clientY);
-			if (expanded && ghostEl && !animating) refreshHoverFromPointer();
+			if (expanded && modalEl() && !animating) refreshHoverFromPointer();
 		};
 		window.addEventListener('pointermove', onPointerMove, { passive: true });
 		return () => window.removeEventListener('pointermove', onPointerMove);
@@ -839,28 +897,28 @@
 				{#if enableFlip}
 					<div class="info-card-flip-stage">
 						<div class="info-card-flip" bind:this={flipEl}>
-						<div class="info-card-face info-card-face--front">
-							<div
-								class="info-card-surface hover-polaroid-surface {surfaceClass}"
-								bind:this={surfaceEl}
-							>
-								<div class="holo-layer" aria-hidden="true"></div>
-								<div class="grid-base" aria-hidden="true"></div>
-								<div class="grid-cursor" aria-hidden="true"></div>
-								<slot name="front" />
+							<div class="info-card-face info-card-face--front">
+								<div
+									class="info-card-surface hover-polaroid-surface {surfaceClass}"
+									bind:this={surfaceEl}
+								>
+									<div class="holo-layer" aria-hidden="true"></div>
+									<div class="grid-base" aria-hidden="true"></div>
+									<div class="grid-cursor" aria-hidden="true"></div>
+									<slot name="front" />
+								</div>
 							</div>
-						</div>
-						<div class="info-card-face info-card-face--back">
-							<div
-								class="info-card-surface info-card-surface--back hover-polaroid-surface {surfaceClass}"
-								bind:this={backSurfaceEl}
-							>
-								<div class="holo-layer" aria-hidden="true"></div>
-								<div class="grid-base" aria-hidden="true"></div>
-								<div class="grid-cursor" aria-hidden="true"></div>
-								<slot name="back" />
+							<div class="info-card-face info-card-face--back">
+								<div
+									class="info-card-surface info-card-surface--back hover-polaroid-surface {surfaceClass}"
+									bind:this={backSurfaceEl}
+								>
+									<div class="holo-layer" aria-hidden="true"></div>
+									<div class="grid-base" aria-hidden="true"></div>
+									<div class="grid-cursor" aria-hidden="true"></div>
+									<slot name="back" />
+								</div>
 							</div>
-						</div>
 						</div>
 					</div>
 				{:else}
@@ -897,13 +955,153 @@
 		transition: none;
 	}
 
+	.info-card.info-card--ghost.info-card--animating,
+	.info-card.info-card--ghost.info-card--modal,
+	.info-card.info-card--ghost.info-card--animating .info-card-hover-lift,
+	.info-card.info-card--ghost.info-card--modal .info-card-hover-lift,
+	.info-card.info-card--ghost.info-card--animating .info-card-tilt,
+	.info-card.info-card--ghost.info-card--modal .info-card-tilt,
+	.info-card.info-card--ghost.info-card--animating .info-card-flip-stage,
+	.info-card.info-card--ghost.info-card--modal .info-card-flip-stage,
+	.info-card.info-card--ghost.info-card--animating .info-card-flip,
+	.info-card.info-card--ghost.info-card--modal .info-card-flip {
+		transform-style: preserve-3d;
+	}
+
+	.info-card.info-card--ghost.info-card--animating .info-card-flip-stage,
+	.info-card.info-card--ghost.info-card--modal .info-card-flip-stage {
+		overflow: visible;
+	}
+
+	.info-card.info-card--modal:not(.info-card--ghost),
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-hover-lift,
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-tilt,
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-flip-stage,
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-flip {
+		transform-style: preserve-3d;
+	}
+
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-flip-stage {
+		overflow: visible;
+	}
+
+	.info-card.info-card--modal:not(.info-card--ghost) .info-card-hover-lift {
+		transform: scale(1) translateY(0);
+		transition: none;
+	}
+
 	.info-card.info-card--ghost.info-card--animating .info-card-surface,
 	.info-card.info-card--ghost.info-card--animating .info-card-surface--back,
 	.info-card.info-card--ghost.info-card--modal .info-card-surface,
 	.info-card.info-card--ghost.info-card--modal .info-card-surface--back {
 		overflow: hidden;
+		transition: none !important;
 	}
 
+	/* Back lays out at modal width; fixed counter-scale cancels the shell warp. */
+	:global(.info-card--ghost .info-card-surface--back .card-row--back) {
+		transform: scale(calc(1 / var(--modal-rest-scale, 1)));
+		transform-origin: top left;
+		width: calc(100% * var(--modal-rest-scale, 1));
+		height: calc(100% * var(--modal-rest-scale, 1));
+	}
+
+	:global(.info-card--ghost .card-back-main) {
+		overflow: hidden;
+	}
+
+	/* Scaled grid/border/surface tokens match the warped flight so settle stays continuous. */
+	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface {
+		--grid-line: calc(1px * var(--modal-rest-scale, 1));
+		--grid-fine: calc(15px * var(--modal-rest-scale, 1));
+		--grid-spot-radius: calc(60px * var(--modal-rest-scale, 1));
+		--hp-shell-border: calc(2px * var(--modal-rest-scale, 1));
+		--hp-frame-border: calc(1px * var(--modal-rest-scale, 1));
+		--hp-frame-inset: calc(5px * var(--modal-rest-scale, 1));
+		--hp-shell-radius: calc(6px * var(--modal-rest-scale, 1));
+		--hp-frame-radius: calc(2px * var(--modal-rest-scale, 1));
+		border-width: var(--hp-shell-border);
+		border-radius: var(--hp-shell-radius);
+		border-color: var(--hp-border-hover);
+		background: var(--hp-bg-hover);
+		box-shadow: var(--hp-shadow-hover);
+		filter: brightness(1.12) saturate(1.15);
+		transition: none !important;
+	}
+
+	/* Logo backs keep edge-to-edge layout — same as flight and the real modal. */
+	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface:not(:global(.has-logo)) {
+		padding: calc(14px * var(--modal-rest-scale, 1));
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface:global(.has-logo) {
+		padding: 0;
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp:is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface {
+		filter: brightness(1.04) saturate(1.1);
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface::before {
+		inset: var(--hp-frame-inset);
+		border-width: var(--hp-frame-border);
+		border-radius: var(--hp-frame-radius);
+		border-color: rgba(220, 235, 255, 0.72);
+		box-shadow:
+			inset 0 0 calc(48px * var(--modal-rest-scale, 1)) rgba(180, 220, 255, 0.24),
+			0 0 calc(32px * var(--modal-rest-scale, 1)) rgba(180, 220, 255, 0.35);
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp:is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface::before {
+		border-color: rgba(var(--tone-border-hover), 0.42);
+		box-shadow:
+			inset 0 0 calc(48px * var(--modal-rest-scale, 1)) rgba(255, 255, 255, 0.16),
+			0 0 calc(32px * var(--modal-rest-scale, 1)) rgba(var(--tone-shadow), 0.14);
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface::after {
+		opacity: 0.92;
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp:is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface::after {
+		opacity: 0.5;
+	}
+
+	.info-card.info-card--ghost.info-card--modal-crisp .holo-layer {
+		opacity: 1;
+		animation-duration: 2.8s;
+	}
+
+	:global(.info-card--ghost.info-card--modal-crisp .info-card-surface--back .card-row--back) {
+		transform: none;
+		width: 100%;
+		height: 100%;
+	}
+
+	.info-card.info-card--ghost.info-card--animating .info-card-flip,
+	.info-card.info-card--ghost.info-card--animating .info-card-face,
+	.info-card.info-card--ghost.info-card--animating .info-card-surface,
 	.info-card.info-card--ghost.info-card--modal .info-card-flip,
 	.info-card.info-card--ghost.info-card--modal .info-card-face,
 	.info-card.info-card--ghost.info-card--modal .info-card-surface {
@@ -1087,6 +1285,7 @@
 
 	.info-card-face {
 		width: 100%;
+		height: 100%;
 		transform-style: preserve-3d;
 		backface-visibility: hidden;
 		-webkit-backface-visibility: hidden;
@@ -1125,6 +1324,7 @@
 		--pointer-u: 50%;
 		--pointer-v: 50%;
 		--spotlight: 0;
+		--grid-line: 1px;
 		--grid-fine: 15px;
 		--grid-spot-radius: 60px;
 		--hp-border: rgba(176, 196, 228, 0.62);
@@ -1241,15 +1441,15 @@
 			repeating-linear-gradient(
 				to bottom,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(186, 206, 234, 0.07) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(186, 206, 234, 0.07) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(186, 206, 234, 0.07) var(--grid-fine)
 			),
 			repeating-linear-gradient(
 				to right,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(186, 206, 234, 0.06) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(186, 206, 234, 0.06) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(186, 206, 234, 0.06) var(--grid-fine)
 			);
 	}
@@ -1259,15 +1459,15 @@
 			repeating-linear-gradient(
 				to bottom,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(210, 228, 255, 0.82) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(210, 228, 255, 0.82) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(210, 228, 255, 0.82) var(--grid-fine)
 			),
 			repeating-linear-gradient(
 				to right,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(200, 222, 252, 0.76) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(200, 222, 252, 0.76) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(200, 222, 252, 0.76) var(--grid-fine)
 			);
 		opacity: var(--spotlight, 0);
@@ -1551,15 +1751,15 @@
 			repeating-linear-gradient(
 				to bottom,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(var(--tone-grid), 0.12) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(var(--tone-grid), 0.12) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(var(--tone-grid), 0.12) var(--grid-fine)
 			),
 			repeating-linear-gradient(
 				to right,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(var(--tone-grid), 0.1) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(var(--tone-grid), 0.1) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(var(--tone-grid), 0.1) var(--grid-fine)
 			);
 	}
@@ -1570,15 +1770,15 @@
 			repeating-linear-gradient(
 				to bottom,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(var(--tone-grid-cursor), 0.5) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(var(--tone-grid-cursor), 0.5) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(var(--tone-grid-cursor), 0.5) var(--grid-fine)
 			),
 			repeating-linear-gradient(
 				to right,
 				transparent 0,
-				transparent calc(var(--grid-fine) - 1px),
-				rgba(var(--tone-grid-cursor), 0.44) calc(var(--grid-fine) - 1px),
+				transparent calc(var(--grid-fine) - var(--grid-line)),
+				rgba(var(--tone-grid-cursor), 0.44) calc(var(--grid-fine) - var(--grid-line)),
 				rgba(var(--tone-grid-cursor), 0.44) var(--grid-fine)
 			);
 	}
