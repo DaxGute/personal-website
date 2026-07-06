@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
 	import SectionNav from '$lib/SectionNav.svelte';
-	import { isCardModalOpen, registerScrollContainer } from '$lib/cardModal';
+	import { isCardModalOpen, layoutScrollLeft, registerScrollContainer } from '$lib/cardModal';
 	import { panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import TitlePanel from '$lib/title/TitlePanel.svelte';
 	import ExperiencesPanel from '$lib/experiences/ExperiencesPanel.svelte';
@@ -175,6 +175,7 @@
 	}
 
 	function scrollToPanel(id: string) {
+		if (isCardModalOpen()) return;
 		if (!scroller) return;
 		const el = document.getElementById(id);
 		if (!el) return;
@@ -277,7 +278,7 @@
 		const updateProgress = () => {
 			if (!scroller) return;
 			clampScroller();
-			const x = scroller!.scrollLeft;
+			const x = layoutScrollLeft();
 			ribbonCmp?.syncRevealScroll(x);
 			sectionNavCmp?.syncScrollRevealed(x);
 			if (panelOffsets.length === 0) return;
@@ -371,6 +372,11 @@
 			scroller.scrollTo({ left: next, top: 0, behavior: 'auto' });
 		};
 
+		const onModalScrollLock = () => {
+			if (!isCardModalOpen() || !scroller) return;
+			if (scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
+		};
+
 		const onScrollLock = () => {
 			if (!greetingScrollLocked) return;
 			if (!scroller) return;
@@ -417,6 +423,7 @@
 		scroller.addEventListener('wheel', wheel, { passive: false });
 		scroller.addEventListener('scroll', onScroll, { passive: true });
 		scroller.addEventListener('scroll', onScrollLock, { passive: true });
+		scroller.addEventListener('scroll', onModalScrollLock, { passive: true });
 		window.addEventListener('keydown', keyLock);
 		window.addEventListener('resize', () => {
 			measure();
@@ -427,6 +434,7 @@
 			scroller?.removeEventListener('wheel', wheel as EventListener);
 			scroller?.removeEventListener('scroll', onScroll);
 			scroller?.removeEventListener('scroll', onScrollLock);
+			scroller?.removeEventListener('scroll', onModalScrollLock);
 			window.removeEventListener('keydown', keyLock);
 			cancelScrollAnim();
 			cancelEduSpreadAnim();

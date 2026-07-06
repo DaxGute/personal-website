@@ -100,9 +100,6 @@
 	:global(#experiences) .experience-item:nth-child(4) {
 		z-index: 10;
 	}
-	:global(#experiences) .experience-item:hover {
-		z-index: 40;
-	}
 
 	@media (min-width: 720px) {
 		:global(#experiences) .experience-list {

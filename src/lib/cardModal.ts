@@ -6,6 +6,19 @@ export const CARD_MODAL_MS = 760;
 /** Visual-only stage zoom on the modal backdrop clone (not applied to the real .stage). */
 export const STAGE_VIGNETTE_SCALE = 1.035;
 
+export type StageZoomTransform = {
+	tx: number;
+	ty: number;
+	scale: number;
+	originX: number;
+	originY: number;
+};
+
+export type VignetteOrigin = {
+	x: number;
+	y: number;
+};
+
 const MODAL_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
 const VIGNETTE_SIZE_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
 
@@ -23,6 +36,11 @@ export function registerScrollContainer(el: HTMLElement) {
 
 export function readScrollLeft() {
 	return scrollContainer?.scrollLeft ?? 0;
+}
+
+/** Scroll position used for panel layout vars; frozen while modal scroll is compensated to 0. */
+export function layoutScrollLeft() {
+	return lockCount > 0 ? savedScrollLeft : readScrollLeft();
 }
 
 export function writeScrollLeft(left: number) {
@@ -69,6 +87,17 @@ export function viewportCenter() {
 
 function findStageEl() {
 	return document.querySelector('.desktop-app > .stage') ?? document.querySelector('.stage');
+}
+
+function findScrollTrackEl() {
+	return (
+		document.querySelector('.desktop-app > .stage .scroll-track') ??
+		document.querySelector('.scroll-track')
+	);
+}
+
+function findStageZoomEl() {
+	return findScrollTrackEl() ?? findStageEl();
 }
 
 const STAGE_CLONE_ID_SUFFIX = '-stage-clone';
@@ -187,6 +216,155 @@ function prepareStageClone(source: HTMLElement, clone: HTMLElement) {
 	stripModalCardFromClone(clone);
 }
 
+function applyStageZoomVars(
+	tx: number,
+	ty: number,
+	scale: number,
+	originX = 0,
+	originY = 0
+) {
+	document.documentElement.style.setProperty('--stage-tx', `${tx}px`);
+	document.documentElement.style.setProperty('--stage-ty', `${ty}px`);
+	document.documentElement.style.setProperty('--stage-scale', String(scale));
+	document.documentElement.style.setProperty('--stage-origin-x', `${originX}px`);
+	document.documentElement.style.setProperty('--stage-origin-y', `${originY}px`);
+}
+
+function clearStageZoomVars() {
+	document.documentElement.style.removeProperty('--stage-tx');
+	document.documentElement.style.removeProperty('--stage-ty');
+	document.documentElement.style.removeProperty('--stage-scale');
+	document.documentElement.style.removeProperty('--stage-origin-x');
+	document.documentElement.style.removeProperty('--stage-origin-y');
+}
+
+function applyScrollCompensate(scrollLeft: number) {
+	document.documentElement.style.setProperty(
+		'--track-scroll-compensate',
+		`${-scrollLeft}px`
+	);
+}
+
+function clearScrollCompensate() {
+	document.documentElement.style.removeProperty('--track-scroll-compensate');
+}
+
+/** Track-local zoom origin — stable across scroll reset + compensate translate. */
+export function computeTrackZoomOrigin(
+	cardCenterX: number,
+	cardCenterY: number,
+	scrollLeft = readScrollLeft()
+) {
+	const scroller = scrollContainer;
+	if (scroller instanceof HTMLElement) {
+		const scrollerRect = scroller.getBoundingClientRect();
+		return {
+			originX: cardCenterX - scrollerRect.left + scrollLeft,
+			originY: cardCenterY - scrollerRect.top
+		};
+	}
+
+	const track = findScrollTrackEl();
+	if (track instanceof HTMLElement) {
+		const trackRect = track.getBoundingClientRect();
+		return {
+			originX: cardCenterX - trackRect.left,
+			originY: cardCenterY - trackRect.top
+		};
+	}
+
+	return { originX: cardCenterX, originY: cardCenterY };
+}
+
+/** Zoom scroll-track around card center, then translate so the card lands on viewport center. */
+export function computeStageZoomTransform(
+	cardCenterX: number,
+	cardCenterY: number,
+	cardVisualWidth: number,
+	cardVisualHeight: number,
+	targetVisualWidth: number,
+	targetVisualHeight: number,
+	scrollLeft = readScrollLeft()
+): StageZoomTransform {
+	if (cardVisualWidth <= 0 || cardVisualHeight <= 0) {
+		return { tx: 0, ty: 0, scale: 1, originX: 0, originY: 0 };
+	}
+	const scale = Math.min(
+		targetVisualWidth / cardVisualWidth,
+		targetVisualHeight / cardVisualHeight
+	);
+	const center = viewportCenter();
+	const { originX, originY } = computeTrackZoomOrigin(cardCenterX, cardCenterY, scrollLeft);
+	return {
+		tx: center.x - cardCenterX,
+		ty: center.y - cardCenterY,
+		scale,
+		originX,
+		originY
+	};
+}
+
+export function snapStageZoom(
+	tx: number,
+	ty: number,
+	scale: number,
+	originX = 0,
+	originY = 0
+) {
+	const zoomEl = findStageZoomEl();
+	if (zoomEl instanceof HTMLElement) {
+		const transition = zoomEl.style.transition;
+		zoomEl.style.transition = 'none';
+		applyStageZoomVars(tx, ty, scale, originX, originY);
+		void zoomEl.offsetHeight;
+		zoomEl.style.transition = transition;
+		return;
+	}
+	applyStageZoomVars(tx, ty, scale, originX, originY);
+}
+
+export function setStageZoom(
+	tx: number,
+	ty: number,
+	scale: number,
+	originX = 0,
+	originY = 0
+) {
+	applyStageZoomVars(tx, ty, scale, originX, originY);
+}
+
+export function resetStageZoom() {
+	snapStageZoom(0, 0, 1, 0, 0);
+	clearStageZoomVars();
+}
+
+export function waitStageZoomMotion() {
+	return new Promise<void>((resolve) => {
+		const ms = modalMotionMs();
+		const zoomEl = findStageZoomEl();
+		if (!(zoomEl instanceof HTMLElement) || ms === 0) {
+			resolve();
+			return;
+		}
+
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			zoomEl.removeEventListener('transitionend', onEnd);
+			window.clearTimeout(timer);
+			resolve();
+		};
+		const onEnd = (e: TransitionEvent) => {
+			if (e.target !== zoomEl || e.propertyName !== 'transform') return;
+			finish();
+		};
+
+		zoomEl.addEventListener('transitionend', onEnd);
+		const timer = window.setTimeout(finish, ms + 80);
+	});
+}
+
 function mountStageClone() {
 	if (stageCloneEl) return;
 	const stage = findStageEl();
@@ -252,11 +430,6 @@ const VIGNETTE_OPEN_RY = '0vmax';
 const VIGNETTE_CLOSED_RX = '120vmax';
 const VIGNETTE_CLOSED_RY = '120vmax';
 
-export type VignetteOrigin = {
-	x: number;
-	y: number;
-};
-
 function setVignetteOval(rx: string, ry: string) {
 	if (!backdropEl) return;
 	backdropEl.style.setProperty('--vignette-rx', rx);
@@ -313,37 +486,29 @@ function snapVignetteClosed() {
 
 function prepareModalBackdrop() {
 	ensureModalRoot();
-	document.documentElement.style.setProperty('--card-modal-ms', `${CARD_MODAL_MS}ms`);
+	document.documentElement.style.setProperty('--card-modal-ms', `${modalMotionMs()}ms`);
 	document.documentElement.style.setProperty('--card-modal-easing', MODAL_EASING);
 	document.documentElement.style.setProperty('--vignette-size-easing', VIGNETTE_SIZE_EASING);
 	snapVignetteClosed();
 }
 
-/** Contract vignette oval (same frame as card flight). */
+/** Contract vignette oval (same frame as stage zoom). */
 export function syncVignetteOpen() {
 	ensureModalRoot();
 	if (!backdropEl) return;
-	mountStageClone();
-	document.documentElement.classList.add('card-modal-open');
-	restoreSavedScroll();
+	beginStageZoomScrollCompensate();
 	resetVignetteCenter();
 	setVignetteInteractive(false);
 	setVignetteOval(VIGNETTE_CLOSED_RX, VIGNETTE_CLOSED_RY);
 	void backdropEl.offsetHeight;
 	setVignetteInteractive(true);
 	setVignetteOval(VIGNETTE_OPEN_RX, VIGNETTE_OPEN_RY);
-	setStageCloneZoomed(true);
 }
 
 /** Expand vignette oval out from a viewport point while stage unzooms. */
 export function syncVignetteDismiss(origin?: VignetteOrigin) {
 	ensureModalRoot();
-	if (!backdropEl) {
-		setStageCloneZoomed(false);
-		return;
-	}
-
-	setStageCloneZoomed(false);
+	if (!backdropEl) return;
 	if (!backdropEl.classList.contains('is-visible')) return;
 
 	const start = dismissStartRadii();
@@ -389,7 +554,7 @@ export function waitVignetteMotion() {
 
 /** Reset vignette after unlock — collapse animation already expanded the oval. */
 export function dismissVignette() {
-	setStageCloneZoomed(false);
+	// Stage zoom reset is handled by resetStageZoom() in unlockCardModal.
 }
 
 export function dismissBackdrop() {
@@ -405,6 +570,16 @@ export function removeFromModalLayer(el: HTMLElement) {
 	el.remove();
 }
 
+function beginStageZoomScrollCompensate() {
+	if (document.documentElement.classList.contains('card-modal-open')) return;
+	applyScrollCompensate(savedScrollLeft);
+	document.documentElement.classList.add('card-modal-open');
+	// Freeze compensate offset before animating zoom (avoids sliding in from scroll origin).
+	snapStageZoom(0, 0, 1, 0, 0);
+	writeScrollLeft(0);
+	pinScrollLeft(0);
+}
+
 export function lockCardModal(preScrollLeft?: number) {
 	lockCount++;
 	if (lockCount === 1) {
@@ -412,7 +587,6 @@ export function lockCardModal(preScrollLeft?: number) {
 			savedScrollLeft = preScrollLeft ?? scrollContainer.scrollLeft;
 		}
 		prepareModalBackdrop();
-		restoreSavedScroll();
 	}
 }
 
@@ -422,6 +596,8 @@ export function unlockCardModal() {
 		document.documentElement.classList.remove('card-modal-open');
 		dismissBackdrop();
 		snapVignetteClosed();
+		resetStageZoom();
+		clearScrollCompensate();
 		removeStageClone();
 		restoreSavedScroll();
 	}

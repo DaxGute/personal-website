@@ -78,31 +78,47 @@
 </script>
 
 <div class="polaroid-root" bind:this={rootEl}>
-	<CardShell theme="green" class="polaroid-card" enableFlip={false} onModalOpen={onCardModalOpen}>
-		<figure
+	<CardShell theme="green" class="polaroid-card" onModalOpen={onCardModalOpen}>
+		<div
+			slot="front"
 			class="polaroid-content"
 			class:is-revealed={revealed}
 			class:reveal-complete={revealComplete}
+			role="group"
+			aria-label={caption}
 		>
-			<div class="photo">
-				{#if src}
-					<img src={src} {alt} {loading} decoding="async" />
-				{:else}
-					<div class="placeholder" aria-hidden="true"></div>
-				{/if}
-				<div
-					class="reveal-overlay"
-					aria-hidden="true"
-					on:animationend={handleRevealAnimationEnd}
-				></div>
+			<div class="polaroid-front-main">
+				<div class="photo">
+					{#if src}
+						<img src={src} {alt} {loading} decoding="async" />
+					{:else}
+						<div class="placeholder" aria-hidden="true"></div>
+					{/if}
+					<div
+						class="reveal-overlay"
+						aria-hidden="true"
+						on:animationend={handleRevealAnimationEnd}
+					></div>
+				</div>
+				<div class="caption">
+					<span class="experience-company">{caption}</span>
+					{#if subtitle}
+						<span class="experience-sub wrap-sub">{subtitle}</span>
+					{/if}
+				</div>
 			</div>
-			<figcaption class="caption">
-				<span class="experience-company">{caption}</span>
+			<p class="polaroid-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
+		</div>
+
+		<div slot="back" class="polaroid-content polaroid-content--back">
+			<div class="polaroid-back-main">
+				<p class="polaroid-back-marker">backside</p>
+				<p class="experience-company">{caption}</p>
 				{#if subtitle}
-					<span class="experience-sub wrap-sub">{subtitle}</span>
+					<p class="experience-sub wrap-sub">{subtitle}</p>
 				{/if}
-			</figcaption>
-		</figure>
+			</div>
+		</div>
 	</CardShell>
 </div>
 
@@ -118,10 +134,84 @@
 
 	.polaroid-content {
 		margin: 0;
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+
+	.polaroid-front-main {
 		display: flex;
 		flex-direction: column;
 		gap: 10px;
 		height: 100%;
+		transition: opacity 0.28s ease;
+	}
+
+	:global(.hover-polaroid-scale:hover) .polaroid-front-main {
+		opacity: 0;
+	}
+
+	.polaroid-hover-hint {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin: 0;
+		padding: 0 12px;
+		opacity: 0;
+		pointer-events: none;
+		color: #e8f2ff;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		text-align: center;
+		text-shadow:
+			0 1px 2px rgba(11, 18, 32, 0.85),
+			0 0 12px rgba(170, 210, 255, 0.4);
+		transition: opacity 0.28s ease;
+	}
+
+	:global(.hover-polaroid-scale:hover) .polaroid-hover-hint {
+		opacity: 1;
+	}
+
+	.polaroid-content--back {
+		justify-content: center;
+	}
+
+	.polaroid-back-main {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		text-align: center;
+	}
+
+	.polaroid-back-marker {
+		margin: 0 0 4px;
+		color: rgba(var(--tone-sub), 0.72);
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+		text-transform: lowercase;
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	.polaroid-content--back :global(.experience-company) {
+		font-size: 14px;
+		line-height: 1.25;
+	}
+
+	.polaroid-content--back :global(.experience-sub) {
+		font-size: 12px;
+		line-height: 1.3;
+		letter-spacing: 0.01em;
 	}
 
 	.photo {

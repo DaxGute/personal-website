@@ -2,17 +2,21 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import {
 		claimCardModal,
+		computeStageZoomTransform,
+		computeTrackZoomOrigin,
 		lockCardModal,
 		modalMotionMs,
 		modalTransition,
 		mountInModalLayer,
 		readScrollLeft,
 		releaseCardModal,
-		removeFromModalLayer,
+		setStageZoom,
 		syncVignetteDismiss,
 		syncVignetteOpen,
+		type StageZoomTransform,
 		unlockCardModal,
 		viewportCenter,
+		waitStageZoomMotion,
 		waitVignetteMotion
 	} from '$lib/cardModal';
 
@@ -38,10 +42,13 @@
 	let hoverFrozen = false;
 	let suppressHover = false;
 	let dismissing = false;
-	let ghostEl: HTMLElement | null = null;
-	let ghostFlipEl: HTMLElement | null = null;
-	let ghostTiltEl: HTMLElement | null = null;
 	let openingScrollLeft = 0;
+	let zoomTarget: StageZoomTransform | null = null;
+	let anchorHome: { parent: HTMLElement; next: ChildNode | null } | null = null;
+	let anchorPlaceholder: HTMLElement | null = null;
+	let openPinStart: PinMotionState | null = null;
+	let openPinEnd: PinMotionState | null = null;
+	let openPinFlightEnd: PinMotionState | null = null;
 	let lastPointerX = 0;
 	let lastPointerY = 0;
 
@@ -55,15 +62,23 @@
 	}
 
 	function isPointerOverModal() {
-		const el = modalEl();
-		if (!el) return false;
-		const hit = document.elementFromPoint(lastPointerX, lastPointerY);
-		return !!hit && el.contains(hit);
+		const surface = activeSurfaceEl();
+		if (!surface) return false;
+		const rect = surface.getBoundingClientRect();
+		return (
+			lastPointerX >= rect.left &&
+			lastPointerX <= rect.right &&
+			lastPointerY >= rect.top &&
+			lastPointerY <= rect.bottom
+		);
 	}
 
 	function modalEl() {
-		if (!expanded) return rootEl;
-		return ghostEl ?? rootEl;
+		return rootEl;
+	}
+
+	function isShowingBack() {
+		return expanded && enableFlip && readFlipDeg(flipEl) === FLIP_OPEN_DEG;
 	}
 
 	function refreshHoverFromPointer() {
@@ -74,24 +89,23 @@
 			for (const surface of el.querySelectorAll('.info-card-surface')) {
 				if (surface instanceof HTMLElement) clearSurfaceGlow(surface);
 			}
+			if (!hoverLocked && rootEl) {
+				resetTiltInstant();
+				rootEl.style.setProperty('--scale', '1');
+				rootEl.style.setProperty('--hover', '0');
+			}
 			return;
 		}
-		setPointerGlow(pointerEventAtLastPointer());
+		const e = pointerEventAtLastPointer();
+		setPointerGlow(e);
+		applyBackHoverTilt(e);
 	}
 
 	function activeSurfaceEl(): HTMLElement | null {
 		if (!expanded) return surfaceEl;
-		if (!enableFlip) {
-			const ghostFront = ghostEl?.querySelector('.info-card-surface:not(.info-card-surface--back)');
-			return ghostFront instanceof HTMLElement ? ghostFront : surfaceEl;
-		}
-		if (readFlipDeg(ghostFlipEl) === FLIP_OPEN_DEG) {
-			const ghostBack = ghostEl?.querySelector('.info-card-surface--back');
-			if (ghostBack instanceof HTMLElement) return ghostBack;
-			return backSurfaceEl ?? surfaceEl;
-		}
-		const ghostFront = ghostEl?.querySelector('.info-card-surface:not(.info-card-surface--back)');
-		return ghostFront instanceof HTMLElement ? ghostFront : surfaceEl;
+		if (!enableFlip) return surfaceEl;
+		if (readFlipDeg(flipEl) === FLIP_OPEN_DEG) return backSurfaceEl ?? surfaceEl;
+		return surfaceEl;
 	}
 
 	function prefersReducedMotion() {
@@ -104,12 +118,141 @@
 	const FLIP_OPEN_DEG = 180;
 	const FLIP_CLOSED_DEG = 0;
 
+	type PinMotionState = {
+		cx: number;
+		cy: number;
+		scale: number;
+		layoutW: number;
+		layoutH: number;
+		rotZ: number;
+	};
+
+	function pinCenter(state: PinMotionState) {
+		return { x: state.cx, y: state.cy };
+	}
+
+	function visualScaleFromLayout(
+		layoutW: number,
+		layoutH: number,
+		visualW: number,
+		visualH: number
+	) {
+		if (layoutW <= 0 || layoutH <= 0) return 1;
+		return Math.min(visualW / layoutW, visualH / layoutH);
+	}
+
+	function computePinState(
+		layoutW: number,
+		layoutH: number,
+		cx: number,
+		cy: number,
+		visualW: number,
+		visualH: number,
+		rotZ = 0
+	): PinMotionState {
+		const scale = visualScaleFromLayout(layoutW, layoutH, visualW, visualH);
+		return { cx, cy, scale, layoutW, layoutH, rotZ };
+	}
+
+	function pinStateAtShell(
+		shellW: number,
+		shellH: number,
+		cx: number,
+		cy: number,
+		scale: number,
+		rotZ: number
+	): PinMotionState {
+		return { cx, cy, scale, layoutW: shellW, layoutH: shellH, rotZ };
+	}
+
+	function pinTransform(scale: number, rotZ: number) {
+		return `translate(-50%, -50%) rotate(${rotZ.toFixed(3)}deg) scale(${scale})`;
+	}
+
+	function parentSkipsPinPlaceholder(parent: HTMLElement) {
+		const pos = getComputedStyle(parent).position;
+		return pos === 'absolute' || pos === 'fixed';
+	}
+
+	function ensurePinMounted(layoutW: number, layoutH: number) {
+		if (!anchorEl || !rootEl) return false;
+
+		if (!anchorHome && anchorEl.parentElement) {
+			anchorHome = { parent: anchorEl.parentElement, next: anchorEl.nextSibling };
+		}
+		if (!anchorEl.classList.contains('info-card-anchor--zoom-pinned') && anchorHome) {
+			if (!parentSkipsPinPlaceholder(anchorHome.parent)) {
+				anchorPlaceholder = document.createElement('div');
+				anchorPlaceholder.className = 'info-card-anchor info-card-anchor--zoom-placeholder';
+				anchorPlaceholder.setAttribute('aria-hidden', 'true');
+				anchorPlaceholder.style.width = `${layoutW}px`;
+				anchorPlaceholder.style.height = `${layoutH}px`;
+				anchorHome.parent.insertBefore(anchorPlaceholder, anchorEl);
+			}
+			mountInModalLayer(anchorEl);
+			anchorEl.classList.add('info-card-anchor--zoom-pinned');
+		}
+
+		anchorEl.style.position = 'fixed';
+		anchorEl.style.margin = '0';
+		anchorEl.style.zIndex = '2';
+		anchorEl.style.transformOrigin = 'center center';
+		return true;
+	}
+
+	function applyPinState(state: PinMotionState) {
+		if (!ensurePinMounted(state.layoutW, state.layoutH)) return;
+		anchorEl!.style.left = `${state.cx}px`;
+		anchorEl!.style.top = `${state.cy}px`;
+		anchorEl!.style.width = `${state.layoutW}px`;
+		anchorEl!.style.height = `${state.layoutH}px`;
+		anchorEl!.style.transform = pinTransform(state.scale, state.rotZ);
+	}
+
+	function setPinTransition(enabled: boolean, { includeSize = false }: { includeSize?: boolean } = {}) {
+		if (!anchorEl) return;
+		const motion = modalTransition();
+		if (!enabled || motion === 'none') {
+			anchorEl.style.transition = 'none';
+			return;
+		}
+		const parts = [`left ${motion}`, `top ${motion}`, `transform ${motion}`];
+		if (includeSize) {
+			parts.push(`width ${motion}`, `height ${motion}`);
+		}
+		anchorEl.style.transition = parts.join(', ');
+	}
+
+	function snapPinState(state: PinMotionState) {
+		setPinTransition(false);
+		applyPinState(state);
+		void anchorEl?.offsetHeight;
+	}
+
+	function animatePinTo(state: PinMotionState) {
+		setPinTransition(modalMotionMs() > 0);
+		requestAnimationFrame(() => applyPinState(state));
+	}
+
 	function isInteractiveTarget(target: EventTarget | null) {
 		return target instanceof Element && !!target.closest('a, button, input, textarea, select, label');
 	}
 
 	function tiltTransform(rotXDeg: number, rotYDeg: number) {
 		return `perspective(${TILT_PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
+	}
+
+	function toCrispPinState(state: PinMotionState): PinMotionState {
+		const visualW = state.layoutW * state.scale;
+		const visualH = state.layoutH * state.scale;
+		return {
+			cx: Math.round(state.cx),
+			cy: Math.round(state.cy),
+			scale: 1,
+			layoutW: Math.round(visualW),
+			layoutH: Math.round(visualH),
+			rotZ: 0
+		};
 	}
 
 	function resetTiltInstant() {
@@ -166,16 +309,6 @@
 
 	function motionTransform(tx: number, ty: number, rotZ: number, scale = 1) {
 		return `translate(-50%, -50%) translate3d(${tx}px, ${ty}px, 0) rotate(${rotZ}deg) scale(${scale})`;
-	}
-
-	function visualScaleFromLayout(
-		layoutW: number,
-		layoutH: number,
-		visualW: number,
-		visualH: number
-	) {
-		if (layoutW <= 0 || layoutH <= 0) return 1;
-		return Math.min(visualW / layoutW, visualH / layoutH);
 	}
 
 	function readCardRect(
@@ -378,108 +511,6 @@
 		await Promise.all(waits);
 	}
 
-	function finishGhostModalPose(
-		el: HTMLElement,
-		cx: number,
-		cy: number,
-		width: number,
-		height: number,
-		scale = 1
-	) {
-		el.style.transition = 'none';
-		applyMotionTransform(el, cx, cy, width, height, {
-			tx: 0,
-			ty: 0,
-			rotZ: 0,
-			scale
-		});
-		void el.offsetHeight;
-	}
-
-	/** Snap to true modal layout (crisp text) while scaled grid tokens preserve warp tiling. */
-	function settleGhostModalCrisp(el: HTMLElement, flipTarget: HTMLElement | null) {
-		// Flight CSS uses transition:!important on .info-card--animating — strip it before the snap.
-		el.classList.remove('info-card--animating');
-		el.style.setProperty('transition', 'none', 'important');
-		flipTarget?.style.setProperty('transition', 'none', 'important');
-		void el.offsetHeight;
-
-		const rect = el.getBoundingClientRect();
-		const cx = rect.left + rect.width / 2;
-		const cy = rect.top + rect.height / 2;
-		applyMotionTransform(el, cx, cy, rect.width, rect.height, { tx: 0, ty: 0, rotZ: 0, scale: 1 });
-		void el.offsetHeight;
-		el.classList.add('info-card--modal-crisp');
-		void el.offsetHeight;
-
-		el.style.removeProperty('transition');
-		flipTarget?.style.removeProperty('transition');
-	}
-
-	function clearGhostRect(el: HTMLElement) {
-		el.style.position = '';
-		el.style.top = '';
-		el.style.left = '';
-		el.style.right = '';
-		el.style.bottom = '';
-		el.style.width = '';
-		el.style.height = '';
-		el.style.margin = '';
-		el.style.transform = '';
-		el.style.opacity = '';
-		el.style.zIndex = '';
-		el.style.removeProperty('--modal-rest-scale');
-		el.classList.remove(
-			'info-card--modal',
-			'info-card--modal-centered',
-			'info-card--modal-crisp',
-			'info-card--ghost'
-		);
-	}
-
-	function hideGridCard() {
-		if (!rootEl || !anchorEl) return;
-		anchorEl.dataset.modalSlot = 'true';
-		rootEl.classList.add('info-card--grid-hidden');
-	}
-
-	function showGridCard() {
-		if (anchorEl) delete anchorEl.dataset.modalSlot;
-		rootEl?.classList.remove('info-card--grid-hidden');
-		clearHoverVisuals();
-		resetTiltInstant();
-	}
-
-	function isGridHovered() {
-		if (!rootEl) return false;
-		const hover =
-			rootEl.style.getPropertyValue('--hover') || getComputedStyle(rootEl).getPropertyValue('--hover');
-		return hover.trim() === '1';
-	}
-
-	function bindGhostElements(ghost: HTMLElement) {
-		ghostEl = ghost;
-		ghostFlipEl = ghost.querySelector('.info-card-flip');
-		ghostTiltEl = ghost.querySelector('.info-card-tilt');
-	}
-
-	function prepareGhostForFlight(ghost: HTMLElement) {
-		ghost.classList.add('info-card--animating');
-
-		const lift = ghost.querySelector('.info-card-hover-lift');
-		if (lift instanceof HTMLElement) {
-			lift.style.transition = 'none';
-			void lift.offsetHeight;
-			lift.style.transition = '';
-		}
-
-		const tilt = ghost.querySelector('.info-card-tilt');
-		if (tilt instanceof HTMLElement) {
-			tilt.style.transition = 'none';
-			void tilt.offsetHeight;
-		}
-	}
-
 	function readFlipDeg(flipTarget: HTMLElement | null) {
 		if (!flipTarget) return FLIP_CLOSED_DEG;
 		const transform = flipTarget.style.transform || getComputedStyle(flipTarget).transform;
@@ -491,51 +522,6 @@
 		const match = transform.match(/rotateY\(([-\d.]+)deg\)/);
 		if (!match) return FLIP_CLOSED_DEG;
 		return Math.abs(parseFloat(match[1])) > 90 ? FLIP_OPEN_DEG : FLIP_CLOSED_DEG;
-	}
-
-	function createDismissGhost(modalGhost: HTMLElement, flipDeg: number) {
-		const ghost = modalGhost.cloneNode(true) as HTMLElement;
-		ghost.classList.add('info-card--animating', 'info-card--dismissing');
-		if (enableFlip) ghost.classList.add('info-card--flip-dismiss');
-		ghost.setAttribute('aria-hidden', 'true');
-
-		const flip = ghost.querySelector('.info-card-flip');
-		if (enableFlip && flip instanceof HTMLElement) resetFlipInstant(flip, flipDeg);
-
-		return ghost;
-	}
-
-	function createGhostFromGrid({ preserveHover = false }: { preserveHover?: boolean } = {}) {
-		if (!rootEl) return null;
-		const ghost = rootEl.cloneNode(true) as HTMLElement;
-		ghost.classList.add('info-card--ghost', 'info-card-motion', 'info-card--modal');
-		ghost.classList.remove(
-			'info-card--grid-hidden',
-			'info-card--dismissing',
-			'info-card--expanded'
-		);
-		if (preserveHover) {
-			ghost.classList.add('info-card--hover-frozen', 'info-card--preserve-grid-hover');
-		}
-		ghost.setAttribute('aria-hidden', 'true');
-		resetCardFlipClosed(ghost);
-		prepareGhostForFlight(ghost);
-		bindGhostElements(ghost);
-		return ghost;
-	}
-
-	function destroyGhost() {
-		if (ghostEl) removeFromModalLayer(ghostEl);
-		ghostEl = null;
-		ghostFlipEl = null;
-		ghostTiltEl = null;
-	}
-
-	function resetGhostTiltInstant() {
-		if (!ghostTiltEl) return;
-		ghostTiltEl.style.transition = 'none';
-		ghostTiltEl.style.transform = tiltTransform(0, 0);
-		void ghostTiltEl.offsetHeight;
 	}
 
 	function focusTargetSize(width: number, height: number) {
@@ -560,23 +546,43 @@
 		tiltEl.style.transform = tiltTransform(rotXDeg, rotYDeg);
 	}
 
+	async function waitFlipMotion(flipTarget: HTMLElement | null) {
+		if (!enableFlip || !flipTarget) return;
+		await waitTransition(flipTarget, 'transform', modalMotionMs());
+	}
+
+	function isGridHovered() {
+		if (!rootEl) return false;
+		const hover =
+			rootEl.style.getPropertyValue('--hover') || getComputedStyle(rootEl).getPropertyValue('--hover');
+		return hover.trim() === '1';
+	}
+
+	function applyExpandedHoverVisuals(preserveHover: boolean) {
+		if (!rootEl) return;
+		hoverFrozen = preserveHover;
+	}
+
 	function clearSurfaceGlow(surface: HTMLElement | null | undefined) {
-		surface?.style.setProperty('--spotlight', '0');
-		surface?.style.setProperty('--pointer-u', '50%');
-		surface?.style.setProperty('--pointer-v', '50%');
+		if (!surface) return;
+		surface.classList.add('info-card-surface--spotlight-off');
+		surface.style.setProperty('--spotlight', '0');
+		void surface.offsetHeight;
+		surface.classList.remove('info-card-surface--spotlight-off');
 	}
 
 	function setPointerGlow(e: PointerEvent) {
 		const surface = activeSurfaceEl();
-		const motionTarget = modalEl();
-		if (!surface || !motionTarget || animating) return;
+		if (!surface || animating) return;
 
-		const rootRect = motionTarget.getBoundingClientRect();
-		const u = (e.clientX - rootRect.left) / rootRect.width;
-		const v = (e.clientY - rootRect.top) / rootRect.height;
+		const surfaceRect = surface.getBoundingClientRect();
+		if (surfaceRect.width <= 0 || surfaceRect.height <= 0) return;
 
-		if (expanded && modalEl()) {
-			for (const candidate of modalEl()!.querySelectorAll('.info-card-surface')) {
+		const u = (e.clientX - surfaceRect.left) / surfaceRect.width;
+		const v = (e.clientY - surfaceRect.top) / surfaceRect.height;
+
+		if (expanded && rootEl) {
+			for (const candidate of rootEl.querySelectorAll('.info-card-surface')) {
 				if (candidate !== surface && candidate instanceof HTMLElement) {
 					clearSurfaceGlow(candidate);
 				}
@@ -586,19 +592,20 @@
 			clearSurfaceGlow(inactive);
 		}
 
+		surface.classList.remove('info-card-surface--spotlight-off');
 		surface.style.setProperty('--pointer-u', `${(u * 100).toFixed(3)}%`);
 		surface.style.setProperty('--pointer-v', `${(v * 100).toFixed(3)}%`);
 		surface.style.setProperty('--spotlight', '1');
 	}
 
-	function setTilt(e: PointerEvent) {
-		if (!rootEl || !tiltEl || animating || hoverLocked || suppressHover || expanded) return;
+	function applyBackHoverTilt(e: PointerEvent) {
+		if (!rootEl || !tiltEl || animating || hoverLocked || suppressHover) return;
+		if (!isShowingBack() || prefersReducedMotion()) return;
 
-		setPointerGlow(e);
+		const surface = backSurfaceEl ?? rootEl;
+		const r = surface.getBoundingClientRect();
+		if (r.width <= 0 || r.height <= 0) return;
 
-		if (expanded || prefersReducedMotion()) return;
-
-		const r = rootEl.getBoundingClientRect();
 		const x = (e.clientX - r.left) / r.width;
 		const y = (e.clientY - r.top) / r.height;
 		const dx = x - 0.5;
@@ -608,10 +615,23 @@
 		const rotYDeg = -dx * 2 * MAX_TILT_DEG;
 
 		setHoverTilt(rotXDeg, rotYDeg);
-
 		rootEl.style.setProperty('--scale', `${HOVER_SCALE}`);
 		rootEl.style.setProperty('--hover', '1');
-		rootEl.style.setProperty('--lift', '-10px');
+	}
+
+	function setTilt(e: PointerEvent) {
+		if (!rootEl || !tiltEl || animating || suppressHover || hoverLocked) return;
+
+		if (isShowingBack()) {
+			setPointerGlow(e);
+			applyBackHoverTilt(e);
+			return;
+		}
+
+		if (expanded) return;
+
+		// Front face: spotlight only — no pointer tilt or scale.
+		setPointerGlow(e);
 	}
 
 	function resetTilt() {
@@ -620,18 +640,31 @@
 		for (const surface of [surfaceEl, backSurfaceEl]) {
 			clearSurfaceGlow(surface);
 		}
-		if (ghostEl) {
-			for (const surface of ghostEl.querySelectorAll('.info-card-surface')) {
-				if (surface instanceof HTMLElement) clearSurfaceGlow(surface);
-			}
-		}
 
-		if (expanded || hoverLocked) return;
+		if (hoverLocked) return;
 
 		resetTiltInstant();
-		rootEl.style.setProperty('--scale', `1`);
+		rootEl.style.setProperty('--scale', '1');
 		rootEl.style.setProperty('--hover', '0');
-		rootEl.style.setProperty('--lift', '0px');
+	}
+
+	function unpinZoomCard() {
+		if (!anchorEl || !anchorHome) return;
+		anchorEl.classList.remove('info-card-anchor--zoom-pinned');
+		anchorEl.style.position = '';
+		anchorEl.style.top = '';
+		anchorEl.style.left = '';
+		anchorEl.style.width = '';
+		anchorEl.style.height = '';
+		anchorEl.style.margin = '';
+		anchorEl.style.zIndex = '';
+		anchorEl.style.transition = '';
+		anchorEl.style.transform = '';
+		anchorEl.style.transformOrigin = '';
+		anchorHome.parent.insertBefore(anchorEl, anchorPlaceholder ?? anchorHome.next);
+		anchorPlaceholder?.remove();
+		anchorPlaceholder = null;
+		anchorHome = null;
 	}
 
 	function clearHoverVisuals() {
@@ -639,7 +672,6 @@
 		hoverFrozen = false;
 		rootEl.style.setProperty('--scale', '1');
 		rootEl.style.setProperty('--hover', '0');
-		rootEl.style.setProperty('--lift', '0px');
 	}
 
 	async function expandCard() {
@@ -652,83 +684,106 @@
 		const startVisual = readCardRect(rootEl, anchorEl, { visual: true });
 		const startLayout = readCardRect(rootEl, anchorEl, { layout: true });
 		const preserveHover = isGridHovered();
-
-		const ghost = createGhostFromGrid({ preserveHover });
-		if (!ghost || !ghostEl) {
-			return;
-		}
-
 		const targetSize = centeredTargetSize(startLayout.width, startLayout.height);
-		const endCenter = viewportCenter();
+		const backScale = visualScaleFromLayout(
+			startLayout.width,
+			startLayout.height,
+			targetSize.width,
+			targetSize.height
+		);
+		zoomTarget = computeStageZoomTransform(
+			startVisual.cx,
+			startVisual.cy,
+			startVisual.width,
+			startVisual.height,
+			targetSize.width,
+			targetSize.height,
+			openingScrollLeft
+		);
+		const center = viewportCenter();
 		const shellW = startLayout.width;
 		const shellH = startLayout.height;
-		const startScale = visualScaleFromLayout(
-			shellW,
-			shellH,
-			startVisual.width,
-			startVisual.height
-		);
 		const endScale = visualScaleFromLayout(shellW, shellH, targetSize.width, targetSize.height);
-		const startTx = startVisual.cx - endCenter.x;
-		const startTy = startVisual.cy - endCenter.y;
+		openPinEnd = pinStateAtShell(shellW, shellH, center.x, center.y, endScale, 0);
 
-		ghost.style.setProperty('--modal-rest-scale', String(endScale));
-
-		setMotionTransition(ghost, false);
-		setFlipTransition(ghostFlipEl, false);
-		applyMotionTransform(ghost, endCenter.x, endCenter.y, shellW, shellH, {
-			tx: startTx,
-			ty: startTy,
-			rotZ: startVisual.planeRot,
-			scale: startScale
-		});
-		mountInModalLayer(ghost);
-		void ghost.offsetHeight;
+		lockCardModal(openingScrollLeft);
 
 		expanded = true;
-		hideGridCard();
-		lockCardModal(openingScrollLeft);
-		await tick();
+		hoverLocked = true;
+		applyExpandedHoverVisuals(preserveHover);
+		rootEl.style.setProperty('--zoom-back-scale', String(backScale));
 
-		applyStackZIndex(anchorEl, captureStackZIndex(anchorEl));
+		await tick();
 
 		animating = true;
-		hoverLocked = true;
 		onModalOpen?.();
 
-		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, FLIP_CLOSED_DEG);
-		resetGhostTiltInstant();
+		resetTiltInstant();
+
+		if (enableFlip && flipEl) resetFlipInstant(flipEl, FLIP_CLOSED_DEG);
+		setFlipTransition(flipEl, false);
 
 		await tick();
+		setFlipTransition(flipEl, modalMotionMs() > 0);
 
-		setMotionWillChange(ghost, ghostFlipEl);
-		setMotionTransition(ghost, true);
-		setFlipTransition(ghostFlipEl, true);
-
-		requestAnimationFrame(() => {
-			if (!ghostEl) return;
+		const runOpenMotion = () => {
+			if (!zoomTarget) return;
 			syncVignetteOpen();
-			applyMotionTransform(ghostEl, endCenter.x, endCenter.y, shellW, shellH, {
-				tx: 0,
-				ty: 0,
-				rotZ: 0,
-				scale: endScale
+			requestAnimationFrame(() => {
+				if (!zoomTarget || !openPinEnd) return;
+				const liveVisual = readCardRect(rootEl!, anchorEl, { visual: true });
+				openPinStart = pinStateAtShell(
+					shellW,
+					shellH,
+					liveVisual.cx,
+					liveVisual.cy,
+					1,
+					liveVisual.planeRot
+				);
+				snapPinState(openPinStart);
+				setStageZoom(
+					zoomTarget.tx,
+					zoomTarget.ty,
+					zoomTarget.scale,
+					zoomTarget.originX,
+					zoomTarget.originY
+				);
+				animatePinTo(openPinEnd);
+				if (enableFlip && flipEl) setFlipDeg(flipEl, FLIP_OPEN_DEG);
 			});
-			if (enableFlip && ghostFlipEl) setFlipDeg(ghostFlipEl, FLIP_OPEN_DEG);
-		});
+		};
 
-		await waitModalMotion(ghost, ghostFlipEl);
-		resetGhostTiltInstant();
-		if (enableFlip && ghostFlipEl) resetFlipInstant(ghostFlipEl, FLIP_OPEN_DEG);
-		settleGhostModalCrisp(ghost, ghostFlipEl);
-		clearGhostMotion(ghost, ghostFlipEl);
+		if (modalMotionMs() === 0) {
+			runOpenMotion();
+		} else {
+			requestAnimationFrame(runOpenMotion);
+		}
+
+		await Promise.all([waitStageZoomMotion(), waitFlipMotion(flipEl), waitVignetteMotion()]);
+
+		if (enableFlip && flipEl) resetFlipInstant(flipEl, FLIP_OPEN_DEG);
+
 		animating = false;
+		hoverLocked = false;
+		await tick();
+
+		const endVisual = readCardRect(rootEl, anchorEl, { visual: true });
+		openPinFlightEnd = computePinState(
+			shellW,
+			shellH,
+			endVisual.cx,
+			endVisual.cy,
+			endVisual.width,
+			endVisual.height,
+			0
+		);
+		openPinEnd = toCrispPinState(openPinFlightEnd);
+		snapPinState(openPinEnd);
 		requestAnimationFrame(() => refreshHoverFromPointer());
 	}
 
 	async function collapseCard() {
-		if (!rootEl || !anchorEl || !ghostEl || !expanded) return;
-		if (animating) return;
+		if (!rootEl || !anchorEl || !expanded || animating) return;
 
 		animating = true;
 		dismissing = true;
@@ -736,111 +791,60 @@
 		hoverLocked = true;
 		hoverFrozen = false;
 
-		const modalVisual = readCardRect(ghostEl, null, { visual: true });
-		const pivotCx = modalVisual.cx;
-		const pivotCy = modalVisual.cy;
-		const startOpacity = readCardOpacity(ghostEl);
-		const flipDeg = readFlipDeg(ghostFlipEl);
+		setFlipTransition(flipEl, modalMotionMs() > 0);
 
-		hideGridCard();
-		resetGhostTiltInstant();
+		const dismissOrigin = openPinEnd
+			? pinCenter(openPinEnd)
+			: pinCenter(
+					computePinState(
+						rootEl.offsetWidth,
+						rootEl.offsetHeight,
+						readCardRect(rootEl, anchorEl, { visual: true }).cx,
+						readCardRect(rootEl, anchorEl, { visual: true }).cy,
+						readCardRect(rootEl, anchorEl, { visual: true }).width,
+						readCardRect(rootEl, anchorEl, { visual: true }).height
+					)
+				);
+		const dismissOriginX = zoomTarget?.originX ?? 0;
+		const dismissOriginY = zoomTarget?.originY ?? 0;
 
-		const slotEnd = readCardRect(rootEl, anchorEl, { layout: true });
-		const slotVisual = readCardRect(rootEl, anchorEl, { visual: true });
-		const shellW = slotEnd.width;
-		const shellH = slotEnd.height;
-		const endRotZ = slotEnd.planeRot;
-		const endOpacity = readCardOpacity(rootEl);
-		const endStackZ = captureStackZIndex(anchorEl);
-		const opacityMotion = Math.abs(startOpacity - endOpacity) > 0.001;
-		const zIndexMotion = !!endStackZ;
-		const startScale = visualScaleFromLayout(shellW, shellH, modalVisual.width, modalVisual.height);
-		const endScale = visualScaleFromLayout(shellW, shellH, slotVisual.width, slotVisual.height);
-
-		applyStackZIndex(anchorEl, endStackZ);
-
-		const gridGhost = createDismissGhost(ghostEl, flipDeg);
-		if (!gridGhost) return;
-
-		gridGhost.classList.remove('info-card--modal-crisp');
-
-		if (ghostEl) removeFromModalLayer(ghostEl);
-		bindGhostElements(gridGhost);
-
-		const flipTarget = ghostFlipEl;
-		const endTx = slotEnd.cx - pivotCx;
-		const endTy = slotEnd.cy - pivotCy;
-
-		setMotionTransition(gridGhost, false, {
-			includeOpacity: opacityMotion,
-			includeZIndex: zIndexMotion
-		});
-		setFlipTransition(flipTarget, false);
-		applyMotionTransform(gridGhost, pivotCx, pivotCy, shellW, shellH, {
-			tx: 0,
-			ty: 0,
-			rotZ: modalVisual.planeRot,
-			scale: startScale
-		});
-		gridGhost.style.opacity = String(startOpacity);
-		if (endStackZ) gridGhost.style.zIndex = '1';
-		mountInModalLayer(gridGhost);
-		void gridGhost.offsetHeight;
-
-		await tick();
-
-		setMotionWillChange(gridGhost, flipTarget);
-		setMotionTransition(gridGhost, true, {
-			includeOpacity: opacityMotion,
-			includeZIndex: zIndexMotion
-		});
-		setFlipTransition(flipTarget, true);
-
-		requestAnimationFrame(() => {
-			if (!ghostEl) return;
-			syncVignetteDismiss();
-			transitionStackZIndex(anchorEl, endStackZ);
-			applyMotionTransform(ghostEl, pivotCx, pivotCy, shellW, shellH, {
-				tx: endTx,
-				ty: endTy,
-				rotZ: endRotZ,
-				scale: endScale
+		const runDismissMotion = () => {
+			syncVignetteDismiss(dismissOrigin);
+			requestAnimationFrame(() => {
+				if (openPinFlightEnd) snapPinState(openPinFlightEnd);
+				else if (openPinEnd) snapPinState(openPinEnd);
+				setStageZoom(0, 0, 1, dismissOriginX, dismissOriginY);
+				if (openPinStart) animatePinTo(openPinStart);
+				if (enableFlip && flipEl) setFlipDeg(flipEl, FLIP_CLOSED_DEG);
 			});
-			ghostEl.style.opacity = String(endOpacity);
-			if (endStackZ) ghostEl.style.zIndex = endStackZ;
-			if (enableFlip && flipTarget) setFlipDeg(flipTarget, FLIP_CLOSED_DEG);
-		});
+		};
 
-		await Promise.all([
-			waitModalMotion(gridGhost, flipTarget, { includeOpacity: opacityMotion }),
-			waitVignetteMotion()
-		]);
+		if (modalMotionMs() === 0) {
+			runDismissMotion();
+		} else {
+			requestAnimationFrame(runDismissMotion);
+		}
 
-		const finalRect = readCardRect(rootEl, anchorEl, { layout: true });
-		gridGhost.style.transition = 'none';
-		applyMotionTransform(gridGhost, finalRect.cx, finalRect.cy, shellW, shellH, {
-			tx: 0,
-			ty: 0,
-			rotZ: endRotZ,
-			scale: 1
-		});
-		gridGhost.style.opacity = String(endOpacity);
-		if (endStackZ) gridGhost.style.zIndex = endStackZ;
-		if (enableFlip && flipTarget) resetFlipInstant(flipTarget, FLIP_CLOSED_DEG);
-		void gridGhost.offsetHeight;
+		await Promise.all([waitStageZoomMotion(), waitFlipMotion(flipEl), waitVignetteMotion()]);
 
-		destroyGhost();
-		showGridCard();
-		applyStackZIndex(anchorEl, endStackZ);
+		if (enableFlip && flipEl) resetFlipInstant(flipEl, FLIP_CLOSED_DEG);
+
 		expanded = false;
+		zoomTarget = null;
+		openPinStart = null;
+		openPinEnd = null;
+		openPinFlightEnd = null;
+		rootEl.style.removeProperty('--zoom-back-scale');
+		unpinZoomCard();
+		clearHoverVisuals();
 		await tick();
+
 		dismissing = false;
 		animating = false;
 		hoverLocked = false;
 		suppressHover = true;
 		openingScrollLeft = 0;
 		unlockCardModal();
-		clearAppliedStackZIndex(anchorEl);
 		releaseCardModal(collapseCard);
 	}
 
@@ -868,12 +872,7 @@
 	onDestroy(() => {
 		if (typeof document === 'undefined') return;
 
-		if (ghostEl) {
-			clearGhostRect(ghostEl);
-			destroyGhost();
-		}
-		showGridCard();
-		clearAppliedStackZIndex(anchorEl);
+		unpinZoomCard();
 		if (expanded) {
 			unlockCardModal();
 			releaseCardModal(collapseCard);
@@ -884,8 +883,11 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
 	<div
 		class="info-card hover-polaroid-scale {theme !== 'dark' ? `info-card--${theme}` : ''} {className}"
-		class:info-card--grid-hidden={expanded}
 		class:info-card--hover-frozen={hoverFrozen}
+		class:info-card--modal={expanded}
+		class:info-card--zoom-active={expanded}
+		class:info-card--modal-crisp={expanded && !animating}
+		class:info-card--dismissing={dismissing}
 		bind:this={rootEl}
 		on:click={handleClick}
 		on:pointerenter={setTilt}
@@ -944,6 +946,149 @@
 		height: 100%;
 	}
 
+	.info-card-anchor.info-card-anchor--zoom-placeholder {
+		width: 100%;
+		height: 100%;
+		min-height: inherit;
+		visibility: hidden;
+		pointer-events: none;
+	}
+
+	/* Counter-scale back only while zoom animation is running (not crisp). */
+	:global(.info-card--zoom-active:not(.info-card--modal-crisp) .info-card-surface--back .card-row--back),
+	:global(.info-card--zoom-active:not(.info-card--modal-crisp) .info-card-surface--back .polaroid-content--back),
+	:global(
+			.card-modal-layer
+				.info-card--modal:not(.info-card--modal-crisp)
+				.info-card-surface--back
+				.card-row--back
+		),
+	:global(
+			.card-modal-layer
+				.info-card--modal:not(.info-card--modal-crisp)
+				.info-card-surface--back
+				.polaroid-content--back
+		) {
+		transform: scale(calc(1 / var(--zoom-back-scale, 1)));
+		transform-origin: top left;
+		width: calc(100% * var(--zoom-back-scale, 1));
+		height: calc(100% * var(--zoom-back-scale, 1));
+	}
+
+	:global(.info-card--zoom-active:not(.info-card--modal-crisp) .info-card-surface--back .card-back-main),
+	:global(.info-card--zoom-active:not(.info-card--modal-crisp) .info-card-surface--back .polaroid-back-main),
+	:global(
+			.card-modal-layer
+				.info-card--modal:not(.info-card--modal-crisp)
+				.info-card-surface--back
+				.card-back-main
+		),
+	:global(
+			.card-modal-layer
+				.info-card--modal:not(.info-card--modal-crisp)
+				.info-card-surface--back
+				.polaroid-back-main
+		) {
+		overflow: hidden;
+	}
+
+	:global(.info-card--modal-crisp .info-card-surface--back .card-row--back),
+	:global(.info-card--modal-crisp .info-card-surface--back .polaroid-content--back) {
+		transform: none;
+		width: 100%;
+		height: 100%;
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface--back {
+		--grid-dot: calc(1px * var(--zoom-back-scale, 1));
+		--grid-fine: calc(15px * var(--zoom-back-scale, 1));
+		--grid-spot-radius: calc(60px * var(--zoom-back-scale, 1));
+		--hp-shell-border: calc(2px * var(--zoom-back-scale, 1));
+		--hp-frame-border: calc(1px * var(--zoom-back-scale, 1));
+		--hp-frame-inset: calc(5px * var(--zoom-back-scale, 1));
+		--hp-shell-radius: calc(6px * var(--zoom-back-scale, 1));
+		--hp-frame-radius: calc(2px * var(--zoom-back-scale, 1));
+		border-width: var(--hp-shell-border);
+		border-radius: var(--hp-shell-radius);
+		border-color: var(--hp-border-hover);
+		background: var(--hp-bg-hover);
+		box-shadow: var(--hp-shadow-hover);
+		filter: brightness(1.12) saturate(1.15);
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		transition: none !important;
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface:not(:global(.has-logo)),
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface--back:not(:global(.has-logo)) {
+		padding: calc(14px * var(--zoom-back-scale, 1));
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface:global(.has-logo),
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface--back:global(.has-logo) {
+		padding: 0;
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface::before,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface--back::before {
+		inset: var(--hp-frame-inset);
+		border-width: var(--hp-frame-border);
+		border-radius: var(--hp-frame-radius);
+		border-color: rgba(220, 235, 255, 0.72);
+		box-shadow:
+			inset 0 0 calc(48px * var(--zoom-back-scale, 1)) rgba(180, 220, 255, 0.24),
+			0 0 calc(32px * var(--zoom-back-scale, 1)) rgba(180, 220, 255, 0.35);
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost):is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost):is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface--back {
+		filter: brightness(1.04) saturate(1.1);
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost):is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface::before,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost):is(
+			.info-card--green,
+			.info-card--teal,
+			.info-card--aquamarine,
+			.info-card--blue,
+			.info-card--periwinkle
+		)
+		.info-card-surface--back::before {
+		border-color: rgba(var(--tone-border-hover), 0.42);
+		box-shadow:
+			inset 0 0 calc(48px * var(--zoom-back-scale, 1)) rgba(255, 255, 255, 0.16),
+			0 0 calc(32px * var(--zoom-back-scale, 1)) rgba(var(--tone-shadow), 0.14);
+	}
+
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-face,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface,
+	.info-card.info-card--modal-crisp:not(.info-card--ghost) .info-card-surface--back {
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
 	.info-card.info-card--grid-hidden {
 		visibility: hidden;
 		pointer-events: none;
@@ -951,7 +1096,7 @@
 
 	/* Ghost flight scale lives on the motion layer only — neutralize nested hover lift. */
 	.info-card.info-card--ghost .info-card-hover-lift {
-		transform: scale(1) translateY(0);
+		transform: scale(1);
 		transition: none;
 	}
 
@@ -985,11 +1130,6 @@
 		overflow: visible;
 	}
 
-	.info-card.info-card--modal:not(.info-card--ghost) .info-card-hover-lift {
-		transform: scale(1) translateY(0);
-		transition: none;
-	}
-
 	.info-card.info-card--ghost.info-card--animating .info-card-surface,
 	.info-card.info-card--ghost.info-card--animating .info-card-surface--back,
 	.info-card.info-card--ghost.info-card--modal .info-card-surface,
@@ -1012,7 +1152,7 @@
 
 	/* Scaled grid/border/surface tokens match the warped flight so settle stays continuous. */
 	.info-card.info-card--ghost.info-card--modal-crisp .info-card-surface {
-		--grid-line: calc(1px * var(--modal-rest-scale, 1));
+		--grid-dot: calc(1px * var(--modal-rest-scale, 1));
 		--grid-fine: calc(15px * var(--modal-rest-scale, 1));
 		--grid-spot-radius: calc(60px * var(--modal-rest-scale, 1));
 		--hp-shell-border: calc(2px * var(--modal-rest-scale, 1));
@@ -1118,7 +1258,7 @@
 	.info-card-hover-lift {
 		width: 100%;
 		height: 100%;
-		transform: scale(var(--scale, 1)) translateY(var(--lift, 0px));
+		transform: scale(var(--scale, 1));
 		transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
@@ -1135,7 +1275,7 @@
 	.info-card.info-card--animating .info-card-hover-lift,
 	.info-card.info-card--dismissing .info-card-hover-lift {
 		transition: none;
-		transform: scale(1) translateY(0);
+		transform: scale(1);
 	}
 
 	.info-card.info-card--dismissing {
@@ -1324,7 +1464,7 @@
 		--pointer-u: 50%;
 		--pointer-v: 50%;
 		--spotlight: 0;
-		--grid-line: 1px;
+		--grid-dot: 1px;
 		--grid-fine: 15px;
 		--grid-spot-radius: 60px;
 		--hp-border: rgba(176, 196, 228, 0.62);
@@ -1437,39 +1577,16 @@
 	}
 
 	.grid-base {
-		background-image:
-			repeating-linear-gradient(
-				to bottom,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(186, 206, 234, 0.07) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(186, 206, 234, 0.07) var(--grid-fine)
-			),
-			repeating-linear-gradient(
-				to right,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(186, 206, 234, 0.06) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(186, 206, 234, 0.06) var(--grid-fine)
-			);
+		background-image: none;
 	}
 
 	.grid-cursor {
-		background-image:
-			repeating-linear-gradient(
-				to bottom,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(210, 228, 255, 0.82) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(210, 228, 255, 0.82) var(--grid-fine)
-			),
-			repeating-linear-gradient(
-				to right,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(200, 222, 252, 0.76) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(200, 222, 252, 0.76) var(--grid-fine)
-			);
+		background-image: radial-gradient(
+			circle,
+			rgba(210, 228, 255, 1) 0,
+			rgba(210, 228, 255, 1) var(--grid-dot),
+			transparent calc(var(--grid-dot) + 0.5px)
+		);
 		opacity: var(--spotlight, 0);
 		transition: opacity 0.16s ease;
 		-webkit-mask-image: radial-gradient(
@@ -1488,6 +1605,10 @@
 			rgba(0, 0, 0, 0.18) 76%,
 			transparent 100%
 		);
+	}
+
+	.info-card-surface.info-card-surface--spotlight-off .grid-cursor {
+		transition: none;
 	}
 
 	.info-card-surface::after {
@@ -1746,41 +1867,13 @@
 	}
 
 	.info-card:is(.info-card--green, .info-card--teal, .info-card--aquamarine, .info-card--blue, .info-card--periwinkle)
-		.grid-base {
-		background-image:
-			repeating-linear-gradient(
-				to bottom,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid), 0.12) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid), 0.12) var(--grid-fine)
-			),
-			repeating-linear-gradient(
-				to right,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid), 0.1) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid), 0.1) var(--grid-fine)
-			);
-	}
-
-	.info-card:is(.info-card--green, .info-card--teal, .info-card--aquamarine, .info-card--blue, .info-card--periwinkle)
 		.grid-cursor {
-		background-image:
-			repeating-linear-gradient(
-				to bottom,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid-cursor), 0.5) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid-cursor), 0.5) var(--grid-fine)
-			),
-			repeating-linear-gradient(
-				to right,
-				transparent 0,
-				transparent calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid-cursor), 0.44) calc(var(--grid-fine) - var(--grid-line)),
-				rgba(var(--tone-grid-cursor), 0.44) var(--grid-fine)
-			);
+		background-image: radial-gradient(
+			circle,
+			rgba(var(--tone-grid-cursor), 1) 0,
+			rgba(var(--tone-grid-cursor), 1) var(--grid-dot),
+			transparent calc(var(--grid-dot) + 0.5px)
+		);
 	}
 
 	.info-card:is(.info-card--green, .info-card--teal, .info-card--aquamarine, .info-card--blue, .info-card--periwinkle)

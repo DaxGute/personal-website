@@ -105,10 +105,6 @@
 			translateZ(0);
 	}
 
-	.education-card:hover {
-		z-index: 5;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.education-carousel {
 			width: min(980px, 100%);

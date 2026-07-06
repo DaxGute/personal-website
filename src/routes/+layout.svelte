@@ -204,8 +204,9 @@
 	:global(.card-modal-layer) {
 		position: fixed;
 		inset: 0;
-		z-index: 9999;
+		z-index: 10000;
 		pointer-events: none;
+		isolation: isolate;
 	}
 
 	:global(.card-modal-layer .info-card) {
@@ -254,10 +255,43 @@
 		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
 	}
 
-	/* Real stage stays untransformed while modal is open so slot rects stay stable. */
+	/* Real scroll-track zooms around the active card; vignette sits below the pinned card. */
 	:global(html.card-modal-open .desktop-app > .stage) {
+		overflow: visible;
 		pointer-events: none;
-		visibility: hidden;
+	}
+
+	:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
+		transform-origin: var(--stage-origin-x, 0px) var(--stage-origin-y, 0px);
+		transform: translateX(var(--track-scroll-compensate, 0px))
+			translate(var(--stage-tx, 0px), var(--stage-ty, 0px)) scale(var(--stage-scale, 1));
+		transition: transform var(--card-modal-ms, 760ms)
+			var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
+	}
+
+	:global(html.card-modal-open .desktop-app > .stage .scroll-track),
+	:global(html.card-modal-open .awards),
+	:global(html.card-modal-open .award-item) {
+		overflow: visible !important;
+	}
+
+	:global(html.card-modal-open .awards) {
+		-webkit-clip-path: none !important;
+		clip-path: none !important;
+	}
+
+	:global(html.card-modal-open .info-card--zoom-active .info-card-flip-stage),
+	:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {
+		overflow: visible;
+	}
+
+	:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+	}
+
+	:global(.card-modal-layer .info-card-anchor--zoom-pinned) {
+		pointer-events: auto;
+		z-index: 1;
 	}
 
 	:global(.card-modal-stage-clone) {
@@ -295,8 +329,9 @@
 	}
 
 	:global(html.card-modal-open .desktop-app > .stage .scroller) {
-		overflow: hidden !important;
 		touch-action: none;
+		overflow: hidden !important;
+		overscroll-behavior: none;
 	}
 
 	/* Shared Polaroid-style hover transforms (tilt vars set by JS)
@@ -314,7 +349,7 @@
 	}
 
 	:global(.info-card-hover-lift) {
-		transform: scale(var(--scale, 1)) translateY(var(--lift, 0px));
+		transform: scale(var(--scale, 1));
 		transition: transform 0.2s ease-in;
 	}
 
@@ -374,7 +409,7 @@
 			transition: none;
 		}
 
-		:global(html.card-modal-open .desktop-app > .stage) {
+		:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
 			transition: none;
 		}
 
