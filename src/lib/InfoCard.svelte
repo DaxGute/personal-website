@@ -225,7 +225,8 @@
 </CardShell>
 
 <style>
-	:global(.hover-polaroid-scale:hover) .card-content {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.card-content {
 		background: transparent;
 		box-shadow: none;
 	}
@@ -350,51 +351,13 @@
 		transition: opacity 0.28s ease;
 	}
 
-	:global(.hover-polaroid-scale:hover) .card-main-content {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.card-main-content {
 		opacity: 0;
 	}
 
-	:global(.hover-polaroid-scale:hover) .card-hover-hint {
-		opacity: 1;
-	}
-
-	:global(.info-card--preserve-grid-hover) .card-content {
-		background: transparent;
-		box-shadow: none;
-	}
-
-	:global(.info-card--preserve-grid-hover) .card-main-content,
-	:global(.info-card--preserve-grid-hover:hover) .card-main-content {
-		opacity: 0;
-	}
-
-	:global(.info-card--preserve-grid-hover) .card-hover-hint,
-	:global(.info-card--preserve-grid-hover:hover) .card-hover-hint,
-	:global(.info-card--preserve-grid-hover.info-card--animating) .card-hover-hint,
-	:global(.info-card--preserve-grid-hover.info-card--animating:hover) .card-hover-hint {
-		opacity: 1;
-	}
-
-	:global(.info-card--preserve-grid-hover.info-card--animating) .card-main-content,
-	:global(.info-card--preserve-grid-hover.info-card--animating:hover) .card-main-content {
-		opacity: 0;
-	}
-
-	:global(.info-card--expanded) .card-hover-hint,
-	:global(.info-card--expanded:hover) .card-hover-hint,
-	:global(.info-card--animating) .card-hover-hint,
-	:global(.info-card--dismissing) .card-hover-hint,
-	:global(.info-card--dismissing:hover) .card-hover-hint,
-	:global(.info-card--hover-frozen) .card-hover-hint {
-		opacity: 0;
-	}
-
-	:global(.info-card--expanded) .card-main-content,
-	:global(.info-card--expanded:hover) .card-main-content,
-	:global(.info-card--animating) .card-main-content,
-	:global(.info-card--animating:hover) .card-main-content,
-	:global(.info-card--dismissing) .card-main-content,
-	:global(.info-card--dismissing:hover) .card-main-content {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.card-hover-hint {
 		opacity: 1;
 	}
 

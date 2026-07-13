@@ -19,8 +19,11 @@ export type VignetteOrigin = {
 	y: number;
 };
 
-const MODAL_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
-const VIGNETTE_SIZE_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
+/** Shared open/close easing (slight overshoot — card pin/flip only). */
+const MODAL_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1.01)';
+/** Stage/ribbon zoom: no overshoot — SVG stroke AA shimmers when scale dips past 1. */
+const STAGE_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1)';
+const VIGNETTE_SIZE_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1.01)';
 
 let backdropEl: HTMLDivElement | null = null;
 let modalLayerEl: HTMLDivElement | null = null;
@@ -184,11 +187,6 @@ function syncStageCloneLayout(source: HTMLElement, clone: HTMLElement) {
 	mirrorInlineStyle(
 		source.querySelector('.scroll-track'),
 		clone.querySelector('.scroll-track'),
-		['width']
-	);
-	mirrorInlineStyle(
-		source.querySelector('.scroller-wash'),
-		clone.querySelector('.scroller-wash'),
 		['width']
 	);
 	mirrorInlineStyle(
@@ -488,6 +486,7 @@ function prepareModalBackdrop() {
 	ensureModalRoot();
 	document.documentElement.style.setProperty('--card-modal-ms', `${modalMotionMs()}ms`);
 	document.documentElement.style.setProperty('--card-modal-easing', MODAL_EASING);
+	document.documentElement.style.setProperty('--stage-easing', STAGE_EASING);
 	document.documentElement.style.setProperty('--vignette-size-easing', VIGNETTE_SIZE_EASING);
 	snapVignetteClosed();
 }

@@ -200,9 +200,11 @@
 		z-index: 1;
 		pointer-events: none;
 		overflow: visible;
-		contain: paint;
 		display: flex;
 		align-items: center;
+		/* Stable compositor layer — avoids subpixel stroke shimmer when the track zooms. */
+		transform: translateZ(0);
+		backface-visibility: hidden;
 	}
 
 	.ribbon {
@@ -216,7 +218,7 @@
 		stroke-linecap: butt;
 		stroke-linejoin: miter;
 		stroke-miterlimit: 10;
-		shape-rendering: optimizeSpeed;
+		shape-rendering: geometricPrecision;
 	}
 
 	.ribbon-path--base {

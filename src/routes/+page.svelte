@@ -85,7 +85,6 @@
 
 	// Decorative line from `static/background.svg` — panels anchored along the ribbon track.
 	/** Horizontal scroll extent (panel strip width); wash uses this so `scrollWidth` is not inflated. */
-	let ribbonScrollTrackW = RIBBON_RENDER_WIDTH_PX;
 	let scrollTrackW = RIBBON_RENDER_WIDTH_PX;
 
 	let greetingScrollLocked = true;
@@ -269,7 +268,6 @@
 				RIBBON_RENDER_WIDTH_PX,
 				(panelOffsets[panelOffsets.length - 1] ?? 0) + panelW
 			);
-			ribbonScrollTrackW = scrollTrackW;
 			ribbonCmp?.syncLayout(scrollTrackW);
 
 			clampScroller();
@@ -445,6 +443,8 @@
 </script>
 
 <div class="stage" class:intro-locked={greetingScrollLocked}>
+	<!-- Fixed to the stage (not the zooming scroll-track) so blobs don't clip/flicker on modal zoom. -->
+	<div class="scroller-wash" aria-hidden="true"></div>
 	<main
 		class="scroller"
 		bind:this={scroller}
@@ -453,8 +453,6 @@
 		<div class="scroll-track" style:width={`${scrollTrackW}px`}>
 			<!-- Scrolls natively with the strip (no JS pan); sits above wash, below panels. -->
 			<Ribbon bind:this={ribbonCmp} />
-			<!-- Full-width wash scrolls with panels; scroller bg is transparent so ribbon can sit above wash, below panels. -->
-			<div class="scroller-wash" aria-hidden="true" style:width={`${ribbonScrollTrackW}px`}></div>
 
 			{#each panels as panel, i}
 				<section
@@ -521,6 +519,7 @@
 
 	.scroller {
 		position: relative;
+		z-index: 1;
 		height: 100vh;
 		width: 100vw;
 		overflow-x: auto;
@@ -549,18 +548,18 @@
 
 	.scroller-wash {
 		position: absolute;
-		left: 0;
-		top: 0;
-		height: 100%;
-		min-height: 100%;
+		inset: 0;
 		z-index: 0;
 		pointer-events: none;
 		background:
-			radial-gradient(1000px 520px at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
-			radial-gradient(900px 500px at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
-			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
+			radial-gradient(70vmax 42vmax at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
+			radial-gradient(62vmax 40vmax at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
+			radial-gradient(62vmax 52vmax at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
 			var(--bg);
 		background-repeat: no-repeat;
+		/* Own compositor layer — sibling track transforms won't resample the gradients. */
+		transform: translateZ(0);
+		backface-visibility: hidden;
 	}
 
 	/* hide scrollbars without disabling scrolling */

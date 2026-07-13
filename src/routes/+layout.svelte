@@ -108,6 +108,13 @@
 		--card-hover: rgba(255, 255, 255, 0.38);
 		--card-border: rgba(11, 18, 32, 0.12);
 		--shadow: 0 18px 50px rgba(11, 18, 32, 0.12);
+		/* Stage zoom defaults — keep transform applied idle so open/close doesn't promote layers. */
+		--stage-tx: 0px;
+		--stage-ty: 0px;
+		--stage-scale: 1;
+		--stage-origin-x: 0px;
+		--stage-origin-y: 0px;
+		--track-scroll-compensate: 0px;
 	}
 
 	:global(html, body) {
@@ -213,60 +220,62 @@
 		pointer-events: auto;
 	}
 
-	:global(.card-modal-layer .info-card--ghost.info-card--animating.info-card-motion) {
-		transition:
-			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
-			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
-		transform-style: preserve-3d;
-	}
-
 	:global(.card-modal-layer .info-card--modal-centered) {
 		transition: none;
 	}
 
-	:global(.card-modal-layer .info-card--ghost.info-card--modal-crisp) {
-		transition: none !important;
-	}
-
-	:global(.card-modal-layer .info-card--modal:not(.info-card--ghost)),
-	:global(.card-modal-layer .info-card--ghost.info-card--modal) {
+	:global(.card-modal-layer .info-card--modal) {
 		transform-style: preserve-3d;
 	}
 
 	:global(.card-modal-layer .info-card--modal .hover-polaroid-tilt) {
-		transition: none !important;
+		/* Inline style may temporarily enable a short ease on open/close settle. */
+		transition: none;
 	}
 
 	:global(.card-modal-layer .info-card--animating .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card-motion) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss) {
 		transition:
-			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)),
-			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)),
+			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
 	}
 
-	/* Real scroll-track zooms around the active card; vignette sits below the pinned card. */
+	/* Real scroll-track zooms around the active card; vignette sits below the pinned card.
+	   Transform stays applied at identity when idle so toggling modal doesn't layer-promote
+	   (that was shimmering the ribbon/signature strokes on open/close). */
+	:global(.desktop-app > .stage .scroll-track) {
+		transform-origin: var(--stage-origin-x, 0px) var(--stage-origin-y, 0px);
+		transform: translateX(var(--track-scroll-compensate, 0px))
+			translate(var(--stage-tx, 0px), var(--stage-ty, 0px)) scale(var(--stage-scale, 1));
+	}
+
 	:global(html.card-modal-open .desktop-app > .stage) {
 		overflow: visible;
 		pointer-events: none;
 	}
 
 	:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
-		transform-origin: var(--stage-origin-x, 0px) var(--stage-origin-y, 0px);
-		transform: translateX(var(--track-scroll-compensate, 0px))
-			translate(var(--stage-tx, 0px), var(--stage-ty, 0px)) scale(var(--stage-scale, 1));
 		transition: transform var(--card-modal-ms, 760ms)
-			var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
+			var(--stage-easing, cubic-bezier(0.76, 0.39, 0.08, 1));
+	}
+
+	/* Backdrop-filter re-samples the ribbon every zoom frame → stroke wiggle.
+	   Leave projects glass alone so the panel doesn't lose frost mid-open. */
+	:global(html.card-modal-open .desktop-app > .stage .scroll-track)
+		:global(*:not(.panel-inner):not(.listbox)) {
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
 	}
 
 	:global(html.card-modal-open .desktop-app > .stage .scroll-track),
@@ -286,7 +295,7 @@
 	}
 
 	:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
 	}
 
 	:global(.card-modal-layer .info-card-anchor--zoom-pinned) {
@@ -296,25 +305,25 @@
 
 	:global(.card-modal-stage-clone) {
 		position: fixed;
-		inset: 0;
+		/* Pad beyond the viewport so scale(1.035) doesn't hard-clip wash edges. */
+		inset: -6%;
 		z-index: 9997;
-		width: 100vw;
-		height: 100vh;
 		overflow: hidden;
 		visibility: visible;
 		pointer-events: none;
 		transform: scale(1);
 		transform-origin: center center;
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.22, 1, 0.36, 1));
-		background:
-			radial-gradient(1000px 520px at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
-			radial-gradient(900px 500px at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
-			radial-gradient(900px 700px at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
-			var(--bg);
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01));
+		background: var(--bg);
 	}
 
 	:global(.card-modal-stage-clone.is-zoomed) {
 		transform: scale(1.035);
+	}
+
+	:global(.card-modal-stage-clone .scroller-wash) {
+		/* Clone wash already covers the padded shell; keep it from double-scaling soft edges. */
+		inset: 0;
 	}
 
 	:global(.card-modal-stage-clone > .stage) {
@@ -334,25 +343,10 @@
 		overscroll-behavior: none;
 	}
 
-	/* Shared Polaroid-style hover transforms (tilt vars set by JS)
-	   - scale: eased on enter/leave
-	   - tilt: instant on pointer move (no lag)
+	/* Shared polaroid card transforms
+	   - grid: CSS :hover surface chrome
+	   - modal: JS cursor tilt + dots only
 	*/
-	:global(.hover-polaroid-scale) {
-		transform: scale(var(--scale, 1));
-		transition: transform 0.2s ease-in;
-	}
-
-	:global(.info-card-motion.hover-polaroid-scale:not(.info-card--ghost)) {
-		transform: none;
-		transition: none;
-	}
-
-	:global(.info-card-hover-lift) {
-		transform: scale(var(--scale, 1));
-		transition: transform 0.2s ease-in;
-	}
-
 	:global(.hover-polaroid-tilt) {
 		transform: perspective(900px) rotateX(0deg) rotateY(0deg);
 		transform-style: preserve-3d;
@@ -368,29 +362,18 @@
 		transition-timing-function: ease, ease, ease;
 	}
 
-	:global(.hover-polaroid-scale:hover .hover-polaroid-surface),
-	:global(.info-card--modal.hover-polaroid-scale .hover-polaroid-surface) {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing)
+		.hover-polaroid-surface) {
 		border-color: var(--hp-border-hover, var(--hp-border, rgba(11, 18, 32, 0.14)));
 		background: var(--hp-bg-hover, var(--hp-bg, rgba(255, 255, 255, 0.86)));
 		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
 	}
 
-	:global(.info-card--ghost.info-card--modal.hover-polaroid-scale .hover-polaroid-surface) {
-		transition: none !important;
-	}
-
-	:global(.info-card--ghost.info-card--modal-crisp.hover-polaroid-scale .hover-polaroid-surface) {
-		background: var(--hp-bg-hover) !important;
-		box-shadow: var(--hp-shadow-hover) !important;
-		border-color: var(--hp-border-hover) !important;
-		transition: none !important;
-	}
-
-	:global(.info-card--dismissing.hover-polaroid-scale .info-card-face--front .hover-polaroid-surface),
-	:global(.info-card--dismissing.hover-polaroid-scale:hover .info-card-face--front .hover-polaroid-surface) {
-		border-color: var(--hp-border, rgba(11, 18, 32, 0.14));
-		background: var(--hp-bg, rgba(255, 255, 255, 0.86));
-		box-shadow: var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12));
+	/* Modal back face: always hover tokens (not :hover). */
+	:global(.info-card--modal .info-card-surface--back.hover-polaroid-surface) {
+		border-color: var(--hp-border-hover, var(--hp-border, rgba(11, 18, 32, 0.14)));
+		background: var(--hp-bg-hover, var(--hp-bg, rgba(255, 255, 255, 0.86)));
+		box-shadow: var(--hp-shadow-hover, var(--hp-shadow, 0 0px 30px rgba(11, 18, 32, 0.12)));
 	}
 
 	:global(.info-card--dismissing.hover-polaroid-scale .info-card-face--front .hover-polaroid-surface),
@@ -409,6 +392,7 @@
 			transition: none;
 		}
 
+		:global(.desktop-app > .stage .scroll-track),
 		:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
 			transition: none;
 		}
@@ -417,8 +401,6 @@
 			transition: none;
 		}
 
-		:global(.hover-polaroid-scale),
-		:global(.info-card-hover-lift),
 		:global(.hover-polaroid-tilt),
 		:global(.hover-polaroid-surface) {
 			transition: none;

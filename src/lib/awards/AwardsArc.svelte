@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
+	import { isCardModalOpen } from '$lib/cardModal';
 
 	type Award = {
 		heading: string;
@@ -75,6 +76,8 @@
 
 	let hoverCapable = false;
 	let allowManual = false; // true only while hovered (desktop)
+	/** RAF timestamp when modal freeze began; used to shift phaseAnim clocks on resume. */
+	let modalFreezeAt: number | null = null;
 
 	let dragging = false;
 	let dragStartX = 0;
@@ -286,11 +289,36 @@
 		scheduleWheelCaptureIdle();
 	}
 
+	/**
+	 * Fade in while the next award moves into the tip (current stays opaque).
+	 * At rested steps (≥ 1), opacity is 0 so card open/close can't flash a mid-fade.
+	 */
+	function arcEnterOpacity(stepsToTip: number, fadeStartSteps = 1, fadeEndSteps = 0.15) {
+		if (stepsToTip <= fadeEndSteps) return 1;
+		if (stepsToTip >= fadeStartSteps) return 0;
+		return 1 - (stepsToTip - fadeEndSteps) / (fadeStartSteps - fadeEndSteps);
+	}
+
 	/** After the arc tip (p=0.5), fade out quickly and stay hidden for the rest of the arc. */
 	function arcExitOpacity(p: number, fadeStart = 0.5, fadeEnd = 0.57) {
 		if (p <= fadeStart) return 1;
 		if (p >= fadeEnd) return 0;
 		return 1 - (p - fadeStart) / (fadeEnd - fadeStart);
+	}
+
+	/** Avoid translucent award surfaces during modal open/close (backdrop-filter / clip toggles flash them). */
+	function snapAwardOpacitiesForModal(els: HTMLElement[]) {
+		for (const el of els) {
+			const surface = el.querySelector('.award-card-surface');
+			if (!(surface instanceof HTMLElement)) continue;
+			const raw = Number.parseFloat(surface.style.opacity || '1');
+			const snapped = Number.isFinite(raw) && raw >= 0.5 ? 1 : 0;
+			surface.style.opacity = String(snapped);
+			if (snapped === 0) {
+				el.style.visibility = 'hidden';
+				el.style.pointerEvents = 'none';
+			}
+		}
 	}
 
 	function shouldAnimate() {
@@ -315,6 +343,23 @@
 			const els = awardEls.filter((el): el is HTMLElement => el instanceof HTMLElement);
 			const n = els.length;
 			if (n === 0) return;
+
+			// Freeze while a card modal zooms the stage — otherwise sibling awards
+			// remeasure against the scaled getBoundingClientRect and drift.
+			if (isCardModalOpen()) {
+				if (modalFreezeAt == null) {
+					modalFreezeAt = now;
+					snapAwardOpacitiesForModal(els);
+				}
+				lastNow = 0;
+				raf = requestAnimationFrame(tick);
+				return;
+			}
+			if (modalFreezeAt != null) {
+				const freezeMs = now - modalFreezeAt;
+				if (phaseAnim) phaseAnim.startTime += freezeMs;
+				modalFreezeAt = null;
+			}
 
 			const dt = lastNow > 0 ? Math.max(8, now - lastNow) : 16;
 			lastNow = now;
@@ -345,9 +390,9 @@
 				phase = (phase + dt / dur) % 1;
 			}
 
-			const rect = orbitEl.getBoundingClientRect();
-			const w = rect.width;
-			const h = rect.height;
+			// Layout size (not transformed) so stage zoom / scroll compensate don't move the arc.
+			const w = orbitEl.clientWidth;
+			const h = orbitEl.clientHeight;
 
 			const x0 = startX * w;
 			const x1 = endX * w;
@@ -356,6 +401,8 @@
 			const k = Math.pow(0.5, Math.max(0.3, fallExp));
 			const yCenter = clamp(centerY, 0.2, 0.8) * h;
 			const yBase = yPeak + (yCenter - yPeak) / k;
+			const tip = tipPhase();
+			const step = 1 / n;
 
 			for (let i = 0; i < n; i++) {
 				const el = els[i];
@@ -378,9 +425,11 @@
 				const y = yPeak + (yBase - yPeak) * Math.pow(p, Math.max(0.3, fallExp));
 				const rot = 360 * (p - 0.5);
 
-				const opacity = arcExitOpacity(p);
+				// Positive = still on the entry side of the tip (incoming awards).
+				const stepsToTip = shortestDelta(phaseI, tip) / step;
+				const opacity = arcEnterOpacity(stepsToTip) * arcExitOpacity(p);
 
-				el.style.visibility = 'visible';
+				el.style.visibility = opacity < 0.02 ? 'hidden' : 'visible';
 				el.style.pointerEvents = opacity < 0.12 ? 'none' : 'auto';
 				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg)`;
 				if (surface) surface.style.opacity = String(opacity);

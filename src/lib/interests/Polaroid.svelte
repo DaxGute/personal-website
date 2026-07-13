@@ -148,7 +148,8 @@
 		transition: opacity 0.28s ease;
 	}
 
-	:global(.hover-polaroid-scale:hover) .polaroid-front-main {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.polaroid-front-main {
 		opacity: 0;
 	}
 
@@ -173,7 +174,8 @@
 		transition: opacity 0.28s ease;
 	}
 
-	:global(.hover-polaroid-scale:hover) .polaroid-hover-hint {
+	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.polaroid-hover-hint {
 		opacity: 1;
 	}
 
@@ -215,8 +217,6 @@
 	}
 
 	.photo {
-		transform: translateZ(calc(10px * var(--hover, 0)));
-		transition: transform 140ms ease;
 		position: relative;
 		width: 100%;
 		border-radius: 3px;
@@ -227,13 +227,6 @@
 			inset 0 0 0 1px rgba(255, 255, 255, 0.45),
 			inset 0 0 24px rgba(255, 255, 255, 0.08);
 		aspect-ratio: 1 / 1;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.photo {
-			transition: none;
-			transform: none;
-		}
 	}
 
 	.photo img {
