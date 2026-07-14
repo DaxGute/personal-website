@@ -1,7 +1,9 @@
 import bishopsGraduation from '$lib/assets/education/bishops_graduation.png';
 import bishopsLogo from '$lib/assets/education/bishops_logo.png';
-import bishopsWithDog from '$lib/assets/education/bishops_with_dog.png';
+import bishopsWithDog from '$lib/assets/education/bishops_with_dog.jpeg';
+import stanfordCampus from '$lib/assets/education/stanford_campus.png';
 import stanfordLogo from '$lib/assets/education/stanford_logo.png';
+import stanfordPortrait from '$lib/assets/education/stanford_portrait.png';
 
 export type EducationBackImage = {
 	src: string;
@@ -29,7 +31,17 @@ export const educations: Education[] = [
 			'Coursework in probability, statistics, computer science, and data-driven decision making. Focused on applied machine learning and data analysis.'
 		],
 		logoSrc: stanfordLogo,
-		logoAlt: 'Stanford logo'
+		logoAlt: 'Stanford logo',
+		backImages: [
+			{
+				src: stanfordCampus,
+				alt: 'Stanford campus building under a cloudy sky'
+			},
+			{
+				src: stanfordPortrait,
+				alt: 'Standing in the Stanford Main Quad colonnade'
+			}
+		]
 	},
 	{
 		school: 'The Bishops School',

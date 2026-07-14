@@ -12,7 +12,7 @@
 	}
 
 	export let heading: string;
-	export let subheading: string;
+	export let subheading = '';
 	export let location: string | null = null;
 	export let dates: string | null = null;
 	export let variant: CardVariant;
@@ -35,6 +35,8 @@
 
 	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
 	$: sidePhotoOnBack = variant === 'experience' && !!backImageSrc;
+	$: hasHeaderLogo = (variant === 'education' || variant === 'award') && !!logoSrc;
+	$: showHeaderSide = (dates && variant !== 'award') || hasHeaderLogo;
 	$: primaryLink =
 		links.find((l) => {
 			const label = (l.label ?? '').trim().toLowerCase();
@@ -49,11 +51,19 @@
 		? 'info-card--project'
 		: variant === 'experience'
 			? 'info-card--experience'
-			: ''}
+			: variant === 'award'
+				? 'info-card--award'
+				: ''}
 	surfaceClass={hasSideLogo ? 'has-logo' : ''}
 	{expandOnClick}
 >
-	<div slot="front" class="card-row">
+	<div slot="front" class="card-row" class:card-row--edu-bg={variant === 'education' && !!logoSrc}>
+		{#if variant === 'education' && logoSrc}
+			<div class="education-bg-logo" aria-hidden="true">
+				<img src={logoSrc} alt="" loading="lazy" decoding="async" />
+			</div>
+		{/if}
+
 		{#if hasSideLogo && logoSrc}
 			<div class="card-logo" aria-hidden={logoAlt ? undefined : 'true'}>
 				<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
@@ -61,22 +71,29 @@
 		{/if}
 
 		<div class="card-content">
-			<div class="card-header experience-header">
+			<div class="card-header experience-header" class:experience-header--award={variant === 'award'}>
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
-					<p
-						class="experience-sub"
-						class:wrap-sub={variant !== 'experience' && variant !== 'education'}
-					>
-						{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
-					</p>
+					{#if variant !== 'award'}
+						<p
+							class="experience-sub"
+							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
+						>
+							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
+						</p>
+					{:else if dates}
+						<div class="award-date-slot">
+							<p class="experience-dates award-dates">{dates}</p>
+							<p class="award-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
+						</div>
+					{/if}
 				</div>
-				{#if dates || (variant === 'education' && logoSrc)}
+				{#if showHeaderSide}
 					<div class="experience-side">
-						{#if dates}
+						{#if dates && variant !== 'award'}
 							<p class="experience-dates">{dates}</p>
 						{/if}
-						{#if variant === 'education' && logoSrc}
+						{#if hasHeaderLogo && logoSrc && variant !== 'education'}
 							<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
 								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
 							</div>
@@ -85,58 +102,54 @@
 				{/if}
 			</div>
 
-			<div class="card-main">
-				<div class="card-main-content" class:card-main-content--custom={customFrontBody}>
-					{#if customFrontBody}
-						<slot name="frontBody" />
-					{:else if variant === 'experience'}
-						<ul class="experience-highlights">
-							{#each items as item}
-								<li>{item}</li>
-							{/each}
-						</ul>
-					{:else if variant === 'education'}
-						<div class="education-details">
-							{#each items as item}
-								<p>{item}</p>
-							{/each}
-						</div>
-					{:else if variant === 'project'}
-						{#if body}
-							<p class="project-body">{body}</p>
-						{/if}
-
-						{#if primaryLink}
-							<p class="project-website">
-								<a
-									class="project-website-link"
-									href={primaryLink.href}
-									target="_blank"
-									rel="noreferrer"
-								>
-									{primaryLink.label}.
-								</a>
-							</p>
-						{/if}
-
-						{#if items.length}
-							<ul class="experience-highlights" aria-label="Project highlights">
+			{#if variant !== 'award'}
+				<div class="card-main">
+					<div class="card-main-content" class:card-main-content--custom={customFrontBody}>
+						{#if customFrontBody}
+							<slot name="frontBody" />
+						{:else if variant === 'experience'}
+							<ul class="experience-highlights">
 								{#each items as item}
 									<li>{item}</li>
 								{/each}
 							</ul>
-						{/if}
-					{:else}
-						<div class="award-details">
-							{#each items as item}
-								<p>{item}</p>
-							{/each}
-						</div>
-					{/if}
-				</div>
+						{:else if variant === 'education'}
+							<div class="education-details">
+								{#each items as item}
+									<p>{item}</p>
+								{/each}
+							</div>
+						{:else if variant === 'project'}
+							{#if body}
+								<p class="project-body">{body}</p>
+							{/if}
 
-				<p class="card-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
-			</div>
+							{#if primaryLink}
+								<p class="project-website">
+									<a
+										class="project-website-link"
+										href={primaryLink.href}
+										target="_blank"
+										rel="noreferrer"
+									>
+										{primaryLink.label}.
+									</a>
+								</p>
+							{/if}
+
+							{#if items.length}
+								<ul class="experience-highlights" aria-label="Project highlights">
+									{#each items as item}
+										<li>{item}</li>
+									{/each}
+								</ul>
+							{/if}
+						{/if}
+					</div>
+
+					<p class="card-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -163,22 +176,26 @@
 		{/if}
 
 		<div class="card-content">
-			<div class="card-header experience-header">
+			<div class="card-header experience-header" class:experience-header--award={variant === 'award'}>
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
-					<p
-						class="experience-sub"
-						class:wrap-sub={variant !== 'experience' && variant !== 'education'}
-					>
-						{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
-					</p>
+					{#if variant !== 'award'}
+						<p
+							class="experience-sub"
+							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
+						>
+							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
+						</p>
+					{:else if dates}
+						<p class="experience-dates award-dates">{dates}</p>
+					{/if}
 				</div>
-				{#if dates || (variant === 'education' && logoSrc)}
+				{#if showHeaderSide}
 					<div class="experience-side">
-						{#if dates}
+						{#if dates && variant !== 'award'}
 							<p class="experience-dates">{dates}</p>
 						{/if}
-						{#if variant === 'education' && logoSrc}
+						{#if hasHeaderLogo && logoSrc}
 							<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
 								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
 							</div>
@@ -190,7 +207,7 @@
 			<div
 				class="card-back-main"
 				class:card-back-main--with-image={(!sidePhotoOnBack && !!backImageSrc) || !!backImageHref}
-				class:card-back-main--with-copy={backItems.length > 0}
+				class:card-back-main--with-copy={backItems.length > 0 || (variant === 'award' && items.length > 0)}
 				class:card-back-main--custom={customBackBody}
 			>
 				{#if customBackBody}
@@ -250,7 +267,7 @@
 								</svg>
 							</a>
 						</div>
-					{:else if backItems.length === 0 && !sidePhotoOnBack}
+					{:else if backItems.length === 0 && !sidePhotoOnBack && !(variant === 'award' && items.length > 0)}
 						<p class="card-back-marker">backside</p>
 					{/if}
 					{#if variant === 'experience'}
@@ -410,6 +427,35 @@
 		height: 100%;
 	}
 
+	.card-row--edu-bg {
+		isolation: isolate;
+	}
+
+	.education-bg-logo {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		display: grid;
+		place-items: center;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.education-bg-logo img {
+		display: block;
+		width: min(78%, 260px);
+		height: min(78%, 260px);
+		object-fit: contain;
+		opacity: 0.22;
+		filter: saturate(0.85) contrast(1.05);
+	}
+
+	.card-row--edu-bg > .card-logo,
+	.card-row--edu-bg > .card-content {
+		position: relative;
+		z-index: 1;
+	}
+
 	.card-logo {
 		position: relative;
 		z-index: 2;
@@ -477,7 +523,7 @@
 	.card-back-main--custom {
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		overflow: visible;
 	}
 
 	.card-back-image {
@@ -653,9 +699,15 @@
 		min-width: 0;
 	}
 
-	:global(.info-card--blue) .experience-sub {
+	:global(.info-card.info-card--blue) .experience-sub {
 		overflow: visible;
 		text-overflow: unset;
+		color: var(--tone-accent);
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.75),
+			0 0 10px rgba(var(--tone-glow-2), 0.2);
 	}
 
 	.experience-dates {
@@ -711,6 +763,87 @@
 	:global(.info-card.info-card--experience) .experience-side {
 		grid-column: 2;
 		grid-row: 1;
+	}
+
+	:global(.info-card.info-card--award) .experience-header {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-rows: auto auto;
+		align-items: start;
+		column-gap: 12px;
+		row-gap: 2px;
+		overflow: visible;
+	}
+
+	:global(.info-card.info-card--award) .experience-meta {
+		display: contents;
+	}
+
+	:global(.info-card.info-card--award) .experience-company {
+		grid-column: 1;
+		grid-row: 1;
+		min-width: 0;
+	}
+
+	:global(.info-card.info-card--award) .award-date-slot,
+	:global(.info-card.info-card--award) .experience-meta > .award-dates {
+		grid-column: 1;
+		grid-row: 2;
+		min-width: 0;
+	}
+
+	:global(.info-card.info-card--award) .award-date-slot {
+		position: relative;
+		min-height: 1.2em;
+	}
+
+	:global(.info-card.info-card--award) .award-dates {
+		transition: opacity 0.28s ease;
+	}
+
+	.award-hover-hint {
+		position: absolute;
+		top: 0;
+		left: 0;
+		margin: 0;
+		opacity: 0;
+		color: #e8f2ff;
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+		white-space: nowrap;
+		text-shadow:
+			0 1px 2px rgba(11, 18, 32, 0.85),
+			0 0 12px rgba(170, 210, 255, 0.4);
+		transition: opacity 0.28s ease;
+		pointer-events: none;
+	}
+
+	:global(.hover-polaroid-scale.info-card--award:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.award-date-slot
+		.award-dates {
+		opacity: 0;
+	}
+
+	:global(.hover-polaroid-scale.info-card--award:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.award-date-slot
+		.award-hover-hint {
+		opacity: 1;
+	}
+
+	:global(.info-card.info-card--award) .experience-side {
+		grid-column: 2;
+		grid-row: 1 / span 2;
+		align-self: center;
+	}
+
+	:global(.info-card.info-card--award) .education-logo {
+		width: clamp(34px, 3.8vw, 50px);
+		height: clamp(34px, 3.8vw, 50px);
+	}
+
+	.award-dates {
+		white-space: nowrap;
 	}
 
 	.education-logo {

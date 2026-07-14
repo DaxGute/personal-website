@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
+	import { abbreviateMonths } from '$lib/format';
 	import { isCardModalOpen } from '$lib/cardModal';
 
 	type Award = {
 		heading: string;
-		subheading: string;
+		dates: string;
 		items: string[];
+		logoSrc?: string;
+		logoAlt?: string;
 	};
 
 	export let kicker: string | undefined = undefined;
@@ -583,9 +586,10 @@
 						<InfoCard
 							variant="award"
 							heading={award.heading}
-							subheading={award.subheading}
-							dates={null}
+							dates={abbreviateMonths(award.dates)}
 							items={award.items}
+							logoSrc={award.logoSrc ?? null}
+							logoAlt={award.logoAlt ?? null}
 						/>
 					</div>
 				</li>

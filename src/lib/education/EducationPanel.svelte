@@ -28,8 +28,8 @@
 					logoAlt={edu.logoAlt}
 					customBackBody
 				>
-					<div slot="backBody" class="bishops-back" aria-label="{edu.school} photos">
-						<figure class="bishops-photo bishops-photo--dog">
+					<div slot="backBody" class="edu-back" aria-label="{edu.school} photos">
+						<figure class="edu-photo edu-photo--primary">
 							<img
 								src={edu.backImages[0].src}
 								alt={edu.backImages[0].alt}
@@ -37,7 +37,7 @@
 								decoding="async"
 							/>
 						</figure>
-						<figure class="bishops-photo bishops-photo--grad">
+						<figure class="edu-photo edu-photo--secondary">
 							<img
 								src={edu.backImages[1].src}
 								alt={edu.backImages[1].alt}
@@ -133,19 +133,20 @@
 						var(--edu-split) * var(--edu-t, 0)
 				)
 			)
-			translateY(calc(var(--edu-stack-sep) * var(--edu-t, 0)))
+			translateY(calc(-10px + var(--edu-stack-sep) * var(--edu-t, 0)))
 			translateZ(0);
 	}
 
-	.bishops-back {
+	.edu-back {
 		position: relative;
 		flex: 1 1 auto;
 		min-height: 0;
 		width: 100%;
 		height: 100%;
+		overflow: visible;
 	}
 
-	.bishops-photo {
+	.edu-photo {
 		position: absolute;
 		margin: 0;
 		width: min(69%, 222px);
@@ -154,33 +155,41 @@
 		border-radius: 2px;
 		background: rgba(140, 180, 220, 0.12);
 		box-shadow:
-			0 1px 0 rgba(255, 255, 255, 0.35),
-			0 6px 16px rgba(40, 70, 110, 0.18);
+			0 2px 4px rgba(40, 70, 110, 0.16),
+			0 10px 22px rgba(40, 70, 110, 0.22);
 	}
 
-	.bishops-photo img {
+	.edu-photo img {
 		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
 
-	.bishops-photo--dog {
+	.edu-photo--primary {
 		top: 50%;
-		right: 0;
+		right: 6px;
 		transform: translateY(-50%);
 	}
 
-	.bishops-photo--dog img {
+	.edu-photo--secondary {
+		bottom: 6px;
+		left: 6px;
+	}
+
+	.education-card.is-stanford .edu-photo--primary img {
+		object-position: center 40%;
+	}
+
+	.education-card.is-stanford .edu-photo--secondary img {
+		object-position: center 20%;
+	}
+
+	.education-card:not(.is-stanford) .edu-photo--primary img {
 		object-position: center 18%;
 	}
 
-	.bishops-photo--grad {
-		bottom: 0;
-		left: 0;
-	}
-
-	.bishops-photo--grad img {
+	.education-card:not(.is-stanford) .edu-photo--secondary img {
 		object-position: center 55%;
 	}
 
