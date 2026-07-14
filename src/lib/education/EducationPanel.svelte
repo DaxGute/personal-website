@@ -17,15 +17,47 @@
 <div class="education-carousel" aria-label="Education carousel">
 	{#each educations.slice(0, 2) as edu (edu.school)}
 		<article class="education-card" class:is-stanford={edu.school === 'Stanford University'}>
-			<InfoCard
-				variant="education"
-				heading={edu.school}
-				subheading={`${edu.degree} · ${edu.location}`}
-				dates={abbreviateMonths(edu.dates)}
-				items={edu.details}
-				logoSrc={edu.logoSrc}
-				logoAlt={edu.logoAlt}
-			/>
+			{#if edu.backImages?.length}
+				<InfoCard
+					variant="education"
+					heading={edu.school}
+					subheading={`${edu.degree} · ${edu.location}`}
+					dates={abbreviateMonths(edu.dates)}
+					items={edu.details}
+					logoSrc={edu.logoSrc}
+					logoAlt={edu.logoAlt}
+					customBackBody
+				>
+					<div slot="backBody" class="bishops-back" aria-label="{edu.school} photos">
+						<figure class="bishops-photo bishops-photo--dog">
+							<img
+								src={edu.backImages[0].src}
+								alt={edu.backImages[0].alt}
+								loading="lazy"
+								decoding="async"
+							/>
+						</figure>
+						<figure class="bishops-photo bishops-photo--grad">
+							<img
+								src={edu.backImages[1].src}
+								alt={edu.backImages[1].alt}
+								loading="lazy"
+								decoding="async"
+							/>
+						</figure>
+					</div>
+				</InfoCard>
+			{:else}
+				<InfoCard
+					variant="education"
+					heading={edu.school}
+					subheading={`${edu.degree} · ${edu.location}`}
+					dates={abbreviateMonths(edu.dates)}
+					items={edu.details}
+					logoSrc={edu.logoSrc}
+					logoAlt={edu.logoAlt}
+				/>
+			{/if}
 		</article>
 	{/each}
 </div>
@@ -103,6 +135,53 @@
 			)
 			translateY(calc(var(--edu-stack-sep) * var(--edu-t, 0)))
 			translateZ(0);
+	}
+
+	.bishops-back {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+		height: 100%;
+	}
+
+	.bishops-photo {
+		position: absolute;
+		margin: 0;
+		width: min(69%, 222px);
+		aspect-ratio: 1 / 1;
+		overflow: hidden;
+		border-radius: 2px;
+		background: rgba(140, 180, 220, 0.12);
+		box-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.35),
+			0 6px 16px rgba(40, 70, 110, 0.18);
+	}
+
+	.bishops-photo img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.bishops-photo--dog {
+		top: 50%;
+		right: 0;
+		transform: translateY(-50%);
+	}
+
+	.bishops-photo--dog img {
+		object-position: center 18%;
+	}
+
+	.bishops-photo--grad {
+		bottom: 0;
+		left: 0;
+	}
+
+	.bishops-photo--grad img {
+		object-position: center 55%;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

@@ -33,6 +33,7 @@
 			<Polaroid
 				src={item.src ?? null}
 				alt={item.alt ?? item.caption}
+				backImages={item.backImages ?? []}
 				revealRootMargin={item.revealRootMargin ?? '0px -35% 0px -35%'}
 				revealThreshold={item.revealThreshold ?? 0.01}
 				caption={item.caption}

@@ -26,6 +26,10 @@
 					items={exp.highlights}
 					logoSrc={exp.logoSrc}
 					logoAlt={exp.logoAlt}
+					backImageSrc={exp.backImageSrc}
+					backImageAlt={exp.backImageAlt}
+					backImageHref={exp.backImageHref}
+					backLinkLabel={exp.backLinkLabel}
 				/>
 			</li>
 		{/each}
@@ -76,10 +80,12 @@
 		--t: var(--exp-t, 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
+		--exp-card-h: clamp(117px, 13vh, 156px);
 		position: relative;
 		z-index: 1;
 		width: 100%;
-		min-height: clamp(180px, 20vh, 240px);
+		height: var(--exp-card-h);
+		min-height: var(--exp-card-h);
 		transform: translate3d(
 			calc(var(--spread-x) * (1 - var(--t))),
 			calc(var(--spread-y) * (1 - var(--t))),
@@ -103,7 +109,7 @@
 
 	@media (min-width: 720px) {
 		:global(#experiences) .experience-list {
-			--exp-card-w: min(520px, 46vw);
+			--exp-card-w: min(546px, 48.3vw);
 		}
 
 		.experience-item {

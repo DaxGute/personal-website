@@ -6,9 +6,12 @@
 	export let alt = '';
 	export let caption: string;
 	export let subtitle: string | null = null;
+	export let backImages: string[] = [];
 	export let loading: 'lazy' | 'eager' = 'lazy';
 	export let revealRootMargin = '0px -35% 0px -35%';
 	export let revealThreshold = 0.01;
+
+	$: hasBackGrid = backImages.length >= 4;
 
 	let rootEl: HTMLElement | null = null;
 	let revealed = false;
@@ -110,14 +113,28 @@
 			<p class="polaroid-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
 		</div>
 
-		<div slot="back" class="polaroid-content polaroid-content--back">
-			<div class="polaroid-back-main">
-				<p class="polaroid-back-marker">backside</p>
-				<p class="experience-company">{caption}</p>
-				{#if subtitle}
-					<p class="experience-sub wrap-sub">{subtitle}</p>
-				{/if}
-			</div>
+		<div
+			slot="back"
+			class="polaroid-content polaroid-content--back"
+			class:polaroid-content--back-grid={hasBackGrid}
+		>
+			{#if hasBackGrid}
+				<div class="polaroid-back-grid" aria-label="{caption} photos">
+					{#each backImages.slice(0, 4) as image (image)}
+						<div class="polaroid-back-cell">
+							<img src={image} alt="" loading="lazy" decoding="async" />
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<div class="polaroid-back-main">
+					<p class="polaroid-back-marker">backside</p>
+					<p class="experience-company">{caption}</p>
+					{#if subtitle}
+						<p class="experience-sub wrap-sub">{subtitle}</p>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</CardShell>
 </div>
@@ -181,6 +198,40 @@
 
 	.polaroid-content--back {
 		justify-content: center;
+	}
+
+	.polaroid-content--back-grid {
+		padding: 0;
+		justify-content: stretch;
+	}
+
+	.polaroid-back-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		grid-template-rows: 1fr 1fr;
+		gap: 3px;
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+		height: 100%;
+		border-radius: 3px;
+		overflow: hidden;
+	}
+
+	.polaroid-back-cell {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		background: #aebeaa;
+	}
+
+	.polaroid-back-cell img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center;
 	}
 
 	.polaroid-back-main {

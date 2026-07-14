@@ -1,5 +1,12 @@
+import bishopsGraduation from '$lib/assets/education/bishops_graduation.png';
 import bishopsLogo from '$lib/assets/education/bishops_logo.png';
+import bishopsWithDog from '$lib/assets/education/bishops_with_dog.png';
 import stanfordLogo from '$lib/assets/education/stanford_logo.png';
+
+export type EducationBackImage = {
+	src: string;
+	alt: string;
+};
 
 export type Education = {
 	school: string;
@@ -9,6 +16,7 @@ export type Education = {
 	details: string[];
 	logoSrc: string;
 	logoAlt: string;
+	backImages?: EducationBackImage[];
 };
 
 export const educations: Education[] = [
@@ -32,6 +40,16 @@ export const educations: Education[] = [
 			'Graduated Cum Laude; Coursework in advanced mathematics, computer science, and economics. [GPA: 4.82]'
 		],
 		logoSrc: bishopsLogo,
-		logoAlt: "The Bishop's School logo"
+		logoAlt: "The Bishop's School logo",
+		backImages: [
+			{
+				src: bishopsWithDog,
+				alt: 'In Bishop’s School uniform with a dog on campus'
+			},
+			{
+				src: bishopsGraduation,
+				alt: 'Bishop’s School graduation display with diploma and community service award'
+			}
+		]
 	}
 ];

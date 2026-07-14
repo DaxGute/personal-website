@@ -1,7 +1,9 @@
-import baiLogo from '$lib/assets/experience/bai_logo.jpg';
+import baiLogo from '$lib/assets/experience/bai_logo.jpeg';
+import baiPhoto from '$lib/assets/experience/bai_photo.png';
 import cestaLogo from '$lib/assets/experience/CESTA_logo.jpg';
-import ccLogo from '$lib/assets/experience/cc_logo.jpg';
-import sdLogo from '$lib/assets/experience/sd_logo.jpg';
+import ccLogo from '$lib/assets/experience/cc_logo.jpeg';
+import sdLogo from '$lib/assets/experience/sd_logo.jpeg';
+import youthCommissionPhoto from '$lib/assets/experience/youth_commission.png';
 
 export type Experience = {
 	company: string;
@@ -11,6 +13,10 @@ export type Experience = {
 	highlights: string[];
 	logoSrc: string;
 	logoAlt: string;
+	backImageSrc?: string;
+	backImageAlt?: string;
+	backImageHref?: string;
+	backLinkLabel?: string;
 };
 
 export const experiences: Experience[] = [
@@ -34,7 +40,9 @@ export const experiences: Experience[] = [
 			'Working on AI and biotech research, analyzing product-fit within the evolving biotech landscape and potential areas for innovation.'
 		],
 		logoSrc: baiLogo,
-		logoAlt: 'Benevolent AI logo'
+		logoAlt: 'Benevolent AI logo',
+		backImageSrc: baiPhoto,
+		backImageAlt: 'At BenevolentAI reception in London'
 	},
 	{
 		company: 'Castle Creek Capital',
@@ -45,7 +53,9 @@ export const experiences: Experience[] = [
 			'Assisted with financial modeling and analysis in small community banks across the U.S. for eventual presentation to management.'
 		],
 		logoSrc: ccLogo,
-		logoAlt: 'Castle Creek Capital logo'
+		logoAlt: 'Castle Creek Capital logo',
+		backImageHref: 'https://www.castlecreek.com/internship',
+		backLinkLabel: 'Internship Page'
 	},
 	{
 		company: 'City of San Diego',
@@ -56,6 +66,8 @@ export const experiences: Experience[] = [
 			'Represented District 3 on the city’s Youth Commission, advising on programs and policies affecting young people in San Diego.'
 		],
 		logoSrc: sdLogo,
-		logoAlt: 'City of San Diego logo'
+		logoAlt: 'City of San Diego logo',
+		backImageSrc: youthCommissionPhoto,
+		backImageAlt: 'San Diego Youth Commission group photo'
 	}
 ];
