@@ -427,11 +427,14 @@
 
 	:global(.info-card--experience) .card-logo {
 		align-self: stretch;
-		flex: 0 0 var(--exp-card-h, clamp(121px, 13.4vh, 161px));
-		width: var(--exp-card-h, clamp(121px, 13.4vh, 161px));
-		height: var(--exp-card-h, clamp(121px, 13.4vh, 161px));
+		flex: 0 0 var(--exp-card-h, 112px);
+		width: var(--exp-card-h, 112px);
+		height: var(--exp-card-h, 112px);
 		padding: 0;
 		overflow: hidden;
+		border-right: none;
+		background: transparent;
+		box-shadow: none;
 	}
 
 	:global(.info-card--experience) .card-logo img {
@@ -441,11 +444,27 @@
 		object-position: center;
 	}
 
+	/* Modal back: square photo matching card height, flush top / bottom / left. */
+	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo,
+	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo--back-photo {
+		flex: 0 0 auto;
+		width: auto;
+		height: 100%;
+		aspect-ratio: 1 / 1;
+		align-self: stretch;
+		padding: 0;
+		margin: 0;
+		border-right: none;
+		background: transparent;
+		box-shadow: none;
+		border-radius: 4px 0 0 4px;
+	}
+
 	:global(.info-card--experience) .card-logo--back-photo {
 		position: relative;
 		align-self: stretch;
-		flex: 0 0 calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
-		width: calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
+		flex: 0 0 var(--exp-card-h, 112px);
+		width: var(--exp-card-h, 112px);
 		height: 100%;
 	}
 
@@ -497,8 +516,8 @@
 
 	.education-bg-logo img {
 		display: block;
-		width: min(78%, 260px);
-		height: min(78%, 260px);
+		width: 260px;
+		height: 260px;
 		object-fit: contain;
 		opacity: 0.22;
 		filter: saturate(0.85) contrast(1.05);
@@ -524,6 +543,17 @@
 		box-shadow: inset -10px 0 20px rgba(140, 180, 220, 0.06);
 	}
 
+	.card-row--back .card-logo:not(.card-logo--back-photo) {
+		flex-basis: 18%;
+		padding: var(--back-pad, 0.92cqw) var(--back-gap, 1.2cqw) var(--back-pad, 0.92cqw)
+			var(--back-pad, 0.92cqw);
+	}
+
+	:global(.info-card--experience) .card-row--back .card-logo:not(.card-logo--back-photo) {
+		flex-basis: auto;
+		padding: 0;
+	}
+
 	.card-logo img {
 		position: relative;
 		z-index: 1;
@@ -545,6 +575,19 @@
 		transition:
 			background 0.28s ease,
 			box-shadow 0.28s ease;
+	}
+
+	.card-row--back .card-content {
+		padding: var(--back-pad, 0.92cqw);
+	}
+
+	:global(.info-card--experience.info-card--modal) .card-row--back .card-content {
+		padding: var(--back-pad, 0.92cqw) var(--back-pad, 0.92cqw) var(--back-pad, 0.92cqw)
+			calc(var(--back-pad, 0.92cqw) * 1.4);
+	}
+
+	:global(.info-card--experience.info-card--modal) .card-row--back .experience-header {
+		margin-bottom: var(--back-gap-sm, 0.75cqw);
 	}
 
 	.card-main {
@@ -643,18 +686,18 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 10px;
+		gap: var(--back-gap, 1.2cqw);
 		height: 100%;
 		width: auto;
 		max-width: 100%;
 		aspect-ratio: 4 / 3;
 		margin-left: auto;
-		padding: 16px;
+		padding: var(--back-gap-lg, 1.5cqw);
 		border-radius: 2px;
 		border: 1px solid rgba(150, 160, 175, 0.35);
 		background: rgba(150, 158, 170, 0.28);
 		color: rgba(40, 46, 58, 0.88);
-		font-size: 13px;
+		font-size: var(--back-fs, 2.15cqw);
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		text-align: center;
@@ -671,8 +714,8 @@
 	}
 
 	.card-back-link-icon {
-		width: 22px;
-		height: 22px;
+		width: var(--back-icon, 2cqw);
+		height: var(--back-icon, 2cqw);
 		flex: 0 0 auto;
 		opacity: 0.78;
 	}
@@ -729,9 +772,9 @@
 	}
 
 	.card-back-marker {
-		margin: 0 0 8px;
+		margin: 0 0 var(--back-gap-sm, 0.75cqw);
 		color: rgba(216, 226, 242, 0.72);
-		font-size: 11px;
+		font-size: var(--back-fs-xs, 1.84cqw);
 		font-weight: 700;
 		letter-spacing: 0.14em;
 		text-transform: lowercase;
@@ -796,15 +839,96 @@
 		min-width: 0;
 	}
 
+	.card-row--back .experience-header {
+		gap: var(--back-gap, 1.2cqw);
+		margin-bottom: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.card-row--back .experience-side {
+		gap: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.card-row--back .experience-meta {
+		gap: var(--back-gap-xs, 0.3cqw);
+	}
+
 	:global(.info-card.info-card--blue) .experience-sub {
 		overflow: visible;
 		text-overflow: unset;
 		color: var(--tone-accent);
 		font-weight: 600;
 		letter-spacing: 0.05em;
+		font-size: 13px;
+		white-space: nowrap;
 		text-shadow:
 			0 1px 0 rgba(255, 255, 255, 0.75),
 			0 0 10px rgba(var(--tone-glow-2), 0.2);
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .experience-sub {
+		font-size: var(--back-fs, 2.15cqw);
+	}
+
+	:global(.info-card.info-card--blue) .experience-company {
+		font-size: 16px;
+		line-height: 1.2;
+		white-space: nowrap;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .experience-company {
+		font-size: var(--back-fs-lg, 2.71cqw);
+	}
+
+	:global(.info-card.info-card--blue) .experience-dates {
+		font-size: 13px;
+		white-space: nowrap;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .experience-dates {
+		font-size: var(--back-fs, 2.15cqw);
+	}
+
+	:global(.info-card.info-card--blue) .education-details {
+		font-size: 13px;
+		line-height: 1.6;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .education-details {
+		font-size: var(--back-fs, 2.15cqw);
+	}
+
+	:global(.info-card.info-card--blue) .card-hover-hint {
+		font-size: 13px;
+	}
+
+	:global(.info-card.info-card--blue) .card-content {
+		padding: 14px 14px;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .card-content {
+		padding: var(--back-pad, 0.92cqw);
+	}
+
+	:global(.info-card.info-card--blue) .experience-header {
+		gap: 12px;
+		margin-bottom: 8px;
+		flex-direction: row;
+		align-items: flex-start;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .experience-header {
+		gap: var(--back-gap, 1.2cqw);
+		margin-bottom: var(--back-gap-sm, 0.75cqw);
+	}
+
+	:global(.info-card.info-card--blue) .education-logo {
+		width: 44px;
+		height: 44px;
+	}
+
+	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .education-logo {
+		width: var(--back-logo-sm, 4cqw);
+		height: var(--back-logo-sm, 4cqw);
 	}
 
 	.experience-dates {
@@ -818,6 +942,10 @@
 		text-shadow:
 			0 1px 2px rgba(11, 18, 32, 0.85),
 			0 0 12px rgba(170, 210, 255, 0.4);
+	}
+
+	.card-row--back .experience-dates {
+		font-size: var(--back-fs, 2.15cqw);
 	}
 
 	:global(.info-card.info-card--experience) .experience-sub,
@@ -840,6 +968,11 @@
 		column-gap: 12px;
 		row-gap: 2px;
 		overflow: visible;
+	}
+
+	:global(.info-card.info-card--experience.info-card--modal) .card-row--back .experience-header {
+		column-gap: var(--back-gap, 1.2cqw);
+		row-gap: var(--back-gap-xs, 0.3cqw);
 	}
 
 	:global(.info-card.info-card--experience) .experience-meta {
@@ -870,6 +1003,11 @@
 		column-gap: 12px;
 		row-gap: 2px;
 		overflow: visible;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .card-row--back .experience-header {
+		column-gap: var(--back-gap, 1.2cqw);
+		row-gap: var(--back-gap-xs, 0.3cqw);
 	}
 
 	:global(.info-card.info-card--award) .experience-meta {
@@ -935,8 +1073,13 @@
 	}
 
 	:global(.info-card.info-card--award) .education-logo {
-		width: clamp(34px, 3.8vw, 50px);
-		height: clamp(34px, 3.8vw, 50px);
+		width: 50px;
+		height: 50px;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .card-row--back .education-logo {
+		width: var(--back-logo, 4.5cqw);
+		height: var(--back-logo, 4.5cqw);
 	}
 
 	.award-dates {
@@ -947,8 +1090,8 @@
 		position: relative;
 		z-index: 2;
 		isolation: isolate;
-		width: clamp(28px, 3.2vw, 44px);
-		height: clamp(28px, 3.2vw, 44px);
+		width: 44px;
+		height: 44px;
 		display: grid;
 		place-items: center;
 		padding: 2px;
@@ -958,6 +1101,12 @@
 		box-shadow:
 			inset 0 0 12px rgba(140, 180, 220, 0.12),
 			0 0 14px rgba(140, 180, 220, 0.18);
+	}
+
+	.card-row--back .education-logo {
+		width: var(--back-logo-sm, 4cqw);
+		height: var(--back-logo-sm, 4cqw);
+		padding: 0.5cqw;
 	}
 
 	.education-logo img {
@@ -970,25 +1119,23 @@
 	}
 
 	@media (max-width: 520px) {
-		.experience-header {
+		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .experience-header {
 			flex-direction: column;
 			gap: 6px;
 			align-items: flex-start;
 		}
 
-		.experience-side {
+		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .experience-side {
 			align-items: flex-start;
 			gap: 6px;
 		}
-	}
 
-	@media (max-width: 520px) {
-		.card-logo {
+		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .card-logo {
 			flex-basis: clamp(56px, 22%, 88px);
 			padding: 10px 8px 10px 10px;
 		}
 
-		.card-content {
+		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .card-content {
 			padding: 12px 12px;
 		}
 	}
@@ -1128,6 +1275,61 @@
 			transform 140ms ease,
 			background 140ms ease,
 			border-color 140ms ease;
+	}
+
+	/* Back-only: size type / spacing as % of card width. */
+	.card-row--back .experience-highlights {
+		font-size: var(--back-fs-sm, 2.02cqw);
+	}
+
+	.card-row--back .experience-back-copy {
+		gap: var(--back-gap-lg, 1.5cqw);
+	}
+
+	.card-row--back .experience-back-paragraph {
+		font-size: var(--back-fs-sm, 2.02cqw);
+	}
+
+	.card-row--back .education-details {
+		gap: var(--back-gap-sm, 0.75cqw);
+		font-size: var(--back-fs, 2.15cqw);
+	}
+
+	.card-row--back .award-details {
+		gap: var(--back-gap-sm, 0.75cqw);
+		font-size: var(--back-fs, 2.15cqw);
+	}
+
+	.card-row--back .project-body,
+	.card-row--back .project-website {
+		margin: 0 0 var(--back-gap-sm, 0.75cqw);
+		font-size: var(--back-fs-sm, 2.02cqw);
+	}
+
+	.card-row--back .project-chips {
+		gap: var(--back-gap-sm, 0.75cqw);
+		margin: 0 0 var(--back-gap-sm, 0.75cqw);
+	}
+
+	.card-row--back .experience-skills {
+		gap: var(--back-gap-sm, 0.75cqw);
+		padding-top: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.card-row--back .project-chip {
+		height: var(--back-chip-h, 4.1cqw);
+		padding: 0 2.4cqw;
+		font-size: var(--back-fs-xs, 1.84cqw);
+	}
+
+	.card-row--back .project-links {
+		gap: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.card-row--back .project-link {
+		height: var(--back-link-h, 4.42cqw);
+		padding: 0 2.4cqw;
+		font-size: var(--back-fs-xs, 1.84cqw);
 	}
 
 	.project-link:hover {

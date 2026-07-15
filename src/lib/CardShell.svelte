@@ -7,6 +7,7 @@
 		modalMotionMs,
 		modalTransition,
 		mountInModalLayer,
+		prefersMobileCardFade,
 		readScrollLeft,
 		releaseCardModal,
 		setStageZoom,
@@ -70,10 +71,12 @@
 		);
 	}
 
+	let faceOpen = false;
+
 	function activeSurfaceEl(): HTMLElement | null {
 		if (!expanded) return surfaceEl;
 		if (!enableFlip) return surfaceEl;
-		if (readFlipDeg(flipEl) === FLIP_OPEN_DEG) return backSurfaceEl ?? surfaceEl;
+		if (faceOpen) return backSurfaceEl ?? surfaceEl;
 		return surfaceEl;
 	}
 
@@ -271,13 +274,31 @@
 		void tiltEl.offsetHeight;
 	}
 
+	function setFaceOpenClass(open: boolean) {
+		faceOpen = open;
+		rootEl?.classList.toggle('info-card--face-open', open);
+	}
+
 	function setFlipDeg(flipTarget: HTMLElement, deg: number) {
+		const open = deg === FLIP_OPEN_DEG;
+		setFaceOpenClass(open);
+		if (prefersMobileCardFade()) {
+			flipTarget.style.transform = 'none';
+			return;
+		}
 		flipTarget.style.transform = `rotateY(${deg}deg)`;
 	}
 
 	function resetFlipInstant(flipTarget: HTMLElement, deg: number) {
+		const open = deg === FLIP_OPEN_DEG;
+		setFaceOpenClass(open);
 		flipTarget.style.transition = 'none';
-		setFlipDeg(flipTarget, deg);
+		rootEl?.classList.add('info-card--no-face-transition');
+		if (prefersMobileCardFade()) {
+			flipTarget.style.transform = 'none';
+		} else {
+			flipTarget.style.transform = `rotateY(${deg}deg)`;
+		}
 		void flipTarget.offsetHeight;
 	}
 
@@ -285,6 +306,8 @@
 		if (!enableFlip) return;
 		const flip = card.querySelector('.info-card-flip');
 		if (!(flip instanceof HTMLElement)) return;
+		faceOpen = false;
+		card.classList.remove('info-card--face-open');
 		flip.style.transition = 'none';
 		flip.style.transform = '';
 		void flip.offsetHeight;
@@ -474,6 +497,11 @@
 	}
 
 	function setFlipTransition(flipTarget: HTMLElement | null, enabled: boolean) {
+		if (prefersMobileCardFade()) {
+			rootEl?.classList.toggle('info-card--no-face-transition', !enabled || modalMotionMs() === 0);
+			if (flipTarget) flipTarget.style.transition = 'none';
+			return;
+		}
 		if (!flipTarget) return;
 		const motion = modalTransition();
 		flipTarget.style.transition = !enabled || motion === 'none' ? 'none' : `transform ${motion}`;
@@ -482,11 +510,23 @@
 	function clearMotionWillChange(el: HTMLElement, flipTarget: HTMLElement | null) {
 		el.style.removeProperty('will-change');
 		flipTarget?.style.removeProperty('will-change');
+		if (rootEl) {
+			for (const face of rootEl.querySelectorAll<HTMLElement>('.info-card-face')) {
+				face.style.removeProperty('will-change');
+			}
+		}
 	}
 
 	function setMotionWillChange(el: HTMLElement, flipTarget: HTMLElement | null) {
 		el.style.setProperty('will-change', 'transform');
-		if (enableFlip) flipTarget?.style.setProperty('will-change', 'transform');
+		if (!enableFlip) return;
+		if (prefersMobileCardFade() && rootEl) {
+			for (const face of rootEl.querySelectorAll<HTMLElement>('.info-card-face')) {
+				face.style.setProperty('will-change', 'opacity');
+			}
+			return;
+		}
+		flipTarget?.style.setProperty('will-change', 'transform');
 	}
 
 	function clearGhostMotion(el: HTMLElement, flipTarget: HTMLElement | null) {
@@ -534,21 +574,23 @@
 		if (includeOpacity) {
 			waits.push(waitTransition(el, 'opacity', ms));
 		}
-		if (enableFlip && flipTarget) waits.push(waitTransition(flipTarget, 'transform', ms));
+		if (enableFlip && flipTarget) {
+			if (prefersMobileCardFade()) {
+				waits.push(...faceOpacityWaits(flipTarget, ms));
+			} else {
+				waits.push(waitTransition(flipTarget, 'transform', ms));
+			}
+		}
 		await Promise.all(waits);
 	}
 
-	function readFlipDeg(flipTarget: HTMLElement | null) {
-		if (!flipTarget) return FLIP_CLOSED_DEG;
-		const transform = flipTarget.style.transform || getComputedStyle(flipTarget).transform;
-		if (transform.includes('matrix')) {
-			const matrix = new DOMMatrix(transform);
-			const angle = (Math.atan2(matrix.m13, matrix.m11) * 180) / Math.PI;
-			return Math.abs(angle) > 90 ? FLIP_OPEN_DEG : FLIP_CLOSED_DEG;
+	function faceOpacityWaits(flipTarget: HTMLElement, ms: number) {
+		const waits: Promise<void>[] = [];
+		for (const sel of ['.info-card-face--front', '.info-card-face--back']) {
+			const face = flipTarget.querySelector(sel);
+			if (face instanceof HTMLElement) waits.push(waitTransition(face, 'opacity', ms));
 		}
-		const match = transform.match(/rotateY\(([-\d.]+)deg\)/);
-		if (!match) return FLIP_CLOSED_DEG;
-		return Math.abs(parseFloat(match[1])) > 90 ? FLIP_OPEN_DEG : FLIP_CLOSED_DEG;
+		return waits;
 	}
 
 	function focusTargetSize(width: number, height: number) {
@@ -557,7 +599,8 @@
 		const viewH = vv?.height ?? window.innerHeight;
 		const maxW = viewW * 0.82;
 		const maxH = viewH * 0.82;
-		const scale = Math.min(1.75, maxW / width, maxH / height);
+		// Always fill 82% of the viewport on the limiting axis (preserve aspect ratio).
+		const scale = Math.min(maxW / width, maxH / height);
 		return {
 			width: width * scale,
 			height: height * scale
@@ -602,7 +645,12 @@
 
 	async function waitFlipMotion(flipTarget: HTMLElement | null) {
 		if (!enableFlip || !flipTarget) return;
-		await waitTransition(flipTarget, 'transform', modalMotionMs());
+		const ms = modalMotionMs();
+		if (prefersMobileCardFade()) {
+			await Promise.all(faceOpacityWaits(flipTarget, ms));
+			return;
+		}
+		await waitTransition(flipTarget, 'transform', ms);
 	}
 
 	function clearSurfaceGlow(surface: HTMLElement | null | undefined) {
@@ -949,14 +997,16 @@
 								</div>
 							</div>
 							<div class="info-card-face info-card-face--back">
-								<div
-									class="info-card-surface info-card-surface--back hover-polaroid-surface {surfaceClass}"
-									bind:this={backSurfaceEl}
-								>
-									<div class="holo-layer" aria-hidden="true"></div>
-									<div class="grid-base" aria-hidden="true"></div>
-									<div class="grid-cursor" aria-hidden="true"></div>
-									<slot name="back" />
+								<div class="info-card-back-layout">
+									<div
+										class="info-card-surface info-card-surface--back hover-polaroid-surface {surfaceClass}"
+										bind:this={backSurfaceEl}
+									>
+										<div class="holo-layer" aria-hidden="true"></div>
+										<div class="grid-base" aria-hidden="true"></div>
+										<div class="grid-cursor" aria-hidden="true"></div>
+										<slot name="back" />
+									</div>
 								</div>
 							</div>
 						</div>
@@ -997,7 +1047,7 @@
 		transform-style: preserve-3d;
 	}
 
-	/* Back face uses normal modal layout for the entire open/close — no counter-scale mode. */
+	/* Back fills the modal shell at native size so content can use % / cqw of card width. */
 	:global(.info-card--zoom-active .info-card-surface--back .card-row--back),
 	:global(.info-card--zoom-active .info-card-surface--back .polaroid-content--back),
 	:global(.card-modal-layer .info-card--modal .info-card-surface--back .card-row--back),
@@ -1206,11 +1256,18 @@
 		overflow: hidden;
 	}
 
-	/* Idle: fill the face. Pinned: fixed grid design coords scaled into the modal shell. */
-	.info-card-front-layout {
+	/* Idle: fill the face. Front (pinned): grid design coords scaled into the modal shell.
+	   Back always fills the shell so typography can be % of card width (cqw). */
+	.info-card-front-layout,
+	.info-card-back-layout {
 		position: relative;
 		width: 100%;
 		height: 100%;
+	}
+
+	.info-card-back-layout {
+		container-type: inline-size;
+		container-name: card-back;
 	}
 
 	/* Only while pinned — idle grid card must not pick up the scaled front surface. */
@@ -1226,7 +1283,8 @@
 		container-type: inline-size;
 	}
 
-	.info-card-front-layout > .info-card-surface {
+	.info-card-front-layout > .info-card-surface,
+	.info-card-back-layout > .info-card-surface {
 		width: 100%;
 		height: 100%;
 	}
@@ -1305,6 +1363,62 @@
 		width: 100%;
 		height: 100%;
 		transform: rotateY(180deg);
+		overflow: hidden;
+	}
+
+	/* Mobile: crossfade faces instead of rotateY flip. */
+	@media (max-width: 900px) {
+		.info-card-flip-stage {
+			perspective: none;
+		}
+
+		.info-card-flip {
+			transform: none;
+		}
+
+		.info-card-face {
+			backface-visibility: visible;
+			-webkit-backface-visibility: visible;
+			transition: opacity var(--card-modal-ms, 760ms)
+				var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		}
+
+		.info-card-face--front {
+			position: relative;
+			z-index: 1;
+			opacity: 1;
+		}
+
+		.info-card-face--back {
+			transform: none;
+			z-index: 0;
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		.info-card.info-card--face-open .info-card-face--front {
+			z-index: 0;
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		.info-card.info-card--face-open .info-card-face--back {
+			z-index: 1;
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.info-card.info-card--no-face-transition .info-card-face--front,
+		.info-card.info-card--no-face-transition .info-card-face--back {
+			transition: none;
+		}
+	}
+
+	@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+		.info-card-face--front,
+		.info-card-face--back {
+			transition: none;
+		}
 	}
 
 	.info-card:global(.info-card--project),
@@ -1317,6 +1431,22 @@
 	}
 
 	.info-card-surface--back {
+		/* Back type / spacing as % of card width — same scale for every card type. */
+		--back-fs-xs: 1.84cqw;
+		--back-fs-sm: 2.02cqw;
+		--back-fs: 2.15cqw;
+		--back-fs-md: 2.41cqw;
+		--back-fs-lg: 2.71cqw;
+		--back-pad: 0.92cqw;
+		--back-gap-xs: 0.3cqw;
+		--back-gap-sm: 0.75cqw;
+		--back-gap: 1.2cqw;
+		--back-gap-lg: 1.5cqw;
+		--back-icon: 2cqw;
+		--back-logo-sm: 4cqw;
+		--back-logo: 4.5cqw;
+		--back-chip-h: 4.1cqw;
+		--back-link-h: 4.42cqw;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 	}
@@ -1380,6 +1510,10 @@
 			box-shadow 0.32s ease,
 			background 0.32s ease,
 			filter 0.26s ease;
+	}
+
+	.info-card-surface.info-card-surface--back {
+		padding: var(--back-pad);
 	}
 
 	.holo-layer {
@@ -1652,6 +1786,16 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.8);
+	}
+
+	.info-card-surface--back :global(.experience-company) {
+		font-size: var(--back-fs-lg);
+		line-height: 1.2;
+	}
+
+	.info-card-surface--back :global(.experience-sub) {
+		font-size: var(--back-fs);
+		line-height: 1.25;
 	}
 
 	:global(.experience-sub.wrap-sub) {

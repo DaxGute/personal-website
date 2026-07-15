@@ -209,7 +209,7 @@
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		grid-template-rows: 1fr 1fr;
-		gap: 3px;
+		gap: 0.8cqw;
 		flex: 1 1 auto;
 		min-height: 0;
 		width: 100%;
@@ -239,7 +239,7 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 6px;
+		gap: var(--back-gap-sm, 0.75cqw);
 		flex: 1 1 auto;
 		min-height: 0;
 		overflow-y: auto;
@@ -247,9 +247,9 @@
 	}
 
 	.polaroid-back-marker {
-		margin: 0 0 4px;
+		margin: 0 0 var(--back-gap-xs, 0.3cqw);
 		color: rgba(var(--tone-sub), 0.72);
-		font-size: 11px;
+		font-size: var(--back-fs-xs, 1.84cqw);
 		font-weight: 700;
 		letter-spacing: 0.14em;
 		text-transform: lowercase;
@@ -257,12 +257,12 @@
 	}
 
 	.polaroid-content--back :global(.experience-company) {
-		font-size: 14px;
+		font-size: var(--back-fs-md, 2.41cqw);
 		line-height: 1.25;
 	}
 
 	.polaroid-content--back :global(.experience-sub) {
-		font-size: 12px;
+		font-size: var(--back-fs-sm, 2.02cqw);
 		line-height: 1.3;
 		letter-spacing: 0.01em;
 	}

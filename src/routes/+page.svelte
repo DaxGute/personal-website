@@ -382,12 +382,9 @@
 		};
 
 		const keyLock = (e: KeyboardEvent) => {
-			if (isCardModalOpen()) {
-				e.preventDefault();
-				return;
-			}
-			if (!greetingScrollLocked) return;
-			// Prevent keys that can trigger scroll.
+			// Only block scroll-triggering keys — never blanket-preventDefault while a
+			// card modal is open, or Cmd/Ctrl shortcuts (copy, etc.) break on the back.
+			if (!isCardModalOpen() && !greetingScrollLocked) return;
 			const keys = [
 				'ArrowLeft',
 				'ArrowRight',

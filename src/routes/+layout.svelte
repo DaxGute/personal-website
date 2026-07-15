@@ -208,6 +208,28 @@
 		cursor: pointer;
 	}
 
+	/* Mobile: solid black fade instead of oval vignette cutout. */
+	@media (max-width: 900px) {
+		:global(.card-modal-backdrop) {
+			background: #000;
+			opacity: 0;
+			-webkit-mask-image: none;
+			mask-image: none;
+			transition: opacity var(--card-modal-ms, 760ms)
+				var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		}
+
+		:global(.card-modal-backdrop.is-visible) {
+			opacity: 1;
+		}
+
+		:global(.card-modal-layer .info-card--animating .info-card-flip),
+		:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss .info-card-flip),
+		:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {
+			transition: none !important;
+		}
+	}
+
 	:global(.card-modal-layer) {
 		position: fixed;
 		inset: 0;

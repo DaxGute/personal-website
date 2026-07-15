@@ -80,6 +80,12 @@ export function modalTransition() {
 	return ms === 0 ? 'none' : `${ms}ms ${MODAL_EASING}`;
 }
 
+/** Narrow viewports use a solid black fade + face crossfade instead of 3D flip / vignette. */
+export function prefersMobileCardFade() {
+	if (typeof window === 'undefined') return false;
+	return window.matchMedia('(max-width: 900px)').matches;
+}
+
 export function viewportCenter() {
 	const vv = window.visualViewport;
 	if (!vv) {
@@ -545,7 +551,13 @@ export function waitVignetteMotion() {
 		};
 		const onEnd = (e: TransitionEvent) => {
 			if (e.target !== backdrop) return;
-			if (e.propertyName !== '--vignette-rx' && e.propertyName !== '--vignette-ry') return;
+			if (
+				e.propertyName !== '--vignette-rx' &&
+				e.propertyName !== '--vignette-ry' &&
+				e.propertyName !== 'opacity'
+			) {
+				return;
+			}
 			finish();
 		};
 

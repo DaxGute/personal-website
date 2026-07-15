@@ -83,10 +83,11 @@
 		--t: var(--exp-t, 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
-		--exp-card-h: clamp(121px, 13.4vh, 161px);
+		--exp-card-w: 573px;
+		--exp-card-h: 112px;
 		position: relative;
 		z-index: 1;
-		width: 100%;
+		width: var(--exp-card-w);
 		height: var(--exp-card-h);
 		min-height: var(--exp-card-h);
 		transform: translate3d(
@@ -111,18 +112,12 @@
 	}
 
 	@media (min-width: 720px) {
-		:global(#experiences) .experience-list {
-			--exp-card-w: min(573px, 50.7vw);
-		}
-
 		.experience-item {
-			width: 50%;
 			margin-inline: auto;
 		}
 
 		:global(#experiences) .experience-item {
 			position: absolute;
-			width: var(--exp-card-w);
 			margin: 0;
 		}
 

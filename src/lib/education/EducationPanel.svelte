@@ -17,7 +17,7 @@
 <div class="education-carousel" aria-label="Education carousel">
 	{#each educations.slice(0, 2) as edu (edu.school)}
 		<article class="education-card" class:is-stanford={edu.school === 'Stanford University'}>
-			{#if edu.backImages?.length}
+			{#if edu.backSections?.length || edu.backImages?.length}
 				<InfoCard
 					variant="education"
 					heading={edu.school}
@@ -28,23 +28,64 @@
 					logoAlt={edu.logoAlt}
 					customBackBody
 				>
-					<div slot="backBody" class="edu-back" aria-label="{edu.school} photos">
-						<figure class="edu-photo edu-photo--primary">
-							<img
-								src={edu.backImages[0].src}
-								alt={edu.backImages[0].alt}
-								loading="lazy"
-								decoding="async"
-							/>
-						</figure>
-						<figure class="edu-photo edu-photo--secondary">
-							<img
-								src={edu.backImages[1].src}
-								alt={edu.backImages[1].alt}
-								loading="lazy"
-								decoding="async"
-							/>
-						</figure>
+					<div
+						slot="backBody"
+						class="edu-back"
+						class:edu-back--copy={!!edu.backSections?.length}
+						class:edu-back--photos={!!edu.backImages?.length}
+						class:edu-back--hybrid={!!edu.backSections?.length && !!edu.backImages?.length}
+						aria-label="{edu.school} details"
+					>
+						{#if edu.backSections?.length}
+							<div class="edu-copy">
+								{#if edu.backImages?.length}
+									<!--
+										Zero-width spacer pushes the mid-right exclusion down WITHOUT
+										stealing horizontal space (margin-top on a float would).
+									-->
+									<div class="edu-shim edu-shim--primary-spacer" aria-hidden="true"></div>
+									<div class="edu-shim edu-shim--primary" aria-hidden="true"></div>
+									<div class="edu-shim edu-shim--secondary" aria-hidden="true"></div>
+								{/if}
+								{#each edu.backSections as section}
+									<h2
+										class="edu-section-heading"
+										class:edu-section-heading--spaced={section.heading === 'Highlights'}
+									>
+										{section.heading}
+									</h2>
+									{#if section.items?.length}
+										{#each section.items as item}
+											<p class="edu-section-item">{item}</p>
+										{/each}
+									{/if}
+									{#if section.activities?.length}
+										<p class="edu-activities">{section.activities.join(' · ')}</p>
+									{/if}
+								{/each}
+							</div>
+						{/if}
+
+						{#if edu.backImages?.length}
+							<div class="edu-photos" aria-label="{edu.school} photos">
+								<figure class="edu-photo edu-photo--primary">
+									<img
+										src={edu.backImages[0].src}
+										alt={edu.backImages[0].alt}
+										loading="lazy"
+										decoding="async"
+									/>
+								</figure>
+								<figure class="edu-photo edu-photo--secondary">
+									<img
+										src={edu.backImages[1].src}
+										alt={edu.backImages[1].alt}
+										loading="lazy"
+										decoding="async"
+									/>
+								</figure>
+							</div>
+						{/if}
 					</div>
 				</InfoCard>
 			{:else}
@@ -89,12 +130,12 @@
 	.education-carousel {
 		position: relative;
 		isolation: isolate;
-		--edu-card-width: clamp(229px, 38.6vw, 371px);
-		--edu-card-height: var(--edu-card-width);
-		--edu-base-x: clamp(40px, 10vw, 140px);
-		--edu-split: clamp(70px, 10vw, 130px);
-		--edu-stack-sep: clamp(4px, 0.5vw, 8px);
-		--edu-stack-x: clamp(8px, 1vw, 14px);
+		--edu-card-width: 371px;
+		--edu-card-height: 371px;
+		--edu-base-x: 140px;
+		--edu-split: 160px;
+		--edu-stack-sep: 8px;
+		--edu-stack-x: 14px;
 		width: min(980px, 100%);
 		height: var(--edu-card-height);
 		margin: 18px auto 0;
@@ -143,16 +184,77 @@
 		min-height: 0;
 		width: 100%;
 		height: 100%;
+		overflow: hidden;
+		--edu-photo-size: 33.12%;
+	}
+
+	.edu-back--copy:not(.edu-back--hybrid),
+	.edu-back--hybrid {
+		overflow: hidden;
+	}
+
+	.edu-copy {
+		position: relative;
+		z-index: 0;
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		/* Normal block flow — required for floats + line-box wrapping. */
+		display: block;
+	}
+
+	.edu-section-heading {
+		display: block;
+		margin: var(--back-gap-lg, 1.5cqw) 0 var(--back-gap-xs, 0.3cqw);
+		color: #000;
+		font-size: var(--back-fs-md, 2.41cqw);
+		font-weight: 700;
+		line-height: 1.25;
+		white-space: nowrap;
+	}
+
+	.edu-section-heading--spaced {
+		margin-top: calc(var(--back-gap-lg, 1.5cqw) + 2 * 1.35em);
+	}
+
+	.edu-shim--secondary + .edu-section-heading {
+		margin-top: 0;
+	}
+
+	.edu-section-item,
+	.edu-activities {
+		display: block;
+		width: auto;
+		max-width: none;
+		margin: 0 0 var(--back-gap-xs, 0.3cqw);
+		color: #000;
+		font-size: var(--back-fs, 2.15cqw);
+		line-height: 1.35;
+	}
+
+	.edu-activities {
+		margin-top: var(--back-gap-xs, 0.3cqw);
+	}
+
+	.edu-photos {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
 		overflow: visible;
+		pointer-events: none;
 	}
 
 	.edu-photo {
 		position: absolute;
 		margin: 0;
-		width: min(69%, 222px);
-		aspect-ratio: 1 / 1;
+		width: var(--edu-photo-size);
+		height: var(--edu-photo-size);
 		overflow: hidden;
 		border-radius: 2px;
+		pointer-events: auto;
 		background: rgba(140, 180, 220, 0.12);
 		box-shadow:
 			0 2px 4px rgba(40, 70, 110, 0.16),
@@ -168,13 +270,56 @@
 
 	.edu-photo--primary {
 		top: 50%;
-		right: 6px;
+		right: var(--back-gap-sm, 0.75cqw);
 		transform: translateY(-50%);
 	}
 
 	.edu-photo--secondary {
-		bottom: 6px;
-		left: 6px;
+		bottom: var(--back-gap-sm, 0.75cqw);
+		left: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.edu-back--photos:not(.edu-back--hybrid) .edu-photo {
+		width: 69%;
+		height: 69%;
+	}
+
+	/*
+	 * Invisible floats reserve the same boxes as the absolute photos.
+	 * Primary uses a 0-width spacer so top lines stay full-width; a float
+	 * with margin-top would still steal horizontal space for its margin box.
+	 */
+	.edu-shim {
+		box-sizing: border-box;
+		pointer-events: none;
+		opacity: 0;
+	}
+
+	.edu-shim--primary-spacer {
+		float: right;
+		width: 0;
+		height: 33.44%;
+		margin: 0;
+	}
+
+	.edu-shim--primary {
+		float: right;
+		clear: right;
+		width: var(--edu-photo-size);
+		aspect-ratio: 1 / 1;
+		margin: 0 var(--back-gap-sm, 0.75cqw) var(--back-gap, 1.2cqw) var(--back-gap, 1.2cqw);
+		shape-outside: border-box;
+		shape-margin: var(--back-gap-sm, 0.75cqw);
+	}
+
+	.edu-shim--secondary {
+		float: left;
+		clear: right;
+		width: var(--edu-photo-size);
+		aspect-ratio: 1 / 1;
+		margin: 0 var(--back-gap, 1.2cqw) var(--back-gap-sm, 0.75cqw) var(--back-gap-sm, 0.75cqw);
+		shape-outside: border-box;
+		shape-margin: var(--back-gap-sm, 0.75cqw);
 	}
 
 	.education-card.is-stanford .edu-photo--primary img {
@@ -197,8 +342,9 @@
 		.education-carousel {
 			width: min(980px, 100%);
 			height: auto;
-			display: grid;
-			grid-template-columns: repeat(2, minmax(0, 1fr));
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: center;
 			gap: 18px;
 			top: 0;
 			left: 0;
@@ -207,10 +353,10 @@
 		.education-card {
 			position: relative;
 			left: auto;
-			width: 100%;
-			aspect-ratio: 1 / 1;
-			height: auto;
+			width: var(--edu-card-width);
+			height: var(--edu-card-height);
 			transform: none;
 		}
 	}
+
 </style>
