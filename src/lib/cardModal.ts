@@ -19,11 +19,14 @@ export type VignetteOrigin = {
 	y: number;
 };
 
-/** Shared open/close easing (slight overshoot — card pin/flip only). */
-const MODAL_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1.01)';
-/** Stage/ribbon zoom: no overshoot — SVG stroke AA shimmers when scale dips past 1. */
-const STAGE_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1)';
-const VIGNETTE_SIZE_EASING = 'cubic-bezier(0.76, 0.39, 0.08, 1.01)';
+/**
+ * Shared open/close easing for pin, flip, stage zoom, and vignette.
+ * Keep X control points ordered (x1 <= x2) — crossed Xs (e.g. 0.76 → 0.08)
+ * create a mid-flight velocity spike that looks like a position jolt.
+ */
+const MODAL_EASING = 'cubic-bezier(0.6, 0.5, 0.36, 1)';
+const STAGE_EASING = MODAL_EASING;
+const VIGNETTE_SIZE_EASING = MODAL_EASING;
 
 let backdropEl: HTMLDivElement | null = null;
 let modalLayerEl: HTMLDivElement | null = null;

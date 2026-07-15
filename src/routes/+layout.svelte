@@ -174,8 +174,8 @@
 		--vignette-cx: 50%;
 		--vignette-cy: 50%;
 		transition:
-			--vignette-rx var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.76, 0, 0.24, 1)),
-			--vignette-ry var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.76, 0, 0.24, 1));
+			--vignette-rx var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1)),
+			--vignette-ry var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		background: radial-gradient(
 			ellipse 120vmax 120vmax at 50% 50%,
 			rgba(11, 18, 32, 0.28) 0%,
@@ -234,21 +234,21 @@
 	}
 
 	:global(.card-modal-layer .info-card--animating .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card-motion) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss) {
 		transition:
-			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)),
-			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
+			transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)),
+			opacity var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
 	:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
 	/* Real scroll-track zooms around the active card; vignette sits below the pinned card.
@@ -267,7 +267,7 @@
 
 	:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
 		transition: transform var(--card-modal-ms, 760ms)
-			var(--stage-easing, cubic-bezier(0.76, 0.39, 0.08, 1));
+			var(--stage-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 	}
 
 	/* Backdrop-filter re-samples the ribbon every zoom frame → stroke wiggle.
@@ -295,7 +295,7 @@
 	}
 
 	:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01)) !important;
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
 	:global(.card-modal-layer .info-card-anchor--zoom-pinned) {
@@ -313,7 +313,7 @@
 		pointer-events: none;
 		transform: scale(1);
 		transform-origin: center center;
-		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.76, 0.39, 0.08, 1.01));
+		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		background: var(--bg);
 	}
 

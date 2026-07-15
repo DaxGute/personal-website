@@ -5,6 +5,11 @@ import ccLogo from '$lib/assets/experience/cc_logo.jpeg';
 import sdLogo from '$lib/assets/experience/sd_logo.jpeg';
 import youthCommissionPhoto from '$lib/assets/experience/youth_commission.png';
 
+export type ExperienceBackParagraph = {
+	heading: string;
+	body: string;
+};
+
 export type Experience = {
 	company: string;
 	location: string;
@@ -17,6 +22,8 @@ export type Experience = {
 	backImageAlt?: string;
 	backImageHref?: string;
 	backLinkLabel?: string;
+	backParagraphs?: ExperienceBackParagraph[];
+	skills?: string[];
 };
 
 export const experiences: Experience[] = [
@@ -42,7 +49,17 @@ export const experiences: Experience[] = [
 		logoSrc: baiLogo,
 		logoAlt: 'Benevolent AI logo',
 		backImageSrc: baiPhoto,
-		backImageAlt: 'At BenevolentAI reception in London'
+		backImageAlt: 'At BenevolentAI reception in London',
+		backParagraphs: [
+			{
+				heading: 'Technical Research & AI:',
+				body: 'Over three summers, I rotated through machine learning, computational biology, NLP, software engineering, and data visualization teams, exploring protein binding pocket representations, analyzing datasets with Python and Pandas, and contributing to AI-driven drug discovery research.'
+			},
+			{
+				heading: 'Business Strategy & Commercialization:',
+				body: 'Worked alongside finance, legal/IP, and business strategy teams to research biotechnology companies, shareholder structures, competitive landscapes, and product positioning while gaining insight into the commercialization of AI-powered therapeutics.'
+			}
+		]
 	},
 	{
 		company: 'Castle Creek Capital',

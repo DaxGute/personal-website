@@ -30,6 +30,8 @@
 					backImageAlt={exp.backImageAlt}
 					backImageHref={exp.backImageHref}
 					backLinkLabel={exp.backLinkLabel}
+					backParagraphs={exp.backParagraphs ?? []}
+					skills={exp.skills ?? []}
 				/>
 			</li>
 		{/each}
@@ -80,7 +82,7 @@
 		--t: var(--exp-t, 1);
 		--spread-x: 0px;
 		--spread-y: 0px;
-		--exp-card-h: clamp(117px, 13vh, 156px);
+		--exp-card-h: clamp(121px, 13.4vh, 161px);
 		position: relative;
 		z-index: 1;
 		width: 100%;

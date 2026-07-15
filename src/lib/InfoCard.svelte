@@ -18,6 +18,8 @@
 	export let variant: CardVariant;
 	export let items: string[] = [];
 	export let backItems: string[] = [];
+	export let backParagraphs: { heading: string; body: string }[] = [];
+	export let skills: string[] = [];
 	export let logoSrc: string | null = null;
 	export let logoAlt: string | null = null;
 	export let backImageSrc: string | null = null;
@@ -207,13 +209,13 @@
 			<div
 				class="card-back-main"
 				class:card-back-main--with-image={(!sidePhotoOnBack && !!backImageSrc) || !!backImageHref}
-				class:card-back-main--with-copy={backItems.length > 0 || (variant === 'award' && items.length > 0)}
+				class:card-back-main--with-copy={backItems.length > 0 || backParagraphs.length > 0 || skills.length > 0 || (variant === 'award' && items.length > 0)}
 				class:card-back-main--custom={customBackBody}
 			>
 				{#if customBackBody}
 					<slot name="backBody" />
 				{:else}
-					{#if backImageSrc && backItems.length === 0 && !sidePhotoOnBack}
+					{#if backImageSrc && backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack}
 						<div class="card-back-image">
 							{#if backImageHref}
 								<a
@@ -239,7 +241,7 @@
 								/>
 							{/if}
 						</div>
-					{:else if backImageHref && backItems.length === 0}
+					{:else if backImageHref && backItems.length === 0 && backParagraphs.length === 0}
 						<div class="card-back-image">
 							<a
 								class="card-back-link-box"
@@ -267,17 +269,26 @@
 								</svg>
 							</a>
 						</div>
-					{:else if backItems.length === 0 && !sidePhotoOnBack && !(variant === 'award' && items.length > 0)}
+					{:else if backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack && !(variant === 'award' && items.length > 0)}
 						<p class="card-back-marker">backside</p>
 					{/if}
 					{#if variant === 'experience'}
-						{#if backItems.length}
+						{#if backParagraphs.length}
+							<div class="experience-back-copy" aria-label="Experience details">
+								{#each backParagraphs as paragraph}
+									<p class="experience-back-paragraph">
+										<strong>{paragraph.heading}</strong>
+										{' '}{paragraph.body}
+									</p>
+								{/each}
+							</div>
+						{:else if backItems.length}
 							<ul class="experience-highlights experience-highlights--back">
 								{#each backItems as item}
 									<li>{item}</li>
 								{/each}
 							</ul>
-						{:else if !backImageSrc && !backImageHref}
+						{:else if !backImageSrc && !backImageHref && !skills.length}
 							<ul class="experience-highlights">
 								{#each items as item}
 									<li>{item}</li>
@@ -342,6 +353,14 @@
 					{/if}
 				{/if}
 			</div>
+
+			{#if variant === 'experience' && skills.length}
+				<div class="experience-skills" aria-label="Skills">
+					{#each skills as skill}
+						<span class="project-chip">{skill}</span>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 </CardShell>
@@ -378,9 +397,9 @@
 
 	:global(.info-card--experience) .card-logo {
 		align-self: stretch;
-		flex: 0 0 var(--exp-card-h, clamp(117px, 13vh, 156px));
-		width: var(--exp-card-h, clamp(117px, 13vh, 156px));
-		height: var(--exp-card-h, clamp(117px, 13vh, 156px));
+		flex: 0 0 var(--exp-card-h, clamp(121px, 13.4vh, 161px));
+		width: var(--exp-card-h, clamp(121px, 13.4vh, 161px));
+		height: var(--exp-card-h, clamp(121px, 13.4vh, 161px));
 		padding: 0;
 		overflow: hidden;
 	}
@@ -394,8 +413,8 @@
 
 	:global(.info-card--experience) .card-logo--back-photo {
 		align-self: stretch;
-		flex: 0 0 calc(var(--exp-card-h, clamp(117px, 13vh, 156px)) * 2);
-		width: calc(var(--exp-card-h, clamp(117px, 13vh, 156px)) * 2);
+		flex: 0 0 calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
+		width: calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
 		height: 100%;
 	}
 
@@ -510,7 +529,7 @@
 	.card-back-main {
 		flex: 1 1 auto;
 		min-height: 0;
-		overflow-y: auto;
+		overflow: hidden;
 	}
 
 	.card-back-main--with-image {
@@ -518,6 +537,12 @@
 		flex-direction: column;
 		justify-content: center;
 		overflow: hidden;
+	}
+
+	.card-back-main--with-copy {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
 	}
 
 	.card-back-main--custom {
@@ -910,6 +935,23 @@
 		margin: 0;
 	}
 
+	.experience-back-copy {
+		display: grid;
+		gap: 10px;
+	}
+
+	.experience-back-paragraph {
+		margin: 0;
+		color: #000;
+		font-size: 12.5px;
+		line-height: 1.45;
+	}
+
+	.experience-back-paragraph strong {
+		font-weight: 700;
+		color: inherit;
+	}
+
 	.education-details {
 		display: grid;
 		gap: 6px;
@@ -966,6 +1008,15 @@
 		flex-wrap: wrap;
 		gap: 6px;
 		margin: 0 0 8px;
+	}
+
+	.experience-skills {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: auto;
+		padding-top: 8px;
+		flex: 0 0 auto;
 	}
 
 	.project-chip {
