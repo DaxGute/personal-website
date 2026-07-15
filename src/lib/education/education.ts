@@ -15,6 +15,8 @@ export type EducationBackSection = {
 	items?: string[];
 	/** Compact activity/club names shown after the prose items. */
 	activities?: string[];
+	/** Optional download/external link rendered after the section items. */
+	link?: { label: string; href: string; download?: boolean };
 };
 
 export type Education = {
@@ -36,7 +38,7 @@ export const educations: Education[] = [
 		degree: 'Data Science [BS]',
 		dates: 'September 2023 - Present',
 		details: [
-			'Coursework in probability, statistics, computer science, and data-driven decision making. Focused on applied machine learning and data analysis.'
+			'Pursuing a Bachelor of Science in Data Science while complementing my studies with Computational Neuroscience and Symbolic Systems. My coursework focuses on machine learning, statistics, artificial intelligence, and computational methods for solving real-world problems.'
 		],
 		logoSrc: stanfordLogo,
 		logoAlt: 'Stanford logo',
@@ -48,6 +50,45 @@ export const educations: Education[] = [
 			{
 				src: stanfordPortrait,
 				alt: 'Standing in the Stanford Main Quad colonnade'
+			}
+		],
+		backSections: [
+			{
+				heading: 'Academics',
+				items: [
+					'B.S. in Data Science with a 3.85 GPA.',
+					'Computational Neuroscience Concentration.',
+					'Symbolic Systems Minor.',
+					'Coursework in Machine Learning, Artificial Intelligence, Statistics, Optimization, Economics, and Neuroscience.'
+				],
+				link: {
+					label: '[Download Unofficial Transcript]',
+					href: '/stanford-unofficial-transcript.pdf',
+					download: true
+				}
+			},
+			{
+				heading: 'Leadership & Service',
+				items: [
+					'CESTA Research Intern.',
+					'Stanford School of Medicine (Shah Lab).',
+					'Rise South City Air Quality Initiative.'
+				]
+			},
+			{
+				heading: 'Beyond the Classroom',
+				items: [
+					'Independent research in artificial intelligence and computational neuroscience.',
+					'Interdisciplinary collaboration with faculty, graduate researchers, and nonprofit partners.'
+				]
+			},
+			{
+				heading: 'Highlights',
+				items: [
+					'Developed the Rise AQI platform in partnership with Rise South City.',
+					'Conducted AI and digital humanities research through Stanford CESTA.',
+					'Combined Data Science with Computational Neuroscience and Symbolic Systems in an interdisciplinary academic path.'
+				]
 			}
 		]
 	},

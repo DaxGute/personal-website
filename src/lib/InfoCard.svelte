@@ -897,6 +897,7 @@
 
 	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .education-details {
 		font-size: var(--back-fs, 2.15cqw);
+		line-height: 1.35;
 	}
 
 	:global(.info-card.info-card--blue) .card-hover-hint {
@@ -1177,6 +1178,7 @@
 		display: grid;
 		gap: 6px;
 		color: rgba(216, 226, 242, 0.94);
+		font-size: 13px;
 		line-height: 1.6;
 		overflow-wrap: anywhere;
 		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
@@ -1184,6 +1186,25 @@
 
 	.education-details p {
 		margin: 0;
+	}
+
+	/* Shared front body size for both education cards. */
+	:global(.info-card--education) .info-card-face--front .education-details,
+	:global(.info-card--blue) .info-card-face--front .education-details {
+		color: var(--tone-text, #1e2531);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+		font-size: 13px;
+		line-height: 1.6;
+		gap: 6px;
+	}
+
+	/* Back body keeps the education cqw scale. */
+	:global(.info-card--education) .info-card-face--back .education-details,
+	:global(.info-card--blue) .info-card-face--back .education-details,
+	.card-row--back .education-details {
+		font-size: var(--back-fs, 2.15cqw);
+		line-height: 1.35;
+		gap: var(--back-gap-sm, 0.75cqw);
 	}
 
 	.award-details {

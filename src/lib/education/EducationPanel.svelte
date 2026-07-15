@@ -62,6 +62,17 @@
 									{#if section.activities?.length}
 										<p class="edu-activities">{section.activities.join(' · ')}</p>
 									{/if}
+									{#if section.link}
+										<a
+											class="edu-section-link"
+											href={section.link.href}
+											download={section.link.download ? '' : undefined}
+											target={section.link.download ? undefined : '_blank'}
+											rel={section.link.download ? undefined : 'noreferrer'}
+										>
+											{section.link.label}
+										</a>
+									{/if}
 								{/each}
 							</div>
 						{/if}
@@ -210,11 +221,12 @@
 		font-size: var(--back-fs-md, 2.41cqw);
 		font-weight: 700;
 		line-height: 1.25;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
 	}
 
 	.edu-section-heading--spaced {
-		margin-top: calc(var(--back-gap-lg, 1.5cqw) + 2 * 1.35em);
+		/* Three lines of space after the previous section before Highlights. */
+		margin-top: calc(var(--back-gap-lg, 1.5cqw) + 3 * 1.35em);
 	}
 
 	.edu-shim--secondary + .edu-section-heading {
@@ -230,10 +242,26 @@
 		color: #000;
 		font-size: var(--back-fs, 2.15cqw);
 		line-height: 1.35;
+		overflow-wrap: anywhere;
 	}
 
 	.edu-activities {
 		margin-top: var(--back-gap-xs, 0.3cqw);
+	}
+
+	.edu-section-link {
+		display: inline-block;
+		margin: var(--back-gap-xs, 0.3cqw) 0 var(--back-gap-sm, 0.75cqw);
+		color: #000;
+		font-size: var(--back-fs, 2.15cqw);
+		font-weight: 700;
+		line-height: 1.35;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+
+	.edu-section-link:hover {
+		text-decoration-thickness: 2px;
 	}
 
 	.edu-photos {
@@ -277,11 +305,6 @@
 	.edu-photo--secondary {
 		bottom: var(--back-gap-sm, 0.75cqw);
 		left: var(--back-gap-sm, 0.75cqw);
-	}
-
-	.edu-back--photos:not(.edu-back--hybrid) .edu-photo {
-		width: 69%;
-		height: 69%;
 	}
 
 	/*

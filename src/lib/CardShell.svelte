@@ -1263,10 +1263,10 @@
 		position: relative;
 		width: 100%;
 		height: 100%;
+		container-type: inline-size;
 	}
 
 	.info-card-back-layout {
-		container-type: inline-size;
 		container-name: card-back;
 	}
 
@@ -1467,7 +1467,7 @@
 		--back-link-h: 2.63cqw;
 	}
 
-	/* Education-only: current tuned text / section spacing. */
+	/* Education-only: tuned text / section spacing on the back face. */
 	:global(.info-card--education) .info-card-surface--back,
 	:global(.info-card--blue) .info-card-surface--back {
 		--back-fs-xs: 1.84cqw;
