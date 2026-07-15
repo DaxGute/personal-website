@@ -1431,7 +1431,45 @@
 	}
 
 	.info-card-surface--back {
-		/* Back type / spacing as % of card width — same scale for every card type. */
+		/* Default back type scale (awards / polaroids / projects). */
+		--back-fs-xs: 2.9cqw;
+		--back-fs-sm: 3.2cqw;
+		--back-fs: 3.4cqw;
+		--back-fs-md: 3.8cqw;
+		--back-fs-lg: 4.3cqw;
+		--back-pad: 3.8cqw;
+		--back-gap-xs: 0.5cqw;
+		--back-gap-sm: 1.6cqw;
+		--back-gap: 2.7cqw;
+		--back-gap-lg: 3.2cqw;
+		--back-icon: 5.9cqw;
+		--back-logo-sm: 11.9cqw;
+		--back-logo: 13.5cqw;
+		--back-chip-h: 6.5cqw;
+		--back-link-h: 7cqw;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	/* Wide experience cards — keep the dialed-in cqw scale. */
+	:global(.info-card--experience) .info-card-surface--back {
+		--back-fs-xs: 1.09cqw;
+		--back-fs-sm: 1.2cqw;
+		--back-fs: 1.28cqw;
+		--back-fs-md: 1.43cqw;
+		--back-fs-lg: 1.61cqw;
+		--back-pad: 0.92cqw;
+		--back-gap-xs: 0.15cqw;
+		--back-gap-sm: 0.3cqw;
+		--back-gap: 0.45cqw;
+		--back-gap-lg: 0.55cqw;
+		--back-chip-h: 2.44cqw;
+		--back-link-h: 2.63cqw;
+	}
+
+	/* Education-only: current tuned text / section spacing. */
+	:global(.info-card--education) .info-card-surface--back,
+	:global(.info-card--blue) .info-card-surface--back {
 		--back-fs-xs: 1.84cqw;
 		--back-fs-sm: 2.02cqw;
 		--back-fs: 2.15cqw;
@@ -1447,8 +1485,6 @@
 		--back-logo: 4.5cqw;
 		--back-chip-h: 4.1cqw;
 		--back-link-h: 4.42cqw;
-		overflow-y: auto;
-		overscroll-behavior: contain;
 	}
 
 	.info-card-surface {

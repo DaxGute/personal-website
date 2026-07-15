@@ -57,7 +57,9 @@
 			? 'info-card--experience'
 			: variant === 'award'
 				? 'info-card--award'
-				: ''}
+				: variant === 'education'
+					? 'info-card--education'
+					: ''}
 	surfaceClass={hasSideLogo ? 'has-logo' : ''}
 	{expandOnClick}
 >
