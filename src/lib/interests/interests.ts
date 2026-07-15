@@ -18,6 +18,7 @@ export type Interest = {
 	src?: string | null;
 	alt?: string;
 	backImages?: string[];
+	backMessage?: string;
 	revealRootMargin?: string;
 	revealThreshold?: number;
 	layout?: 'ski' | 'chess' | 'padi' | 'tt' | 'billiards';
@@ -28,6 +29,7 @@ export const interests: Interest[] = [
 		caption: 'PADI Certified Diver',
 		src: scubaPhoto,
 		alt: 'PADI Certified Diver',
+		backMessage: 'Working on finding photos',
 		revealRootMargin: '0px -15% 0px -15%',
 		revealThreshold: 0,
 		layout: 'padi'
@@ -39,11 +41,18 @@ export const interests: Interest[] = [
 		backImages: [skiingBack1, skiingBack2, skiingBack3, skiingBack4],
 		layout: 'ski'
 	},
-	{ caption: 'Chess', src: chessPhoto, alt: 'Chess', layout: 'chess' },
+	{
+		caption: 'Chess',
+		src: chessPhoto,
+		alt: 'Chess',
+		backMessage: 'Working on finding photos',
+		layout: 'chess'
+	},
 	{
 		caption: 'Table Tennis',
 		src: tableTennisPhoto,
 		alt: 'Table Tennis',
+		backMessage: 'Working on finding photos',
 		layout: 'tt'
 	},
 	{

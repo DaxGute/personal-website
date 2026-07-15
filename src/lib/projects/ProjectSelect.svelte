@@ -497,9 +497,13 @@
 <style>
 	.wrap {
 		display: grid;
-		grid-template-columns: 280px 1fr;
+		grid-template-columns: var(--project-reel-w, 280px) var(--project-card-w, 508px);
 		gap: 16px;
 		align-items: stretch;
+		width: max-content;
+		max-width: none;
+		--project-reel-w: 280px;
+		--project-card-w: 508px;
 		--selector-h: 240px;
 		--slot-h: 56px;
 		/* aquamarine accents — matches InfoCard project theme */
@@ -526,6 +530,7 @@
 
 	.desc {
 		position: relative;
+		width: var(--project-card-w);
 		height: var(--selector-h);
 		overflow: visible;
 	}
@@ -784,10 +789,5 @@
 		overflow-wrap: anywhere;
 	}
 
-	@media (max-width: 760px) {
-		.wrap {
-			grid-template-columns: 1fr;
-		}
-	}
 </style>
 

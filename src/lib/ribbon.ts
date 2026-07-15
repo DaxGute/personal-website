@@ -6,6 +6,9 @@ export const RIBBON_VIEWBOX_H = 300;
 export const RIBBON_RENDER_WIDTH_PX = 12000;
 export const RIBBON_RENDER_HEIGHT_PX = 1200;
 
+/** Mobile / short viewports: absolute painted height (px). Desktop stays `RIBBON_RENDER_HEIGHT_PX`. */
+export const RIBBON_MOBILE_HEIGHT_PX = 90;
+
 /** First panel anchor along the ribbon (px from scroll-track left). */
 export const PANEL_TRACK_ORIGIN_PX = 15;
 

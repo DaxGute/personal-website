@@ -699,7 +699,7 @@
 	.award-card-surface {
 		--award-card-w: 390px;
 		--award-card-h: 88px;
-		width: min(var(--award-card-w), 44vw);
+		width: var(--award-card-w);
 		height: var(--award-card-h);
 		position: relative;
 		opacity: 1;
@@ -799,7 +799,7 @@
 			transform: none;
 		}
 		.award-card-surface {
-			width: min(560px, 92vw);
+			width: var(--award-card-w);
 			height: var(--award-card-h);
 			margin-inline: auto;
 		}
@@ -834,7 +834,7 @@
 			transform: none;
 		}
 		.award-card-surface {
-			width: min(560px, 92vw);
+			width: var(--award-card-w);
 			height: var(--award-card-h);
 			margin-inline: auto;
 		}

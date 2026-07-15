@@ -2,6 +2,7 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import {
 		GREETING_SCROLL_UNLOCK_MS,
+		RIBBON_MOBILE_HEIGHT_PX,
 		RIBBON_PATH_D,
 		RIBBON_RENDER_HEIGHT_PX,
 		RIBBON_RENDER_WIDTH_PX,
@@ -15,6 +16,12 @@
 
 	/** Only the first 1/5 of normalized `t` passed to `buildRibbonDistanceAtNormalizedTime`. */
 	const REVEAL_FIRST_FIFTH = 0.25;
+	const ribbonMobileHeightPx = `${RIBBON_MOBILE_HEIGHT_PX}px`;
+	const ribbonDesktopHeightPx = `${RIBBON_RENDER_HEIGHT_PX}px`;
+	/** Keep on-screen stroke ~8px when the SVG is squashed to `RIBBON_MOBILE_HEIGHT_PX`. */
+	const ribbonMobileStrokeWidth = String(
+		(2 * RIBBON_RENDER_HEIGHT_PX) / RIBBON_MOBILE_HEIGHT_PX
+	);
 
 	let ribbonLayerEl: HTMLDivElement | null = null;
 	let ribbonEl: SVGSVGElement | null = null;
@@ -210,6 +217,7 @@
 	.ribbon {
 		display: block;
 		flex: 0 0 auto;
+		height: v-bind(ribbonDesktopHeightPx);
 	}
 
 	.ribbon-path {
@@ -234,5 +242,20 @@
 	.ribbon-reveal-mask {
 		stroke-dasharray: 100000;
 		stroke-dashoffset: 100000;
+	}
+
+	/*
+	  Narrow / phone landscape: force a flat ribbon (90px).
+	  Broad max-width so large phones in landscape still match.
+	*/
+	@media (max-width: 1100px) {
+		.ribbon {
+			height: v-bind(ribbonMobileHeightPx) !important;
+		}
+
+		.ribbon-path,
+		.ribbon-reveal-mask {
+			stroke-width: v-bind(ribbonMobileStrokeWidth);
+		}
 	}
 </style>

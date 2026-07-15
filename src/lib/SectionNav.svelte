@@ -168,8 +168,8 @@
 		}
 	}
 
-	@media (max-width: 640px) {
-		.section-nav__label {
+	@media (max-width: 900px) {
+		.section-nav {
 			display: none;
 		}
 	}

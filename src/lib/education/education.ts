@@ -117,7 +117,7 @@ export const educations: Education[] = [
 				heading: 'Academics',
 				items: [
 					'Graduated Cum Laude with a 4.82 GPA.',
-					'Advanced coursework in Mathematics, Computer Science, Economics, and Chinese.',
+					'Advanced coursework in Mathematics, CS, Economics, and Chinese.',
 					'AP Scholar with Distinction: Calculus BC • Computer Science A • Biology • Physics C • Statistics • Macroeconomics • Microeconomics • U.S. History • English Language • Chinese Language & Culture'
 				]
 			},

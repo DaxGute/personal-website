@@ -106,6 +106,13 @@
 		margin-top: 170px;
 	}
 
+	@media (max-width: 900px) {
+		.greeting-layout {
+			margin-top: 24px;
+			transform: translateX(20%);
+		}
+	}
+
 	.greeting-contact {
 		flex: 0 0 auto;
 		align-self: center;

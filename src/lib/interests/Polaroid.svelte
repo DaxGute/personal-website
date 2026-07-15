@@ -7,6 +7,7 @@
 	export let caption: string;
 	export let subtitle: string | null = null;
 	export let backImages: string[] = [];
+	export let backMessage: string | null = null;
 	export let loading: 'lazy' | 'eager' = 'lazy';
 	export let revealRootMargin = '0px -35% 0px -35%';
 	export let revealThreshold = 0.01;
@@ -128,7 +129,9 @@
 				</div>
 			{:else}
 				<div class="polaroid-back-main">
-					<p class="polaroid-back-marker">backside</p>
+					<p class="polaroid-back-marker" class:polaroid-back-marker--message={!!backMessage}>
+						{backMessage ?? 'backside'}
+					</p>
 					<p class="experience-company">{caption}</p>
 					{#if subtitle}
 						<p class="experience-sub wrap-sub">{subtitle}</p>
@@ -254,6 +257,11 @@
 		letter-spacing: 0.14em;
 		text-transform: lowercase;
 		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	.polaroid-back-marker--message {
+		letter-spacing: 0.02em;
+		text-transform: none;
 	}
 
 	.polaroid-content--back :global(.experience-company) {

@@ -4,7 +4,12 @@
 	import { onMount } from 'svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
 	import SectionNav from '$lib/SectionNav.svelte';
-	import { isCardModalOpen, layoutScrollLeft, registerScrollContainer } from '$lib/cardModal';
+	import {
+		isCardModalOpen,
+		layoutScrollLeft,
+		prefersMobileCardFade,
+		registerScrollContainer
+	} from '$lib/cardModal';
 	import { panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import TitlePanel from '$lib/title/TitlePanel.svelte';
 	import ExperiencesPanel from '$lib/experiences/ExperiencesPanel.svelte';
@@ -294,26 +299,38 @@
 			sectionNavCmp?.setActiveId(nextActiveId);
 			if (nextActiveId !== activePanelRef.id) activePanelRef.id = nextActiveId;
 
-			// Per-panel animation progress (used for Experiences card fan-in)
+			// Per-panel animation progress (used for Experiences card fan-in).
+			// Mobile uses a static 2×2 grid — skip the scroll-driven fan.
 			if (expIdx !== -1 && panelOffsets[expIdx] != null) {
-				const expStart = panelOffsets[expIdx];
-				const expEnd = panelOffsets[Math.min(expIdx + 1, panelOffsets.length - 1)] ?? expStart;
-				const denom = expEnd - expStart;
-				// Start the Experiences animation earlier (before the slide is fully reached).
-				// The panel is clipped (see CSS) so the cards won't visually bleed into the previous slide.
-				const shiftPx = (panelW || denom || window.innerWidth) * 0.95;
-				const start = expStart - shiftPx;
-				// Let the animation "finish" a bit later than the panel boundary.
-				const tailPx = (panelW || denom || window.innerWidth) * 0.75;
-				const end = expEnd - shiftPx + tailPx;
-				const linearT = end === start ? 1 : clamp01((x - start) / (end - start));
-				experiencesPanelEl?.style.setProperty('--exp-t', `${easeOutCubic(linearT)}`);
+				if (prefersMobileCardFade()) {
+					experiencesPanelEl?.style.setProperty('--exp-t', '1');
+				} else {
+					const expStart = panelOffsets[expIdx];
+					const expEnd = panelOffsets[Math.min(expIdx + 1, panelOffsets.length - 1)] ?? expStart;
+					const denom = expEnd - expStart;
+					// Start the Experiences animation earlier (before the slide is fully reached).
+					// The panel is clipped (see CSS) so the cards won't visually bleed into the previous slide.
+					const shiftPx = (panelW || denom || window.innerWidth) * 0.95;
+					const start = expStart - shiftPx;
+					// Let the animation "finish" a bit later than the panel boundary.
+					const tailPx = (panelW || denom || window.innerWidth) * 0.75;
+					const end = expEnd - shiftPx + tailPx;
+					const linearT = end === start ? 1 : clamp01((x - start) / (end - start));
+					experiencesPanelEl?.style.setProperty('--exp-t', `${easeOutCubic(linearT)}`);
+				}
 			}
 
 			// Education: fan / stack over ~1s once scroll crosses threshold (either direction).
+			// Mobile stays permanently splayed — skip the scroll-driven stack.
 			if (eduIdx !== -1 && panelOffsets[eduIdx] != null) {
-				const threshold = eduSpreadThreshold(panelOffsets[eduIdx]!);
-				animateEduSpreadTo(x >= threshold ? 1 : 0);
+				if (prefersMobileCardFade()) {
+					cancelEduSpreadAnim();
+					eduSpreadTarget = 1;
+					setEduT(1);
+				} else {
+					const threshold = eduSpreadThreshold(panelOffsets[eduIdx]!);
+					animateEduSpreadTo(x >= threshold ? 1 : 0);
+				}
 			} else {
 				cancelEduSpreadAnim();
 				eduSpreadTarget = 0;
@@ -594,6 +611,20 @@
 	#projects.panel .panel-inner {
 		--projects-lift: 130px;
 		bottom: var(--projects-lift);
+	}
+
+	@media (max-width: 900px) {
+		#greeting.panel {
+			padding-top: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 24px);
+		}
+
+		#education.panel {
+			padding-top: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 10px);
+		}
+
+		#projects.panel .panel-inner {
+			--projects-lift: calc(130px + 15vh);
+		}
 	}
 
 	.panel-inner {

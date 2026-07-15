@@ -670,6 +670,11 @@
 	function setPointerGlow(e: PointerEvent) {
 		const surface = activeSurfaceEl();
 		if (!surface || animating) return;
+		// Mobile: no spotlight dots on the back face.
+		if (prefersMobileCardFade() && surface === backSurfaceEl) {
+			clearAllSpotlights();
+			return;
+		}
 
 		const surfaceRect = surface.getBoundingClientRect();
 		if (surfaceRect.width <= 0 || surfaceRect.height <= 0) return;
@@ -703,7 +708,7 @@
 	/** Modal-only: tilt always follows cursor position relative to the card. */
 	function applyCursorTilt(clientX: number, clientY: number) {
 		if (!expanded || !rootEl || !tiltEl || animating || hoverLocked) return;
-		if (prefersReducedMotion()) {
+		if (prefersReducedMotion() || prefersMobileCardFade()) {
 			setHoverTilt(0, 0);
 			return;
 		}
@@ -861,7 +866,8 @@
 		const e = pointerEventAtLastPointer();
 		syncModalSpotlight(e);
 		// Ease into cursor tilt (keep hoverLocked so pointermove can't snap mid-ease).
-		if (!prefersReducedMotion()) {
+		// Mobile stays flat — no tilt.
+		if (!prefersReducedMotion() && !prefersMobileCardFade()) {
 			const { rotXDeg, rotYDeg } = tiltAnglesFromPointer(e.clientX, e.clientY);
 			await easeTiltTo(rotXDeg, rotYDeg);
 		} else {
@@ -1366,8 +1372,12 @@
 		overflow: hidden;
 	}
 
-	/* Mobile: crossfade faces instead of rotateY flip. */
+	/* Mobile: crossfade faces instead of rotateY flip; no tilt; no back-face dots. */
 	@media (max-width: 900px) {
+		.info-card-tilt {
+			transform: none !important;
+		}
+
 		.info-card-flip-stage {
 			perspective: none;
 		}
@@ -1411,6 +1421,11 @@
 		.info-card.info-card--no-face-transition .info-card-face--front,
 		.info-card.info-card--no-face-transition .info-card-face--back {
 			transition: none;
+		}
+
+		.info-card-surface--back .grid-cursor,
+		.info-card-surface--back .grid-base {
+			display: none;
 		}
 	}
 
@@ -1496,6 +1511,8 @@
 		--back-logo: 4.5cqw;
 		--back-chip-h: 4.1cqw;
 		--back-link-h: 4.42cqw;
+		text-size-adjust: 100%;
+		-webkit-text-size-adjust: 100%;
 	}
 
 	.info-card-surface {

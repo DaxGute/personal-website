@@ -9,11 +9,13 @@
 </script>
 
 <div class="experiences-panel">
-	{#if kicker}
-		<p class="kicker">{kicker}</p>
-	{/if}
-	<h1 class="title">{title}</h1>
-	<p class="body">{body}</p>
+	<div class="experiences-header">
+		{#if kicker}
+			<p class="kicker">{kicker}</p>
+		{/if}
+		<h1 class="title">{title}</h1>
+		<p class="body">{body}</p>
+	</div>
 
 	<ul class="experience-list" aria-label="Jobs and internships list">
 		{#each experiences as exp}
@@ -111,7 +113,73 @@
 		z-index: 10;
 	}
 
-	@media (min-width: 720px) {
+	/* Mobile: static 2×2 grid — header left, cards shifted right. */
+	@media (max-width: 900px) {
+		.experiences-panel {
+			position: relative;
+			display: block;
+		}
+
+		.experiences-header {
+			position: relative;
+			z-index: 2;
+			width: min(420px, 46vw);
+			max-width: none;
+		}
+
+		.experiences-header .title {
+			font-size: clamp(36px, 5.5vw, 54px);
+		}
+
+		.experiences-header .body {
+			margin-bottom: 0;
+			font-size: 15px;
+			line-height: 1.55;
+		}
+
+		:global(#experiences) .experience-list {
+			position: absolute;
+			top: 0;
+			left: 50vw;
+			display: grid;
+			grid-template-columns: repeat(2, var(--exp-card-w, 573px));
+			grid-template-rows: repeat(2, var(--exp-card-h, 112px));
+			gap: 12px;
+			min-height: 0;
+			margin: 0;
+			z-index: 1;
+		}
+
+		.experience-item,
+		:global(#experiences) .experience-item {
+			position: relative;
+			inset: auto;
+			margin: 0;
+			z-index: 1;
+			width: var(--exp-card-w);
+			height: var(--exp-card-h);
+			min-height: var(--exp-card-h);
+			transform: none;
+			will-change: auto;
+		}
+
+		/* top-right */
+		:global(#experiences) .experience-item:nth-child(2) {
+			transform: translate(10%, -65%);
+		}
+
+		/* bottom-left */
+		:global(#experiences) .experience-item:nth-child(3) {
+			transform: translate(-10%, -5%);
+		}
+
+		/* bottom-right */
+		:global(#experiences) .experience-item:nth-child(4) {
+			transform: translateY(-70%);
+		}
+	}
+
+	@media (min-width: 901px) {
 		.experience-item {
 			margin-inline: auto;
 		}

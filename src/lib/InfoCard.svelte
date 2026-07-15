@@ -561,7 +561,7 @@
 		position: relative;
 		z-index: 2;
 		isolation: isolate;
-		flex: 0 0 clamp(64px, 18%, 120px);
+		flex: 0 0 120px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1166,28 +1166,6 @@
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
-	}
-
-	@media (max-width: 520px) {
-		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .experience-header {
-			flex-direction: column;
-			gap: 6px;
-			align-items: flex-start;
-		}
-
-		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .experience-side {
-			align-items: flex-start;
-			gap: 6px;
-		}
-
-		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .card-logo {
-			flex-basis: clamp(56px, 22%, 88px);
-			padding: 10px 8px 10px 10px;
-		}
-
-		:global(.info-card:not(.info-card--blue):not(.info-card--modal)) .card-content {
-			padding: 12px 12px;
-		}
 	}
 
 	.experience-highlights {

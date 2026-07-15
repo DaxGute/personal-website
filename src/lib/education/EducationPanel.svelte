@@ -216,13 +216,19 @@
 		height: 100%;
 		/* Normal block flow — required for floats + line-box wrapping. */
 		display: block;
+		/*
+		 * Indent in cqw (same scale as --back-fs), not em. em on .edu-section-body
+		 * resolved against the page font, so the inset stayed ~fixed px while body
+		 * text shrank with the card — breaking layout on small viewports.
+		 */
+		--edu-indent: calc(2.5 * var(--back-fs, 2.15cqw));
 	}
 
 	.edu-section-heading-row {
 		display: flex;
 		align-items: baseline;
 		justify-content: flex-start;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		gap: 0 0.6em;
 		margin: var(--back-gap-lg, 2.25cqw) 0 var(--back-gap-xs, 0.45cqw);
 	}
@@ -234,7 +240,9 @@
 		 * the (overflow: hidden) bottom and clip it. Instead let Highlights wrap into
 		 * the bottom-right, pushed right by the 2nd image.
 		 */
-		margin-top: calc(var(--back-gap-lg, 2.25cqw) + 1.5 * 1.35em);
+		margin-top: calc(
+			var(--back-gap-lg, 2.25cqw) + 1.5 * 1.35 * var(--back-fs-md, 2.41cqw)
+		);
 	}
 
 	.edu-shim--secondary + .edu-section-heading-row {
@@ -248,7 +256,7 @@
 		font-size: var(--back-fs-md, 2.41cqw);
 		font-weight: 700;
 		line-height: 1.25;
-		overflow-wrap: anywhere;
+		white-space: nowrap;
 	}
 
 	/*
@@ -257,7 +265,7 @@
 	 */
 	.edu-section-body {
 		box-sizing: border-box;
-		margin: 0 0 var(--back-gap-xs, 0.45cqw) 2.5em;
+		margin: 0 0 var(--back-gap-xs, 0.45cqw) var(--edu-indent);
 	}
 
 	/*
@@ -268,7 +276,7 @@
 	.edu-section-heading-row--spaced + .edu-section-body {
 		display: flow-root;
 		margin-left: 0;
-		padding-left: 2.5em;
+		padding-left: var(--edu-indent);
 	}
 
 	.edu-section-item,
@@ -281,7 +289,7 @@
 		color: #000;
 		font-size: var(--back-fs, 2.15cqw);
 		line-height: 1.35;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 	}
 
 	.edu-activities {
@@ -399,6 +407,15 @@
 
 	.education-card:not(.is-stanford) .edu-photo--secondary img {
 		object-position: center 55%;
+	}
+
+	/* Mobile: always splayed, shifted up and right. */
+	@media (max-width: 900px) {
+		.education-carousel {
+			--edu-t: 1;
+			top: -160px;
+			left: calc(160px + 5%);
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

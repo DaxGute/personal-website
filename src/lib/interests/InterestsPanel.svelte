@@ -34,6 +34,7 @@
 				src={item.src ?? null}
 				alt={item.alt ?? item.caption}
 				backImages={item.backImages ?? []}
+				backMessage={item.backMessage ?? null}
 				revealRootMargin={item.revealRootMargin ?? '0px -35% 0px -35%'}
 				revealThreshold={item.revealThreshold ?? 0.01}
 				caption={item.caption}
@@ -95,7 +96,7 @@
 		position: absolute;
 		inset: 0;
 		z-index: 1;
-		--float-card-w: clamp(180px, 22%, 260px);
+		--float-card-w: 260px;
 	}
 
 	.interest-ski {
@@ -185,14 +186,33 @@
 		}
 	}
 
-	@media (max-width: 720px) {
+	/* Match site mobile breakpoint (900px). Portrait phones get the rotate gate;
+	   landscape / narrow widths use these styles. */
+	@media (max-width: 900px) {
 		.interests-copy {
-			right: auto;
-			left: 50%;
-			transform: translateX(-50%);
-			top: clamp(90px, 12vh, 140px);
-			text-align: center;
+			top: 0;
+			right: 0;
+			left: auto;
+			transform: none;
+			text-align: right;
+			padding-top: 8px;
 		}
+
+		.interest-chess {
+			right: 65%; /* +15% left */
+		}
+
+		.interest-tt {
+			top: 28%; /* +10% up */
+			right: 95%; /* +30% left */
+		}
+
+		.interest-ski {
+			right: 125%; /* +45% left */
+		}
+	}
+
+	@media (max-width: 720px) {
 		.interests-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
