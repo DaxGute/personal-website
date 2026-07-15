@@ -47,6 +47,7 @@
 			return label === 'website' || label === 'app store';
 		}) ?? null;
 	$: otherLinks = links.filter((l) => l !== primaryLink);
+	$: showBackHeaderSide = showHeaderSide || (variant === 'project' && !!primaryLink);
 </script>
 
 <CardShell
@@ -130,19 +131,6 @@
 								<p class="project-body">{body}</p>
 							{/if}
 
-							{#if primaryLink}
-								<p class="project-website">
-									<a
-										class="project-website-link"
-										href={primaryLink.href}
-										target="_blank"
-										rel="noreferrer"
-									>
-										{primaryLink.label}.
-									</a>
-								</p>
-							{/if}
-
 							{#if items.length}
 								<ul class="experience-highlights" aria-label="Project highlights">
 									{#each items as item}
@@ -160,7 +148,7 @@
 	</div>
 
 	<div slot="back" class="card-row card-row--back">
-		{#if hasSideLogo && (sidePhotoOnBack ? backImageSrc : logoSrc)}
+		{#if hasSideLogo && variant !== 'project' && (sidePhotoOnBack ? backImageSrc : logoSrc)}
 			<div
 				class="card-logo"
 				class:card-logo--back-photo={sidePhotoOnBack}
@@ -224,8 +212,18 @@
 						<p class="experience-dates award-dates">{dates}</p>
 					{/if}
 				</div>
-				{#if showHeaderSide}
+				{#if showBackHeaderSide}
 					<div class="experience-side">
+						{#if variant === 'project' && primaryLink}
+							<a
+								class="project-website-bubble"
+								href={primaryLink.href}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{primaryLink.label}
+							</a>
+						{/if}
 						{#if dates && variant !== 'award'}
 							<p class="experience-dates">{dates}</p>
 						{/if}
@@ -334,6 +332,16 @@
 							{/each}
 						</div>
 					{:else if variant === 'project'}
+						{#if backParagraphs.length}
+							<div class="experience-back-copy" aria-label="Project details">
+								{#each backParagraphs as paragraph}
+									<p class="experience-back-paragraph">
+										<strong>{paragraph.heading}</strong>
+										{#if paragraph.body}{' '}{paragraph.body}{/if}
+									</p>
+								{/each}
+							</div>
+						{:else}
 						{#if body}
 							<p class="project-body">{body}</p>
 						{/if}
@@ -375,6 +383,7 @@
 									</a>
 								{/each}
 							</div>
+						{/if}
 						{/if}
 					{:else}
 						<div class="award-details">
@@ -495,6 +504,23 @@
 		overflow: hidden;
 	}
 
+	:global(.info-card--project) .card-row:not(.card-row--back) .card-main {
+		display: flex;
+		flex-direction: column;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .card-main-content {
+		flex: 1 1 auto;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		min-height: 0;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .project-body {
+		margin: 0;
+	}
+
 	.card-row {
 		display: flex;
 		align-items: stretch;
@@ -547,8 +573,8 @@
 
 	.card-row--back .card-logo:not(.card-logo--back-photo) {
 		flex-basis: 18%;
-		padding: var(--back-pad, 0.92cqw) var(--back-gap, 1.2cqw) var(--back-pad, 0.92cqw)
-			var(--back-pad, 0.92cqw);
+		padding: var(--back-pad, 1.38cqw) var(--back-gap, 1.8cqw) var(--back-pad, 1.38cqw)
+			var(--back-pad, 1.38cqw);
 	}
 
 	:global(.info-card--experience) .card-row--back .card-logo:not(.card-logo--back-photo) {
@@ -580,16 +606,16 @@
 	}
 
 	.card-row--back .card-content {
-		padding: var(--back-pad, 0.92cqw);
+		padding: var(--back-pad, 1.38cqw);
 	}
 
 	:global(.info-card--experience.info-card--modal) .card-row--back .card-content {
-		padding: var(--back-pad, 0.92cqw) var(--back-pad, 0.92cqw) var(--back-pad, 0.92cqw)
-			calc(var(--back-pad, 0.92cqw) * 1.4);
+		padding: var(--back-pad, 1.38cqw) var(--back-pad, 1.38cqw) var(--back-pad, 1.38cqw)
+			calc(var(--back-pad, 1.38cqw) * 1.4);
 	}
 
 	:global(.info-card--experience.info-card--modal) .card-row--back .experience-header {
-		margin-bottom: var(--back-gap-sm, 0.75cqw);
+		margin-bottom: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-main {
@@ -688,13 +714,13 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: var(--back-gap, 1.2cqw);
+		gap: var(--back-gap, 1.8cqw);
 		height: 100%;
 		width: auto;
 		max-width: 100%;
 		aspect-ratio: 4 / 3;
 		margin-left: auto;
-		padding: var(--back-gap-lg, 1.5cqw);
+		padding: var(--back-gap-lg, 2.25cqw);
 		border-radius: 2px;
 		border: 1px solid rgba(150, 160, 175, 0.35);
 		background: rgba(150, 158, 170, 0.28);
@@ -774,7 +800,7 @@
 	}
 
 	.card-back-marker {
-		margin: 0 0 var(--back-gap-sm, 0.75cqw);
+		margin: 0 0 var(--back-gap-sm, 1.13cqw);
 		color: rgba(216, 226, 242, 0.72);
 		font-size: var(--back-fs-xs, 1.84cqw);
 		font-weight: 700;
@@ -842,16 +868,16 @@
 	}
 
 	.card-row--back .experience-header {
-		gap: var(--back-gap, 1.2cqw);
-		margin-bottom: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap, 1.8cqw);
+		margin-bottom: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-row--back .experience-side {
-		gap: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-row--back .experience-meta {
-		gap: var(--back-gap-xs, 0.3cqw);
+		gap: var(--back-gap-xs, 0.45cqw);
 	}
 
 	:global(.info-card.info-card--blue) .experience-sub {
@@ -909,7 +935,7 @@
 	}
 
 	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .card-content {
-		padding: var(--back-pad, 0.92cqw);
+		padding: var(--back-pad, 1.38cqw);
 	}
 
 	:global(.info-card.info-card--blue) .experience-header {
@@ -920,8 +946,8 @@
 	}
 
 	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .experience-header {
-		gap: var(--back-gap, 1.2cqw);
-		margin-bottom: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap, 1.8cqw);
+		margin-bottom: var(--back-gap-sm, 1.13cqw);
 	}
 
 	:global(.info-card.info-card--blue) .education-logo {
@@ -974,8 +1000,8 @@
 	}
 
 	:global(.info-card.info-card--experience.info-card--modal) .card-row--back .experience-header {
-		column-gap: var(--back-gap, 1.2cqw);
-		row-gap: var(--back-gap-xs, 0.3cqw);
+		column-gap: var(--back-gap, 1.8cqw);
+		row-gap: var(--back-gap-xs, 0.45cqw);
 	}
 
 	:global(.info-card.info-card--experience) .experience-meta {
@@ -998,6 +1024,16 @@
 		grid-row: 1;
 	}
 
+	:global(.info-card.info-card--award .info-card-face--front .info-card-surface) {
+		padding: 0;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .card-content {
+		padding: 10px 12px;
+		height: 100%;
+		box-sizing: border-box;
+	}
+
 	:global(.info-card.info-card--award) .experience-header {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) auto;
@@ -1008,9 +1044,15 @@
 		overflow: visible;
 	}
 
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-header {
+		margin-bottom: 0;
+		height: 100%;
+		align-items: center;
+	}
+
 	:global(.info-card.info-card--award.info-card--modal) .card-row--back .experience-header {
-		column-gap: var(--back-gap, 1.2cqw);
-		row-gap: var(--back-gap-xs, 0.3cqw);
+		column-gap: var(--back-gap, 1.8cqw);
+		row-gap: var(--back-gap-xs, 0.45cqw);
 	}
 
 	:global(.info-card.info-card--award) .experience-meta {
@@ -1076,8 +1118,13 @@
 	}
 
 	:global(.info-card.info-card--award) .education-logo {
-		width: 50px;
-		height: 50px;
+		width: 44px;
+		height: 44px;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
+		width: 40px;
+		height: 40px;
 	}
 
 	:global(.info-card.info-card--award.info-card--modal) .card-row--back .education-logo {
@@ -1204,7 +1251,7 @@
 	.card-row--back .education-details {
 		font-size: var(--back-fs, 2.15cqw);
 		line-height: 1.35;
-		gap: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.award-details {
@@ -1243,6 +1290,45 @@
 
 	.project-website-link:hover {
 		text-decoration-thickness: 2px;
+	}
+
+	.project-website-bubble {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		height: 24px;
+		padding: 0 11px;
+		border-radius: 999px;
+		border: 1px solid rgba(176, 196, 228, 0.55);
+		background: rgba(140, 180, 220, 0.22);
+		color: #e8f2ff;
+		font-size: 11px;
+		font-weight: 700;
+		letter-spacing: 0.03em;
+		text-decoration: none;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.75);
+		white-space: nowrap;
+		transition:
+			transform 140ms ease,
+			background 140ms ease,
+			border-color 140ms ease;
+	}
+
+	.project-website-bubble:hover {
+		transform: translateY(-1px);
+		background: rgba(140, 180, 220, 0.34);
+		border-color: rgba(200, 220, 255, 0.72);
+	}
+
+	.project-website-bubble:focus-visible {
+		outline: 2px solid rgba(200, 220, 255, 0.55);
+		outline-offset: 2px;
+	}
+
+	.card-row--back .project-website-bubble {
+		height: var(--back-chip-h, 4.1cqw);
+		padding: 0 2.6cqw;
+		font-size: var(--back-fs-xs, 1.84cqw);
 	}
 
 	.project-chips {
@@ -1306,7 +1392,7 @@
 	}
 
 	.card-row--back .experience-back-copy {
-		gap: var(--back-gap-lg, 1.5cqw);
+		gap: var(--back-gap-lg, 2.25cqw);
 	}
 
 	.card-row--back .experience-back-paragraph {
@@ -1314,29 +1400,29 @@
 	}
 
 	.card-row--back .education-details {
-		gap: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
 		font-size: var(--back-fs, 2.15cqw);
 	}
 
 	.card-row--back .award-details {
-		gap: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
 		font-size: var(--back-fs, 2.15cqw);
 	}
 
 	.card-row--back .project-body,
 	.card-row--back .project-website {
-		margin: 0 0 var(--back-gap-sm, 0.75cqw);
+		margin: 0 0 var(--back-gap-sm, 1.13cqw);
 		font-size: var(--back-fs-sm, 2.02cqw);
 	}
 
 	.card-row--back .project-chips {
-		gap: var(--back-gap-sm, 0.75cqw);
-		margin: 0 0 var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
+		margin: 0 0 var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-row--back .experience-skills {
-		gap: var(--back-gap-sm, 0.75cqw);
-		padding-top: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
+		padding-top: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-row--back .project-chip {
@@ -1346,7 +1432,7 @@
 	}
 
 	.card-row--back .project-links {
-		gap: var(--back-gap-sm, 0.75cqw);
+		gap: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.card-row--back .project-link {
@@ -1447,8 +1533,32 @@
 	:global(.info-card--teal) .project-website-link,
 	:global(.info-card--aquamarine) .project-website-link,
 	:global(.info-card--blue) .project-website-link,
-	:global(.info-card--periwinkle) .project-website-link {
+	:global(.info-card--periwinkle) .project-website-link,
+	:global(.info-card--green) .project-website-bubble,
+	:global(.info-card--teal) .project-website-bubble,
+	:global(.info-card--aquamarine) .project-website-bubble,
+	:global(.info-card--blue) .project-website-bubble,
+	:global(.info-card--periwinkle) .project-website-bubble {
 		color: var(--tone-accent);
+	}
+
+	:global(.info-card--green) .project-website-bubble,
+	:global(.info-card--teal) .project-website-bubble,
+	:global(.info-card--aquamarine) .project-website-bubble,
+	:global(.info-card--blue) .project-website-bubble,
+	:global(.info-card--periwinkle) .project-website-bubble {
+		border-color: rgba(var(--tone-border), 0.45);
+		background: rgba(255, 255, 255, 0.34);
+		text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+	}
+
+	:global(.info-card--green) .project-website-bubble:hover,
+	:global(.info-card--teal) .project-website-bubble:hover,
+	:global(.info-card--aquamarine) .project-website-bubble:hover,
+	:global(.info-card--blue) .project-website-bubble:hover,
+	:global(.info-card--periwinkle) .project-website-bubble:hover {
+		background: rgba(255, 255, 255, 0.48);
+		border-color: rgba(var(--tone-border-hover), 0.62);
 	}
 
 	:global(.info-card--green) .project-chip,

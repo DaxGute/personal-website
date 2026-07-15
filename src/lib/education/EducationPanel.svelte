@@ -48,30 +48,34 @@
 									<div class="edu-shim edu-shim--secondary" aria-hidden="true"></div>
 								{/if}
 								{#each edu.backSections as section}
-									<h2
-										class="edu-section-heading"
-										class:edu-section-heading--spaced={section.heading === 'Highlights'}
+									<div
+										class="edu-section-heading-row"
+										class:edu-section-heading-row--spaced={section.heading === 'Highlights'}
 									>
-										{section.heading}
-									</h2>
-									{#if section.items?.length}
-										{#each section.items as item}
-											<p class="edu-section-item">{item}</p>
-										{/each}
-									{/if}
-									{#if section.activities?.length}
-										<p class="edu-activities">{section.activities.join(' · ')}</p>
-									{/if}
-									{#if section.link}
-										<a
-											class="edu-section-link"
-											href={section.link.href}
-											download={section.link.download ? '' : undefined}
-											target={section.link.download ? undefined : '_blank'}
-											rel={section.link.download ? undefined : 'noreferrer'}
-										>
-											{section.link.label}
-										</a>
+										<h2 class="edu-section-heading">{section.heading}</h2>
+										{#if section.link}
+											<a
+												class="edu-section-link"
+												href={section.link.href}
+												download={section.link.download ? '' : undefined}
+												target={section.link.download ? undefined : '_blank'}
+												rel={section.link.download ? undefined : 'noreferrer'}
+											>
+												{section.link.label}
+											</a>
+										{/if}
+									</div>
+									{#if section.items?.length || section.activities?.length}
+										<div class="edu-section-body">
+											{#if section.items?.length}
+												{#each section.items as item}
+													<p class="edu-section-item">{item}</p>
+												{/each}
+											{/if}
+											{#if section.activities?.length}
+												<p class="edu-activities">{section.activities.join(' · ')}</p>
+											{/if}
+										</div>
 									{/if}
 								{/each}
 							</div>
@@ -214,9 +218,32 @@
 		display: block;
 	}
 
+	.edu-section-heading-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: flex-start;
+		flex-wrap: wrap;
+		gap: 0 0.6em;
+		margin: var(--back-gap-lg, 2.25cqw) 0 var(--back-gap-xs, 0.45cqw);
+	}
+
+	.edu-section-heading-row--spaced {
+		/*
+		 * Do NOT clear the left float here. The 2nd photo floats bottom-left and
+		 * reaches the card's bottom edge, so clearing it would push Highlights past
+		 * the (overflow: hidden) bottom and clip it. Instead let Highlights wrap into
+		 * the bottom-right, pushed right by the 2nd image.
+		 */
+		margin-top: calc(var(--back-gap-lg, 2.25cqw) + 1.5 * 1.35em);
+	}
+
+	.edu-shim--secondary + .edu-section-heading-row {
+		margin-top: 0;
+	}
+
 	.edu-section-heading {
-		display: block;
-		margin: var(--back-gap-lg, 1.5cqw) 0 var(--back-gap-xs, 0.3cqw);
+		display: inline;
+		margin: 0;
 		color: #000;
 		font-size: var(--back-fs-md, 2.41cqw);
 		font-weight: 700;
@@ -224,13 +251,24 @@
 		overflow-wrap: anywhere;
 	}
 
-	.edu-section-heading--spaced {
-		/* Three lines of space after the previous section before Highlights. */
-		margin-top: calc(var(--back-gap-lg, 1.5cqw) + 3 * 1.35em);
+	/*
+	 * Indent under the section title. Use margin-left (not padding) so the shift
+	 * stays visible even when line boxes wrap around the photo floats.
+	 */
+	.edu-section-body {
+		box-sizing: border-box;
+		margin: 0 0 var(--back-gap-xs, 0.45cqw) 2.5em;
 	}
 
-	.edu-shim--secondary + .edu-section-heading {
-		margin-top: 0;
+	/*
+	 * Highlights sits beside the bottom-left float. margin-left from the card edge
+	 * is swallowed by that float (~33% wide), so indent is invisible. Shrink into
+	 * the remaining column first, then pad inside it.
+	 */
+	.edu-section-heading-row--spaced + .edu-section-body {
+		display: flow-root;
+		margin-left: 0;
+		padding-left: 2.5em;
 	}
 
 	.edu-section-item,
@@ -238,7 +276,8 @@
 		display: block;
 		width: auto;
 		max-width: none;
-		margin: 0 0 var(--back-gap-xs, 0.3cqw);
+		margin: 0 0 var(--back-gap-xs, 0.45cqw);
+		padding-left: 0;
 		color: #000;
 		font-size: var(--back-fs, 2.15cqw);
 		line-height: 1.35;
@@ -246,18 +285,19 @@
 	}
 
 	.edu-activities {
-		margin-top: var(--back-gap-xs, 0.3cqw);
+		margin-top: var(--back-gap-xs, 0.45cqw);
 	}
 
 	.edu-section-link {
-		display: inline-block;
-		margin: var(--back-gap-xs, 0.3cqw) 0 var(--back-gap-sm, 0.75cqw);
+		display: inline;
+		margin: 0;
 		color: #000;
 		font-size: var(--back-fs, 2.15cqw);
 		font-weight: 700;
-		line-height: 1.35;
+		line-height: 1.25;
 		text-decoration: underline;
 		text-underline-offset: 2px;
+		white-space: nowrap;
 	}
 
 	.edu-section-link:hover {
@@ -298,13 +338,13 @@
 
 	.edu-photo--primary {
 		top: 50%;
-		right: var(--back-gap-sm, 0.75cqw);
+		right: var(--back-gap-sm, 1.13cqw);
 		transform: translateY(-50%);
 	}
 
 	.edu-photo--secondary {
-		bottom: var(--back-gap-sm, 0.75cqw);
-		left: var(--back-gap-sm, 0.75cqw);
+		bottom: var(--back-gap-sm, 1.13cqw);
+		left: var(--back-gap-sm, 1.13cqw);
 	}
 
 	/*
@@ -330,9 +370,9 @@
 		clear: right;
 		width: var(--edu-photo-size);
 		aspect-ratio: 1 / 1;
-		margin: 0 var(--back-gap-sm, 0.75cqw) var(--back-gap, 1.2cqw) var(--back-gap, 1.2cqw);
+		margin: 0 var(--back-gap-sm, 1.13cqw) var(--back-gap, 1.8cqw) var(--back-gap, 1.8cqw);
 		shape-outside: border-box;
-		shape-margin: var(--back-gap-sm, 0.75cqw);
+		shape-margin: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.edu-shim--secondary {
@@ -340,9 +380,9 @@
 		clear: right;
 		width: var(--edu-photo-size);
 		aspect-ratio: 1 / 1;
-		margin: 0 var(--back-gap, 1.2cqw) var(--back-gap-sm, 0.75cqw) var(--back-gap-sm, 0.75cqw);
+		margin: 0 var(--back-gap, 1.8cqw) var(--back-gap-sm, 1.13cqw) var(--back-gap-sm, 1.13cqw);
 		shape-outside: border-box;
-		shape-margin: var(--back-gap-sm, 0.75cqw);
+		shape-margin: var(--back-gap-sm, 1.13cqw);
 	}
 
 	.education-card.is-stanford .edu-photo--primary img {

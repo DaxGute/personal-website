@@ -697,7 +697,10 @@
 	}
 
 	.award-card-surface {
-		width: min(390px, 44vw);
+		--award-card-w: 390px;
+		--award-card-h: 88px;
+		width: min(var(--award-card-w), 44vw);
+		height: var(--award-card-h);
 		position: relative;
 		opacity: 1;
 		will-change: opacity;
@@ -797,6 +800,7 @@
 		}
 		.award-card-surface {
 			width: min(560px, 92vw);
+			height: var(--award-card-h);
 			margin-inline: auto;
 		}
 	}
@@ -831,6 +835,7 @@
 		}
 		.award-card-surface {
 			width: min(560px, 92vw);
+			height: var(--award-card-h);
 			margin-inline: auto;
 		}
 	}

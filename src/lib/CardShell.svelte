@@ -1451,6 +1451,17 @@
 		overscroll-behavior: contain;
 	}
 
+	/* Projects: ~2.25× smaller than default back type. */
+	:global(.info-card--project) .info-card-surface--back {
+		--back-fs-xs: 1.29cqw;
+		--back-fs-sm: 1.42cqw;
+		--back-fs: 1.51cqw;
+		--back-fs-md: 1.69cqw;
+		--back-fs-lg: 1.91cqw;
+		--back-chip-h: 2.89cqw;
+		--back-link-h: 3.11cqw;
+	}
+
 	/* Wide experience cards — keep the dialed-in cqw scale. */
 	:global(.info-card--experience) .info-card-surface--back {
 		--back-fs-xs: 1.09cqw;
@@ -1475,11 +1486,11 @@
 		--back-fs: 2.15cqw;
 		--back-fs-md: 2.41cqw;
 		--back-fs-lg: 2.71cqw;
-		--back-pad: 0.92cqw;
-		--back-gap-xs: 0.3cqw;
-		--back-gap-sm: 0.75cqw;
-		--back-gap: 1.2cqw;
-		--back-gap-lg: 1.5cqw;
+		--back-pad: 1.38cqw;
+		--back-gap-xs: 0.45cqw;
+		--back-gap-sm: 1.13cqw;
+		--back-gap: 1.8cqw;
+		--back-gap-lg: 2.25cqw;
 		--back-icon: 2cqw;
 		--back-logo-sm: 4cqw;
 		--back-logo: 4.5cqw;

@@ -439,11 +439,53 @@
 						subheading={active.blurb}
 						body={active.description}
 						items={active.highlights ?? []}
+						backParagraphs={active.backParagraphs ?? []}
 						tech={active.tech ?? []}
 						links={active.links ?? []}
 						logoSrc={projectLogo?.src ?? null}
 						logoAlt={projectLogo?.alt ?? null}
-					/>
+						customBackBody={!!(active.backSections?.length || active.backImages?.length)}
+					>
+						<div
+							slot="backBody"
+							class="project-back"
+							class:project-back--with-photos={!!active.backImages?.length}
+							aria-label="{active.name} details"
+						>
+							{#if active.backSections?.length}
+								<div
+									class="project-copy"
+									class:project-copy--grid={active.backSections.length === 4}
+								>
+									{#each active.backSections as section}
+										<div class="project-section">
+											<h2 class="project-section-heading">{section.heading}</h2>
+											<div class="project-section-body">
+												{#each section.items as item}
+													<p class="project-section-item">{item}</p>
+												{/each}
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+
+							{#if active.backImages?.length}
+								<div class="project-photos" aria-label="{active.name} photos">
+									{#each active.backImages as image (image.src)}
+										<figure class="project-photo">
+											<img
+												src={image.src}
+												alt={image.alt}
+												loading="lazy"
+												decoding="async"
+											/>
+										</figure>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</InfoCard>
 				{:else}
 					<p class="desc-empty">Add some projects to see details here.</p>
 				{/if}
@@ -649,6 +691,97 @@
 		margin: 0;
 		padding: 14px;
 		color: rgba(216, 226, 242, 0.82);
+	}
+
+	.project-back {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+		overflow: hidden;
+	}
+
+	.project-back--with-photos {
+		display: flex;
+		flex-direction: column;
+		gap: calc(var(--back-gap-sm, 1.13cqw) * 0.7);
+	}
+
+	.project-copy {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.project-copy--grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-rows: repeat(2, minmax(0, 1fr));
+		gap: calc(var(--back-gap-sm, 1.13cqw) * 0.7) calc(var(--back-gap, 1.8cqw) * 0.7);
+		align-content: stretch;
+	}
+
+	.project-copy--grid .project-section {
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.project-copy--grid .project-section-heading {
+		margin-top: 0;
+	}
+
+	.project-copy--grid .project-section-body {
+		margin-left: 0;
+	}
+
+	.project-photos {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+		gap: calc(var(--back-gap-xs, 0.45cqw) * 0.7);
+		flex: 0 0 auto;
+		width: 100%;
+		align-self: stretch;
+	}
+
+	.project-photo {
+		margin: 0;
+		aspect-ratio: 1 / 1;
+		overflow: hidden;
+		border-radius: 2px;
+		border: 1px solid rgba(0, 0, 0, 0.12);
+		background: rgba(0, 0, 0, 0.04);
+	}
+
+	.project-photo img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center;
+	}
+
+	.project-section-heading {
+		margin: calc(var(--back-gap, 1.8cqw) * 0.7) 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7);
+		color: #000;
+		font-size: calc(var(--back-fs-md, 2.41cqw) * 0.7);
+		font-weight: 700;
+		line-height: 1.2;
+		overflow-wrap: anywhere;
+	}
+
+	.project-section:first-child .project-section-heading {
+		margin-top: 0;
+	}
+
+	.project-section-body {
+		margin: 0 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7) 1.54em;
+	}
+
+	.project-section-item {
+		margin: 0 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7);
+		color: #000;
+		font-size: calc(var(--back-fs-sm, 2.02cqw) * 0.7);
+		line-height: 1.35;
+		overflow-wrap: anywhere;
 	}
 
 	@media (max-width: 760px) {

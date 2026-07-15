@@ -1,5 +1,5 @@
 import baiLogo from '$lib/assets/experience/bai_logo.jpeg';
-import baiPhoto from '$lib/assets/experience/bai_photo.png';
+import baiPhoto from '$lib/assets/experience/bai_photo.jpeg';
 import cestaLogo from '$lib/assets/experience/CESTA_logo.jpg';
 import ccLogo from '$lib/assets/experience/cc_logo.jpeg';
 import ccPhoto from '$lib/assets/experience/cc_photo.png';
