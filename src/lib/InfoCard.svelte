@@ -26,6 +26,7 @@
 	export let backImageAlt: string | null = null;
 	export let backImageHref: string | null = null;
 	export let backLinkLabel: string | null = null;
+	export let backImageGrayscale = false;
 	export let body: string | null = null;
 	export let tech: string[] = [];
 	export let links: ProjectLink[] = [];
@@ -37,6 +38,7 @@
 
 	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
 	$: sidePhotoOnBack = variant === 'experience' && !!backImageSrc;
+	$: sidePhotoLinkOverlay = sidePhotoOnBack && !!backImageHref;
 	$: hasHeaderLogo = (variant === 'education' || variant === 'award') && !!logoSrc;
 	$: showHeaderSide = (dates && variant !== 'award') || hasHeaderLogo;
 	$: primaryLink =
@@ -169,11 +171,39 @@
 						: 'true'}
 			>
 				<img
+					class:card-back-photo--bw={sidePhotoOnBack && backImageGrayscale}
 					src={sidePhotoOnBack ? backImageSrc : logoSrc}
 					alt={sidePhotoOnBack ? (backImageAlt ?? '') : (logoAlt ?? '')}
 					loading="lazy"
 					decoding="async"
 				/>
+				{#if sidePhotoLinkOverlay && backImageHref}
+					<a
+						class="card-back-link-box card-back-link-box--overlay"
+						href={backImageHref}
+						target="_blank"
+						rel="noreferrer"
+					>
+						<span class="card-back-link-label">
+							{backLinkLabel ?? backImageAlt ?? 'View more'}
+						</span>
+						<svg
+							class="card-back-link-icon"
+							viewBox="0 0 24 24"
+							aria-hidden="true"
+							focusable="false"
+						>
+							<path
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M14 4h6v6M10 14L20 4M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+							/>
+						</svg>
+					</a>
+				{/if}
 			</div>
 		{/if}
 
@@ -241,7 +271,7 @@
 								/>
 							{/if}
 						</div>
-					{:else if backImageHref && backItems.length === 0 && backParagraphs.length === 0}
+					{:else if backImageHref && !sidePhotoLinkOverlay && backItems.length === 0 && backParagraphs.length === 0}
 						<div class="card-back-image">
 							<a
 								class="card-back-link-box"
@@ -278,7 +308,7 @@
 								{#each backParagraphs as paragraph}
 									<p class="experience-back-paragraph">
 										<strong>{paragraph.heading}</strong>
-										{' '}{paragraph.body}
+										{#if paragraph.body}{' '}{paragraph.body}{/if}
 									</p>
 								{/each}
 							</div>
@@ -412,6 +442,7 @@
 	}
 
 	:global(.info-card--experience) .card-logo--back-photo {
+		position: relative;
 		align-self: stretch;
 		flex: 0 0 calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
 		width: calc(var(--exp-card-h, clamp(121px, 13.4vh, 161px)) * 2);
@@ -421,6 +452,10 @@
 	:global(.info-card--experience) .card-logo--back-photo img {
 		object-fit: cover;
 		object-position: center;
+	}
+
+	.card-back-photo--bw {
+		filter: grayscale(1);
 	}
 
 	:global(.info-card--experience) .card-content {
@@ -654,6 +689,43 @@
 	.card-back-link-box:focus-visible {
 		outline: 2px solid rgba(120, 130, 145, 0.55);
 		outline-offset: 2px;
+	}
+
+	.card-back-link-box.card-back-link-box--overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		max-height: none;
+		aspect-ratio: auto;
+		margin: 0;
+		border-radius: 0;
+		border-color: rgba(255, 255, 255, 0.28);
+		background: rgba(11, 18, 32, 0.42);
+		color: #fff;
+		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.55);
+		box-shadow: none;
+	}
+
+	.card-back-link-box.card-back-link-box--overlay .card-back-link-label,
+	.card-back-link-box.card-back-link-box--overlay .card-back-link-icon {
+		color: #fff;
+	}
+
+	.card-back-link-box.card-back-link-box--overlay .card-back-link-icon {
+		opacity: 1;
+		stroke: #fff;
+	}
+
+	.card-back-link-box.card-back-link-box--overlay:hover {
+		background: rgba(11, 18, 32, 0.52);
+		border-color: rgba(255, 255, 255, 0.4);
+	}
+
+	.card-back-link-box.card-back-link-box--overlay:hover .card-back-link-icon {
+		opacity: 1;
 	}
 
 	.card-back-marker {

@@ -301,10 +301,10 @@
 				const denom = expEnd - expStart;
 				// Start the Experiences animation earlier (before the slide is fully reached).
 				// The panel is clipped (see CSS) so the cards won't visually bleed into the previous slide.
-				const shiftPx = (panelW || denom || window.innerWidth) * 0.78;
+				const shiftPx = (panelW || denom || window.innerWidth) * 0.95;
 				const start = expStart - shiftPx;
 				// Let the animation "finish" a bit later than the panel boundary.
-				const tailPx = (panelW || denom || window.innerWidth) * 0.5;
+				const tailPx = (panelW || denom || window.innerWidth) * 0.75;
 				const end = expEnd - shiftPx + tailPx;
 				const linearT = end === start ? 1 : clamp01((x - start) / (end - start));
 				experiencesPanelEl?.style.setProperty('--exp-t', `${easeOutCubic(linearT)}`);

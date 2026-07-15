@@ -30,6 +30,7 @@
 					backImageAlt={exp.backImageAlt}
 					backImageHref={exp.backImageHref}
 					backLinkLabel={exp.backLinkLabel}
+					backImageGrayscale={exp.backImageGrayscale ?? false}
 					backParagraphs={exp.backParagraphs ?? []}
 					skills={exp.skills ?? []}
 				/>
@@ -111,7 +112,7 @@
 
 	@media (min-width: 720px) {
 		:global(#experiences) .experience-list {
-			--exp-card-w: min(546px, 48.3vw);
+			--exp-card-w: min(573px, 50.7vw);
 		}
 
 		.experience-item {

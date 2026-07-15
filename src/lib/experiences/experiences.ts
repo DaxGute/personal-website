@@ -2,6 +2,7 @@ import baiLogo from '$lib/assets/experience/bai_logo.jpeg';
 import baiPhoto from '$lib/assets/experience/bai_photo.png';
 import cestaLogo from '$lib/assets/experience/CESTA_logo.jpg';
 import ccLogo from '$lib/assets/experience/cc_logo.jpeg';
+import ccPhoto from '$lib/assets/experience/cc_photo.png';
 import sdLogo from '$lib/assets/experience/sd_logo.jpeg';
 import youthCommissionPhoto from '$lib/assets/experience/youth_commission.png';
 
@@ -22,6 +23,7 @@ export type Experience = {
 	backImageAlt?: string;
 	backImageHref?: string;
 	backLinkLabel?: string;
+	backImageGrayscale?: boolean;
 	backParagraphs?: ExperienceBackParagraph[];
 	skills?: string[];
 };
@@ -36,7 +38,15 @@ export const experiences: Experience[] = [
 			'Researching AI-human coauthorship through computational discourse analysis while developing policy frameworks for hybrid text.'
 		],
 		logoSrc: cestaLogo,
-		logoAlt: 'CESTA logo'
+		logoAlt: 'CESTA logo',
+		backImageSrc: cestaLogo,
+		backImageAlt: 'CESTA logo',
+		backParagraphs: [
+			{
+				heading: '⚠️ WIP ⚠️',
+				body: ''
+			}
+		]
 	},
 	{
 		company: 'Benevolent AI',
@@ -71,8 +81,21 @@ export const experiences: Experience[] = [
 		],
 		logoSrc: ccLogo,
 		logoAlt: 'Castle Creek Capital logo',
+		backImageSrc: ccPhoto,
+		backImageAlt: 'At Castle Creek Capital',
 		backImageHref: 'https://www.castlecreek.com/internship',
-		backLinkLabel: 'Internship Page'
+		backLinkLabel: 'Internship Page',
+		backImageGrayscale: true,
+		backParagraphs: [
+			{
+				heading: 'Investment Research & Due Diligence:',
+				body: 'Conducted research on community banks for potential inclusion in Fund VII, analyzing executive leadership, holdings, financial performance, and market positioning while preparing investment presentations for senior management and shareholders.'
+			},
+			{
+				heading: 'Financial Modeling & Forecasting:',
+				body: 'Built discounted cash flow models, developed Excel-based financial analyses and projections, and supported quarterly fund reporting through market research, performance forecasting, and investment data management.'
+			}
+		]
 	},
 	{
 		company: 'City of San Diego',
@@ -85,6 +108,16 @@ export const experiences: Experience[] = [
 		logoSrc: sdLogo,
 		logoAlt: 'City of San Diego logo',
 		backImageSrc: youthCommissionPhoto,
-		backImageAlt: 'San Diego Youth Commission group photo'
+		backImageAlt: 'San Diego Youth Commission group photo',
+		backParagraphs: [
+			{
+				heading: 'Youth Policy & Civic Leadership:',
+				body: 'Represented District 3 on the Mayor-appointed San Diego Youth Commission, collaborating with commissioners, city staff, and local agencies to discuss and vote on recommendations affecting education, immigration, environmental sustainability, and youth policy.'
+			},
+			{
+				heading: 'Community Advocacy:',
+				body: 'Advocated for educational equity, refugee support, and climate resilience by developing policy proposals and participating in discussions aimed at improving opportunities and outcomes for San Diego youth.'
+			}
+		]
 	}
 ];
