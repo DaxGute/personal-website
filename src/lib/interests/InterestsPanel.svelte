@@ -189,6 +189,10 @@
 	/* Match site mobile breakpoint (900px). Portrait phones get the rotate gate;
 	   landscape / narrow widths use these styles. */
 	@media (max-width: 900px) {
+		.repo-note {
+			display: none;
+		}
+
 		.interests-copy {
 			top: 0;
 			right: 0;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy, onMount } from 'svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
 	import { experiences } from '$lib/experiences/experiences';
@@ -6,9 +7,87 @@
 	export let kicker: string | undefined = undefined;
 	export let title: string;
 	export let body: string;
+
+	let panelEl: HTMLElement | null = null;
+	let hintRevealed = false;
+	let rafId: number | null = null;
+
+	/**
+	 * Scroll-in progress at which the hint reveals. The section slides in from
+	 * the right; progress goes 0 (just entering) → 0.5 (centered) → 1 (scrolled
+	 * fully past). Higher = fires later. Desktop only — the hint is disabled on
+	 * mobile (see `isMobile` + CSS).
+	 */
+	const REVEAL_PROGRESS = 0.4;
+
+	function prefersReducedMotion() {
+		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+	}
+
+	// Treat as "mobile" when either the grid layout is active (card list becomes
+	// `position: absolute`) OR the device is touch/coarse-pointer. Landscape
+	// phones are frequently wider than the 900px CSS breakpoint, so a width check
+	// alone misses them.
+	function isMobile() {
+		if (typeof window === 'undefined') return false;
+		if (window.matchMedia('(pointer: coarse)').matches) return true;
+		const list = panelEl?.querySelector('.experience-list');
+		return !!list && getComputedStyle(list).position === 'absolute';
+	}
+
+	function revealHint() {
+		if (hintRevealed) return;
+		hintRevealed = true;
+		stopPolling();
+	}
+
+	function stopPolling() {
+		if (rafId != null) {
+			cancelAnimationFrame(rafId);
+			rafId = null;
+		}
+	}
+
+	function isCentered() {
+		if (!panelEl) return false;
+		const vw = window.innerWidth;
+		if (vw === 0) return false;
+		// Measure the full-width section, not `.experiences-panel`: on mobile the
+		// card list is absolutely positioned, so the panel box only wraps the
+		// left-side header and its center would cross the threshold far too early.
+		const section = panelEl.closest('section') as HTMLElement | null;
+		const rect = (section ?? panelEl).getBoundingClientRect();
+		const center = rect.left + rect.width / 2;
+		const progress = 1 - center / vw;
+		return progress >= REVEAL_PROGRESS;
+	}
+
+	// Poll geometry every frame until revealed. Robust to programmatic scrolls,
+	// the greeting intro lock, and any animation-driven position changes.
+	function tick() {
+		if (hintRevealed) return;
+		if (isCentered()) {
+			revealHint();
+			return;
+		}
+		rafId = requestAnimationFrame(tick);
+	}
+
+	onMount(() => {
+		// Disabled on mobile — no hint, no animation.
+		if (isMobile()) return;
+		if (prefersReducedMotion()) {
+			revealHint();
+			return;
+		}
+		if (!panelEl) return;
+		rafId = requestAnimationFrame(tick);
+	});
+
+	onDestroy(stopPolling);
 </script>
 
-<div class="experiences-panel">
+<div class="experiences-panel" bind:this={panelEl}>
 	<div class="experiences-header">
 		{#if kicker}
 			<p class="kicker">{kicker}</p>
@@ -36,6 +115,34 @@
 					backParagraphs={exp.backParagraphs ?? []}
 					skills={exp.skills ?? []}
 				/>
+				{#if exp.company === 'City of San Diego'}
+					<div class="exp-click-hint" class:is-visible={hintRevealed} aria-hidden="true">
+						<svg
+							class="exp-click-hint-arrow"
+							viewBox="0 0 56 52"
+							width="56"
+							height="52"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M52 48H16Q8 48 8 40V12"
+								stroke="currentColor"
+								stroke-width="2.25"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+							<path
+								d="M0 18l8-10 8 10"
+								stroke="currentColor"
+								stroke-width="2.25"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+						<p class="exp-click-hint-text"><span class="exp-click-hint-verb exp-click-hint-verb--desktop">Click</span><span class="exp-click-hint-verb exp-click-hint-verb--mobile">Tap</span> <span class="exp-click-hint-any">ANY</span> card to learn more</p>
+					</div>
+				{/if}
 			</li>
 		{/each}
 	</ul>
@@ -98,6 +205,108 @@
 			0
 		);
 		will-change: transform;
+	}
+
+	.exp-click-hint {
+		position: absolute;
+		top: calc(100% - 3px);
+		left: calc(8% + 40%);
+		z-index: 6;
+		display: flex;
+		align-items: flex-end;
+		gap: 2px;
+		pointer-events: none;
+		user-select: none;
+	}
+
+	.exp-click-hint-arrow,
+	.exp-click-hint-text {
+		opacity: 0;
+		transition: opacity 0.55s ease;
+	}
+
+	.exp-click-hint-arrow {
+		flex: 0 0 auto;
+		color: var(--muted);
+		margin-bottom: 2px;
+		transform: translate(-4px, 6px);
+		transition:
+			opacity 0.55s ease,
+			transform 0.55s ease;
+	}
+
+	.exp-click-hint-text {
+		position: relative;
+		top: 3px;
+		margin: 0;
+		padding-bottom: 2px;
+		color: var(--muted);
+		font-size: 13px;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		white-space: nowrap;
+	}
+
+	.exp-click-hint-any {
+		font-weight: 800;
+		letter-spacing: 0.06em;
+	}
+
+	.exp-click-hint-verb--mobile {
+		display: none;
+	}
+
+	/* Mobile: the hint is shown statically (no scroll-in animation) and says
+	   "Tap". Covers the grid layout and any touch device (landscape phones can
+	   exceed the 900px breakpoint). */
+	@media (max-width: 900px), (pointer: coarse) {
+		.exp-click-hint-verb--desktop {
+			display: none;
+		}
+
+		.exp-click-hint-verb--mobile {
+			display: inline;
+		}
+
+		.exp-click-hint {
+			top: calc(100% + 2px);
+			left: calc(6% + 40%);
+		}
+
+		.exp-click-hint-text {
+			font-size: 12px;
+		}
+
+		.exp-click-hint-arrow,
+		.exp-click-hint-text {
+			opacity: 1;
+			transition: none;
+		}
+
+		.exp-click-hint-arrow {
+			transform: none;
+		}
+	}
+
+	.exp-click-hint.is-visible .exp-click-hint-arrow {
+		opacity: 1;
+		transform: translate(0, 0);
+	}
+
+	.exp-click-hint.is-visible .exp-click-hint-text {
+		opacity: 1;
+		transition-delay: 0.25s;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.exp-click-hint-arrow,
+		.exp-click-hint-text {
+			transition: none;
+		}
+
+		.exp-click-hint.is-visible .exp-click-hint-text {
+			transition-delay: 0s;
+		}
 	}
 
 	:global(#experiences) .experience-item:nth-child(1) {
