@@ -1477,6 +1477,20 @@
 		--back-link-h: 3.11cqw;
 	}
 
+	/* Awards: compact type pad, card-relative typography and logo. */
+	:global(.info-card--award) .info-card-surface--back {
+		--award-back-fs: 1.51cqw;
+		--award-back-fs-xs: 0.78cqw;
+		--back-pad: 1.9cqw;
+		--back-gap-xs: 0.25cqw;
+		--back-gap-sm: 0.8cqw;
+		--back-gap: 1.35cqw;
+		--back-gap-lg: 1.6cqw;
+		--back-icon: 3cqw;
+		--back-logo-sm: 12cqw;
+		--back-logo: 13.2cqw;
+	}
+
 	/* Wide experience cards — keep the dialed-in cqw scale. */
 	:global(.info-card--experience) .info-card-surface--back {
 		--back-fs-xs: 1.09cqw;

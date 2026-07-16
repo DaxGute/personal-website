@@ -3,14 +3,9 @@
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
 	import { isCardModalOpen } from '$lib/cardModal';
+	import type { AwardItem } from '$lib/awards/awards';
 
-	type Award = {
-		heading: string;
-		dates: string;
-		items: string[];
-		logoSrc?: string;
-		logoAlt?: string;
-	};
+	type Award = AwardItem;
 
 	export let kicker: string | undefined = undefined;
 	export let title: string;
@@ -590,6 +585,9 @@
 							items={award.items}
 							logoSrc={award.logoSrc ?? null}
 							logoAlt={award.logoAlt ?? null}
+							logoHref={award.logoHref ?? null}
+							logoLinkLabel={award.logoLinkLabel ?? null}
+							backTextScale={award.backTextScale ?? 1}
 						/>
 					</div>
 				</li>

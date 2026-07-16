@@ -22,6 +22,8 @@
 	export let skills: string[] = [];
 	export let logoSrc: string | null = null;
 	export let logoAlt: string | null = null;
+	export let logoHref: string | null = null;
+	export let logoLinkLabel: string | null = null;
 	export let backImageSrc: string | null = null;
 	export let backImageAlt: string | null = null;
 	export let backImageHref: string | null = null;
@@ -35,6 +37,8 @@
 	export let customFrontBody = false;
 	/** When true, render the `backBody` slot instead of default back-main content. */
 	export let customBackBody = false;
+	/** Award back typography scale (default 1). */
+	export let backTextScale = 1;
 
 	$: hasSideLogo = (variant === 'experience' || variant === 'project') && !!logoSrc;
 	$: sidePhotoOnBack = variant === 'experience' && !!backImageSrc;
@@ -147,7 +151,7 @@
 		</div>
 	</div>
 
-	<div slot="back" class="card-row card-row--back">
+	<div slot="back" class="card-row card-row--back" class:card-row--award-back={variant === 'award'}>
 		{#if hasSideLogo && variant !== 'project' && (sidePhotoOnBack ? backImageSrc : logoSrc)}
 			<div
 				class="card-logo"
@@ -197,212 +201,256 @@
 			</div>
 		{/if}
 
-		<div class="card-content">
-			<div class="card-header experience-header" class:experience-header--award={variant === 'award'}>
-				<div class="experience-meta">
+		{#if variant === 'award'}
+			<div class="card-content award-back" style:--award-back-text-scale={backTextScale}>
+				<div class="award-back-main">
 					<p class="experience-company">{heading}</p>
-					{#if variant !== 'award'}
-						<p
-							class="experience-sub"
-							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
-						>
-							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
-						</p>
-					{:else if dates}
-						<p class="experience-dates award-dates">{dates}</p>
-					{/if}
-				</div>
-				{#if showBackHeaderSide}
-					<div class="experience-side">
-						{#if variant === 'project' && primaryLink}
-							<a
-								class="project-website-bubble"
-								href={primaryLink.href}
-								target="_blank"
-								rel="noreferrer"
-							>
-								{primaryLink.label}
-							</a>
-						{/if}
-						{#if dates && variant !== 'award'}
-							<p class="experience-dates">{dates}</p>
-						{/if}
-						{#if hasHeaderLogo && logoSrc}
-							<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
-								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
-							</div>
-						{/if}
-					</div>
-				{/if}
-			</div>
-
-			<div
-				class="card-back-main"
-				class:card-back-main--with-image={(!sidePhotoOnBack && !!backImageSrc) || !!backImageHref}
-				class:card-back-main--with-copy={backItems.length > 0 || backParagraphs.length > 0 || skills.length > 0 || (variant === 'award' && items.length > 0)}
-				class:card-back-main--custom={customBackBody}
-			>
-				{#if customBackBody}
-					<slot name="backBody" />
-				{:else}
-					{#if backImageSrc && backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack}
-						<div class="card-back-image">
-							{#if backImageHref}
-								<a
-									class="card-back-image-link"
-									href={backImageHref}
-									target="_blank"
-									rel="noreferrer"
-									aria-label={backImageAlt ?? 'Open related page'}
-								>
-									<img
-										src={backImageSrc}
-										alt={backImageAlt ?? ''}
-										loading="lazy"
-										decoding="async"
-									/>
-								</a>
-							{:else}
-								<img
-									src={backImageSrc}
-									alt={backImageAlt ?? ''}
-									loading="lazy"
-									decoding="async"
-								/>
-							{/if}
-						</div>
-					{:else if backImageHref && !sidePhotoLinkOverlay && backItems.length === 0 && backParagraphs.length === 0}
-						<div class="card-back-image">
-							<a
-								class="card-back-link-box"
-								href={backImageHref}
-								target="_blank"
-								rel="noreferrer"
-							>
-								<span class="card-back-link-label">
-									{backLinkLabel ?? backImageAlt ?? 'View more'}
-								</span>
-								<svg
-									class="card-back-link-icon"
-									viewBox="0 0 24 24"
-									aria-hidden="true"
-									focusable="false"
-								>
-									<path
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="M14 4h6v6M10 14L20 4M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
-									/>
-								</svg>
-							</a>
-						</div>
-					{:else if backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack && !(variant === 'award' && items.length > 0)}
-						<p class="card-back-marker">backside</p>
-					{/if}
-					{#if variant === 'experience'}
-						{#if backParagraphs.length}
-							<div class="experience-back-copy" aria-label="Experience details">
-								{#each backParagraphs as paragraph}
-									<p class="experience-back-paragraph">
-										<strong>{paragraph.heading}</strong>
-										{#if paragraph.body}{' '}{paragraph.body}{/if}
-									</p>
-								{/each}
-							</div>
-						{:else if backItems.length}
-							<ul class="experience-highlights experience-highlights--back">
-								{#each backItems as item}
-									<li>{item}</li>
-								{/each}
-							</ul>
-						{:else if !backImageSrc && !backImageHref && !skills.length}
-							<ul class="experience-highlights">
-								{#each items as item}
-									<li>{item}</li>
-								{/each}
-							</ul>
-						{/if}
-					{:else if variant === 'education' && !backImageSrc}
-						<div class="education-details">
-							{#each items as item}
-								<p>{item}</p>
-							{/each}
-						</div>
-					{:else if variant === 'project'}
-						{#if backParagraphs.length}
-							<div class="experience-back-copy" aria-label="Project details">
-								{#each backParagraphs as paragraph}
-									<p class="experience-back-paragraph">
-										<strong>{paragraph.heading}</strong>
-										{#if paragraph.body}{' '}{paragraph.body}{/if}
-									</p>
-								{/each}
-							</div>
-						{:else}
-						{#if body}
-							<p class="project-body">{body}</p>
-						{/if}
-
-						{#if primaryLink}
-							<p class="project-website">
-								<a
-									class="project-website-link"
-									href={primaryLink.href}
-									target="_blank"
-									rel="noreferrer"
-								>
-									{primaryLink.label}.
-								</a>
-							</p>
-						{/if}
-
-						{#if items.length}
-							<ul class="experience-highlights" aria-label="Project highlights">
-								{#each items as item}
-									<li>{item}</li>
-								{/each}
-							</ul>
-						{/if}
-
-						{#if tech.length}
-							<div class="project-chips" aria-label="Tech stack">
-								{#each tech as t}
-									<span class="project-chip">{t}</span>
-								{/each}
-							</div>
-						{/if}
-
-						{#if otherLinks.length}
-							<div class="project-links" aria-label="Project links">
-								{#each otherLinks as link}
-									<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
-										{link.label}
-									</a>
-								{/each}
-							</div>
-						{/if}
-						{/if}
-					{:else}
+					{#if items.length}
 						<div class="award-details">
 							{#each items as item}
 								<p>{item}</p>
 							{/each}
 						</div>
 					{/if}
+				</div>
+				{#if dates || (hasHeaderLogo && logoSrc)}
+					<div class="award-back-side">
+						{#if dates}
+							<p class="experience-dates award-dates">{dates}</p>
+						{/if}
+						{#if hasHeaderLogo && logoSrc}
+							<div class="education-logo" class:education-logo--linked={!!logoHref}>
+								<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+								{#if logoHref}
+									<a
+										class="card-back-link-box card-back-link-box--overlay"
+										href={logoHref}
+										target="_blank"
+										rel="noreferrer"
+									>
+										<span class="card-back-link-label">
+											{logoLinkLabel ?? logoAlt ?? 'View more'}
+										</span>
+										<svg
+											class="card-back-link-icon"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+											focusable="false"
+										>
+											<path
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M14 4h6v6M10 14L20 4M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+											/>
+										</svg>
+									</a>
+								{/if}
+							</div>
+						{/if}
+					</div>
 				{/if}
 			</div>
-
-			{#if variant === 'experience' && skills.length}
-				<div class="experience-skills" aria-label="Skills">
-					{#each skills as skill}
-						<span class="project-chip">{skill}</span>
-					{/each}
+		{:else}
+			<div class="card-content">
+				<div class="card-header experience-header">
+					<div class="experience-meta">
+						<p class="experience-company">{heading}</p>
+						<p
+							class="experience-sub"
+							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
+						>
+							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
+						</p>
+					</div>
+					{#if showBackHeaderSide}
+						<div class="experience-side">
+							{#if variant === 'project' && primaryLink}
+								<a
+									class="project-website-bubble"
+									href={primaryLink.href}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{primaryLink.label}
+								</a>
+							{/if}
+							{#if dates}
+								<p class="experience-dates">{dates}</p>
+							{/if}
+							{#if hasHeaderLogo && logoSrc}
+								<div class="education-logo" aria-hidden={logoAlt ? undefined : 'true'}>
+									<img src={logoSrc} alt={logoAlt ?? ''} loading="lazy" decoding="async" />
+								</div>
+							{/if}
+						</div>
+					{/if}
 				</div>
-			{/if}
-		</div>
+
+				<div
+					class="card-back-main"
+					class:card-back-main--with-image={(!sidePhotoOnBack && !!backImageSrc) || !!backImageHref}
+					class:card-back-main--with-copy={backItems.length > 0 || backParagraphs.length > 0 || skills.length > 0}
+					class:card-back-main--custom={customBackBody}
+				>
+					{#if customBackBody}
+						<slot name="backBody" />
+					{:else}
+						{#if backImageSrc && backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack}
+							<div class="card-back-image">
+								{#if backImageHref}
+									<a
+										class="card-back-image-link"
+										href={backImageHref}
+										target="_blank"
+										rel="noreferrer"
+										aria-label={backImageAlt ?? 'Open related page'}
+									>
+										<img
+											src={backImageSrc}
+											alt={backImageAlt ?? ''}
+											loading="lazy"
+											decoding="async"
+										/>
+									</a>
+								{:else}
+									<img
+										src={backImageSrc}
+										alt={backImageAlt ?? ''}
+										loading="lazy"
+										decoding="async"
+									/>
+								{/if}
+							</div>
+						{:else if backImageHref && !sidePhotoLinkOverlay && backItems.length === 0 && backParagraphs.length === 0}
+							<div class="card-back-image">
+								<a
+									class="card-back-link-box"
+									href={backImageHref}
+									target="_blank"
+									rel="noreferrer"
+								>
+									<span class="card-back-link-label">
+										{backLinkLabel ?? backImageAlt ?? 'View more'}
+									</span>
+									<svg
+										class="card-back-link-icon"
+										viewBox="0 0 24 24"
+										aria-hidden="true"
+										focusable="false"
+									>
+										<path
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M14 4h6v6M10 14L20 4M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"
+										/>
+									</svg>
+								</a>
+							</div>
+						{:else if backItems.length === 0 && backParagraphs.length === 0 && !sidePhotoOnBack}
+							<p class="card-back-marker">backside</p>
+						{/if}
+						{#if variant === 'experience'}
+							{#if backParagraphs.length}
+								<div class="experience-back-copy" aria-label="Experience details">
+									{#each backParagraphs as paragraph}
+										<p class="experience-back-paragraph">
+											<strong>{paragraph.heading}</strong>
+											{#if paragraph.body}{' '}{paragraph.body}{/if}
+										</p>
+									{/each}
+								</div>
+							{:else if backItems.length}
+								<ul class="experience-highlights experience-highlights--back">
+									{#each backItems as item}
+										<li>{item}</li>
+									{/each}
+								</ul>
+							{:else if !backImageSrc && !backImageHref && !skills.length}
+								<ul class="experience-highlights">
+									{#each items as item}
+										<li>{item}</li>
+									{/each}
+								</ul>
+							{/if}
+						{:else if variant === 'education' && !backImageSrc}
+							<div class="education-details">
+								{#each items as item}
+									<p>{item}</p>
+								{/each}
+							</div>
+						{:else if variant === 'project'}
+							{#if backParagraphs.length}
+								<div class="experience-back-copy" aria-label="Project details">
+									{#each backParagraphs as paragraph}
+										<p class="experience-back-paragraph">
+											<strong>{paragraph.heading}</strong>
+											{#if paragraph.body}{' '}{paragraph.body}{/if}
+										</p>
+									{/each}
+								</div>
+							{:else}
+							{#if body}
+								<p class="project-body">{body}</p>
+							{/if}
+
+							{#if primaryLink}
+								<p class="project-website">
+									<a
+										class="project-website-link"
+										href={primaryLink.href}
+										target="_blank"
+										rel="noreferrer"
+									>
+										{primaryLink.label}.
+									</a>
+								</p>
+							{/if}
+
+							{#if items.length}
+								<ul class="experience-highlights" aria-label="Project highlights">
+									{#each items as item}
+										<li>{item}</li>
+									{/each}
+								</ul>
+							{/if}
+
+							{#if tech.length}
+								<div class="project-chips" aria-label="Tech stack">
+									{#each tech as t}
+										<span class="project-chip">{t}</span>
+									{/each}
+								</div>
+							{/if}
+
+							{#if otherLinks.length}
+								<div class="project-links" aria-label="Project links">
+									{#each otherLinks as link}
+										<a class="project-link" href={link.href} target="_blank" rel="noreferrer">
+											{link.label}
+										</a>
+									{/each}
+								</div>
+							{/if}
+							{/if}
+						{/if}
+					{/if}
+				</div>
+
+				{#if variant === 'experience' && skills.length}
+					<div class="experience-skills" aria-label="Skills">
+						{#each skills as skill}
+							<span class="project-chip">{skill}</span>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 </CardShell>
 
@@ -977,6 +1025,13 @@
 		font-size: var(--back-fs, 2.15cqw);
 	}
 
+	:global(.info-card.info-card--award) .card-row--back .experience-dates {
+		font-size: calc(var(--award-back-fs, 1.51cqw) * var(--award-back-text-scale, 1));
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		line-height: 1.15;
+	}
+
 	:global(.info-card.info-card--experience) .experience-sub,
 	:global(.info-card.info-card--experience) .experience-location {
 		color: #e8f2ff;
@@ -1063,6 +1118,14 @@
 		grid-column: 1;
 		grid-row: 1;
 		min-width: 0;
+		font-size: 14px;
+		line-height: 1.15;
+		white-space: normal;
+		overflow-wrap: anywhere;
+	}
+
+	:global(.info-card.info-card--award) .award-back .experience-company {
+		font-size: calc(var(--award-back-fs, 1.51cqw) * var(--award-back-text-scale, 1));
 	}
 
 	:global(.info-card.info-card--award) .award-date-slot,
@@ -1117,6 +1180,41 @@
 		align-self: center;
 	}
 
+	:global(.info-card.info-card--award) .card-row--back .experience-side {
+		grid-row: 1;
+		align-self: start;
+		align-items: flex-end;
+	}
+
+	.award-back {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: stretch;
+		column-gap: var(--back-gap, 1.35cqw);
+		height: 100%;
+		min-height: 0;
+		box-sizing: border-box;
+	}
+
+	.award-back-main {
+		min-width: 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--back-gap-xs, 0.25cqw);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+
+	.award-back-side {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		justify-content: flex-start;
+		gap: var(--back-gap-xs, 0.25cqw);
+		flex: 0 0 auto;
+	}
+
 	:global(.info-card.info-card--award) .education-logo {
 		width: 44px;
 		height: 44px;
@@ -1157,6 +1255,23 @@
 		width: var(--back-logo-sm, 4cqw);
 		height: var(--back-logo-sm, 4cqw);
 		padding: 0.5cqw;
+	}
+
+	:global(.info-card.info-card--award) .education-logo.education-logo--linked {
+		overflow: hidden;
+	}
+
+	:global(.info-card.info-card--award) .education-logo .card-back-link-box--overlay {
+		font-size: calc(var(--award-back-fs-xs, 0.78cqw) * var(--award-back-text-scale, 1));
+		gap: 0.35em;
+		padding: 0.45em;
+		line-height: 1.15;
+		border-radius: inherit;
+	}
+
+	:global(.info-card.info-card--award) .education-logo .card-back-link-icon {
+		width: 1.1em;
+		height: 1.1em;
 	}
 
 	.education-logo img {
@@ -1383,8 +1498,11 @@
 	}
 
 	.card-row--back .award-details {
-		gap: var(--back-gap-sm, 1.13cqw);
-		font-size: var(--back-fs, 2.15cqw);
+		gap: var(--back-gap-sm, 0.8cqw);
+		font-size: calc(var(--award-back-fs, 1.51cqw) * var(--award-back-text-scale, 1));
+		font-weight: 400;
+		letter-spacing: 0.01em;
+		line-height: 1.35;
 	}
 
 	.card-row--back .project-body,
