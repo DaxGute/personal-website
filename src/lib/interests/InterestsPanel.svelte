@@ -1,11 +1,15 @@
 <script lang="ts">
 	import Polaroid from '$lib/interests/Polaroid.svelte';
 	import { interests } from '$lib/interests/interests';
+	import ContactFanout from '$lib/title/ContactFanout.svelte';
 
 	export let kicker: string | undefined = undefined;
 	export let title: string;
 	export let body: string;
 	export let sourceCodeHref: string;
+	export let linkedinHref: string;
+	export let githubHref: string;
+	export let emailHref: string;
 
 	const layoutClass: Record<string, string> = {
 		ski: 'interest-ski',
@@ -52,10 +56,13 @@
 	{/if}
 </div>
 
-<div class="repo-note">
-	<span>Like my website? The code can be found </span>
-	<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a>
-	<span>.</span>
+<div class="page-end">
+	<ContactFanout {linkedinHref} {githubHref} {emailHref} />
+	<div class="repo-note">
+		<span>Like my website? The code can be found </span>
+		<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a>
+		<span>.</span>
+	</div>
 </div>
 
 <style>
@@ -157,11 +164,25 @@
 		align-items: stretch;
 	}
 
-	.repo-note {
+	/* Above .interests-copy (3) and .interests-content (1), whose polaroids restack internally. */
+	.page-end {
 		position: absolute;
 		right: 5px;
 		bottom: 5px;
-		z-index: 20;
+		z-index: 4;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 14px;
+		pointer-events: none;
+	}
+
+	/* Scale into the corner instead of out past the viewport edge. */
+	.page-end :global(.contact-menu) {
+		transform-origin: bottom right;
+	}
+
+	.repo-note {
 		font-size: 12px;
 		line-height: 1.25;
 		text-align: right;
@@ -191,6 +212,11 @@
 	@media (max-width: 900px) {
 		.repo-note {
 			display: none;
+		}
+
+		.page-end {
+			right: 18px;
+			bottom: 18px;
 		}
 
 		.interests-copy {

@@ -457,18 +457,18 @@
 		display: block;
 	}
 
-	/* Fan-out positions (button anchor, arc down-left) */
+	/* Fan-out positions (button anchor, arc up-left — control sits at the bottom of the page) */
 	.bubble-linkedin {
 		--tx: -96px;
-		--ty: 12px;
+		--ty: -12px;
 	}
 	.bubble-github {
 		--tx: -74px;
-		--ty: 74px;
+		--ty: -74px;
 	}
 	.bubble-email {
 		--tx: -12px;
-		--ty: 96px;
+		--ty: -96px;
 	}
 
 	.contact-menu[data-open='true'] .bubble-linkedin {

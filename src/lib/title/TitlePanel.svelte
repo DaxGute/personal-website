@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { GREETING_SCROLL_UNLOCK_MS } from '$lib/ribbon';
-	import ContactFanout from '$lib/title/ContactFanout.svelte';
 
 	export let kicker: string | undefined = undefined;
 	export let title: string;
 	export let body: string;
-	export let linkedinHref: string;
-	export let githubHref: string;
-	export let emailHref: string;
+	export let resumeHref: string | undefined = '/daxton-gutekunst-resume.pdf';
+	export let resumeFilename = 'Daxton-Gutekunst-Resume.pdf';
 	export let scrollLocked = true;
 	export let onUnlock: (() => void) | undefined = undefined;
 
@@ -73,21 +71,38 @@
 </script>
 
 <div class="greeting-layout">
-	<div class="greeting-contact">
-		<ContactFanout {linkedinHref} {githubHref} {emailHref} />
-	</div>
 	<div class="greeting" class:greeting--animate={timelineOn}>
 		{#if kicker}
 			<p class="kicker greeting-kicker">{kicker}</p>
 		{/if}
-		<h1 class="title title--greeting">
-			<span class="title-first"
-				><span class="first-static">{firstParts.prefix}</span
-				>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
-			>{#if parts.last}<span class="title-last"
-				><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span
-			>{/if}
-		</h1>
+		<div class="title-row">
+			<h1 class="title title--greeting">
+				<span class="title-first"
+					><span class="first-static">{firstParts.prefix}</span
+					>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
+				>{#if parts.last}<span class="title-last"
+					><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span
+				>{/if}
+			</h1>
+			{#if resumeHref}
+				<a class="resume-link" href={resumeHref} download={resumeFilename} aria-label="Download résumé">
+					<svg
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M12 15V3"></path>
+						<path d="m7 10 5 5 5-5"></path>
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+					</svg>
+					<span class="resume-tooltip" aria-hidden="true">Download résumé</span>
+				</a>
+			{/if}
+		</div>
 		<p class="body greeting-body">
 			{body}<span class="jump-dots" class:jump-dots--on={dotsOn} aria-hidden="true"
 				><span>.</span><span>.</span><span>.</span></span
@@ -111,21 +126,6 @@
 			margin-top: 24px;
 			transform: translateX(20%);
 		}
-	}
-
-	.greeting-contact {
-		flex: 0 0 auto;
-		align-self: center;
-		pointer-events: auto;
-		opacity: 1;
-		transform: translateY(0);
-		transition:
-			opacity 1200ms cubic-bezier(0.16, 1, 0.3, 1),
-			transform 1200ms cubic-bezier(0.16, 1, 0.3, 1);
-	}
-
-	.greeting-contact :global(.contact-menu) {
-		transform-origin: center left;
 	}
 
 	.greeting {
@@ -173,6 +173,83 @@
 
 	.title--greeting {
 		white-space: nowrap;
+	}
+
+	/* Wrapper owns the heading's bottom margin so flex centering aligns to the text line. */
+	.title-row {
+		display: flex;
+		align-items: center;
+		margin: 0 0 10px;
+	}
+
+	.title-row .title {
+		margin: 0;
+	}
+
+	.resume-link {
+		position: relative;
+		flex: 0 0 auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		margin-left: 0.3em;
+		padding: 0.08em;
+		border-radius: 8px;
+		font-size: clamp(32px, 4vw, 54px);
+		color: rgba(11, 18, 32, 0.12);
+		text-decoration: none;
+		opacity: 0;
+		transition: color 320ms ease;
+	}
+
+	.resume-link svg {
+		width: 0.4em;
+		height: 0.4em;
+		display: block;
+	}
+
+	.greeting--animate .resume-link {
+		animation: resumeFadeIn 900ms ease-out 1600ms forwards;
+	}
+
+	.resume-link:hover,
+	.resume-link:focus-visible {
+		color: var(--fg);
+	}
+
+	.resume-link:focus-visible {
+		outline: 3px solid rgba(124, 58, 237, 0.25);
+		outline-offset: 2px;
+	}
+
+	.resume-tooltip {
+		position: absolute;
+		top: calc(100% + 6px);
+		left: 50%;
+		transform: translate(-50%, -2px);
+		padding: 4px 8px;
+		border-radius: 6px;
+		border: 1px solid var(--card-border);
+		background: var(--card-strong);
+		backdrop-filter: blur(var(--glass-blur));
+		color: var(--muted);
+		font-size: 12px;
+		font-weight: 500;
+		letter-spacing: 0;
+		line-height: 1.3;
+		white-space: nowrap;
+		pointer-events: none;
+		opacity: 0;
+		transition:
+			opacity 200ms ease,
+			transform 200ms ease;
+	}
+
+	.resume-link:hover .resume-tooltip,
+	.resume-link:focus-visible .resume-tooltip {
+		opacity: 1;
+		transform: translate(-50%, 0);
+		transition-delay: 150ms;
 	}
 
 	.title--greeting .first-static,
@@ -324,6 +401,15 @@
 		}
 	}
 
+	@keyframes resumeFadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
 	@keyframes dotJump {
 		0%,
 		80%,
@@ -359,6 +445,16 @@
 
 		.jump-dots > span {
 			animation: none !important;
+		}
+
+		.resume-link {
+			animation: none !important;
+			opacity: 1 !important;
+		}
+
+		.resume-link,
+		.resume-tooltip {
+			transition: none;
 		}
 	}
 </style>

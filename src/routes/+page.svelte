@@ -456,7 +456,7 @@
 
 </script>
 
-<div class="stage" class:intro-locked={greetingScrollLocked}>
+<div class="stage">
 	<!-- Fixed to the stage (not the zooming scroll-track) so blobs don't clip/flicker on modal zoom. -->
 	<div class="scroller-wash" aria-hidden="true"></div>
 	<main
@@ -480,9 +480,6 @@
 						kicker={panel.kicker}
 						title={panel.title}
 						body={panel.body}
-						{linkedinHref}
-						{githubHref}
-						{emailHref}
 						bind:scrollLocked={greetingScrollLocked}
 						onUnlock={() => syncScrollState?.()}
 					/>
@@ -502,6 +499,9 @@
 								title={panel.title}
 								body={panel.body}
 								{sourceCodeHref}
+								{linkedinHref}
+								{githubHref}
+								{emailHref}
 							/>
 						{/if}
 					</div>
@@ -552,12 +552,6 @@
 		position: relative;
 		flex: 0 0 auto;
 		height: 100vh;
-	}
-
-	/* During the greeting intro, keep contact invisible */
-	.intro-locked :global(.greeting-contact) {
-		opacity: 0;
-		transform: translateY(-10px);
 	}
 
 	.scroller-wash {
