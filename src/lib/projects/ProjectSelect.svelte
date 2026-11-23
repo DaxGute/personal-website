@@ -1,6 +1,8 @@
 <script lang="ts">
 	import InfoCard from '$lib/InfoCard.svelte';
 	import type { Project } from '$lib/projects/projects';
+	import { bindSectionShutter } from '$lib/title/sectionShutter';
+	import { createWheelIntent, type WheelIntent } from '$lib/wheelIntent';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import type { TransitionConfig } from 'svelte/transition';
 	import confcapLogo from '$lib/assets/project/confcap_logo.png';
@@ -12,25 +14,24 @@
 
 	let activeId: string | null = initialId ?? projects[0]?.id ?? null;
 	let listboxEl: HTMLDivElement | null = null;
+	let reelEl: HTMLDivElement | null = null;
 	let scrollbarEl: HTMLDivElement | null = null;
 	let scrollRaf = 0;
 	let resizeObs: ResizeObserver | null = null;
 	let intersectObs: IntersectionObserver | null = null;
-	let viewportFadeObs: IntersectionObserver | null = null;
 	let wrapEl: HTMLDivElement | null = null;
-	let reelEl: HTMLDivElement | null = null;
-	let descEl: HTMLDivElement | null = null;
-	let reelViewportRevealed = false;
-	let descViewportRevealed = false;
-	let viewportFadeMode = false;
+	let unbindBook: (() => void) | null = null;
+	/** False once the spread is lying flat, so the open card has no ancestor transform. */
+	let bookFlat = false;
 	let wheelAccum = 0;
 	let wheelResetTimer: ReturnType<typeof setTimeout> | null = null;
 	let wheelLockUntil = 0;
+	let wheelIntent: WheelIntent | null = null;
 	let isDraggingScrollbar = false;
 	let dragStartY = 0;
 	let dragStartScrollTop = 0;
 	let shownDir: 1 | -1 = 1;
-	/** Skip the deck pull on the first paint; viewport fade handles the entrance. */
+	/** Skip the deck pull on the first paint; the book spread handles the entrance. */
 	let cardMotion = false;
 	/**
 	 * The card on screen. Reel ticks update `activeId` immediately, but the deck
@@ -134,19 +135,46 @@
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	}
 
-	function elIntersectsViewport(el: HTMLElement | null) {
-		if (!el) return false;
-		const r = el.getBoundingClientRect();
-		const vw = window.innerWidth;
-		const vh = window.innerHeight;
-		return (
-			r.width > 0 &&
-			r.height > 0 &&
-			r.bottom > 0 &&
-			r.right > 0 &&
-			r.top < vh &&
-			r.left < vw
-		);
+	function smoothstep(t: number) {
+		const x = Math.max(0, Math.min(1, t));
+		return x * x * (3 - 2 * x);
+	}
+
+	/** Layout center along the scroll track. Ignores the page-turn transform. */
+	function layoutCenter(el: HTMLElement) {
+		const track = el.closest('.scroll-track');
+		let x = el.offsetWidth / 2;
+		let node: HTMLElement | null = el;
+		while (node && node !== track) {
+			x += node.offsetLeft;
+			node = node.offsetParent instanceof HTMLElement ? node.offsetParent : null;
+		}
+		return x;
+	}
+
+	function syncBook(scrollLeft: number, introShiftPx: number) {
+		if (!wrapEl) return;
+		if (prefersReducedMotion()) {
+			bookFlat = true;
+			wrapEl.style.setProperty('--book-open', '1');
+			return;
+		}
+		const scroller = wrapEl.closest('.scroller');
+		if (!(scroller instanceof HTMLElement)) return;
+		const viewMid = scrollLeft - introShiftPx + scroller.clientWidth / 2;
+		const delta = Math.abs(layoutCenter(wrapEl) - viewMid) / Math.max(1, scroller.clientWidth);
+		// Flat near the middle of the screen. Closed as the spread reaches either edge,
+		// so the pages are seen swinging open on the way in and shut on the way out.
+		const flatUntil = 0.18;
+		const closedAt = 0.46;
+		const open =
+			delta <= flatUntil
+				? 1
+				: delta >= closedAt
+					? 0
+					: 1 - smoothstep((delta - flatUntil) / (closedAt - flatUntil));
+		bookFlat = open === 1;
+		wrapEl.style.setProperty('--book-open', open.toFixed(4));
 	}
 
 	function getOptionEls(): HTMLButtonElement[] {
@@ -297,14 +325,19 @@
 	}
 
 	function onReelWheel(e: WheelEvent) {
-		// Make the reel feel like a slot machine: one "tick" per wheel gesture.
-		// Also: always consume the wheel event while hovering the reel so the page
-		// doesn't sideways-scroll on trackpads (deltaX) or scroll-chain away.
+		// One tick per wheel gesture. The page keeps the wheel until the pointer
+		// moves on the reel, so scrolling the page across the selector doesn't stop.
 		if (!listboxEl) return;
 		if (projects.length <= 1) return;
 
 		// Let pinch-to-zoom / browser zoom gestures work.
 		if (e.ctrlKey) return;
+		if (!wheelIntent?.claims()) {
+			// The list is a real scrollport. Cancel its native wheel scroll, but let the
+			// event reach the page scroller so the horizontal pan continues.
+			e.preventDefault();
+			return;
+		}
 
 		e.preventDefault();
 		e.stopPropagation();
@@ -465,27 +498,7 @@
 
 	onMount(() => {
 		cardMotion = true;
-		const fadeOk = !prefersReducedMotion() && typeof IntersectionObserver !== 'undefined';
-		if (fadeOk && wrapEl && reelEl && descEl) {
-			reelViewportRevealed = elIntersectsViewport(reelEl);
-			descViewportRevealed = elIntersectsViewport(descEl);
-			viewportFadeMode = true;
-			viewportFadeObs = new IntersectionObserver(
-				(entries) => {
-					for (const entry of entries) {
-						const t = entry.target;
-						if (t === reelEl) reelViewportRevealed = entry.isIntersecting;
-						if (t === descEl) descViewportRevealed = entry.isIntersecting;
-					}
-				},
-				{ threshold: 0.12, root: null, rootMargin: '0px' }
-			);
-			viewportFadeObs.observe(reelEl);
-			viewportFadeObs.observe(descEl);
-		} else {
-			reelViewportRevealed = true;
-			descViewportRevealed = true;
-		}
+		unbindBook = bindSectionShutter(syncBook);
 
 		// Slot-machine behavior:
 		// - spin the reel (scroll) and always select the option in the center window.
@@ -515,8 +528,20 @@
 		const onWinResize = () => requestUpdateActiveFromCenter();
 		window.addEventListener('resize', onWinResize, { passive: true });
 
+		if (reelEl) {
+			wheelIntent = createWheelIntent(reelEl, (e) => {
+				if (e.ctrlKey) return false;
+				const node = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement;
+				return !!node && !!reelEl?.contains(node);
+			});
+			reelEl.addEventListener('wheel', onReelWheel, { capture: true, passive: false });
+		}
+
 		return () => {
 			window.removeEventListener('resize', onWinResize);
+			reelEl?.removeEventListener('wheel', onReelWheel, true);
+			wheelIntent?.destroy();
+			wheelIntent = null;
 		};
 	});
 
@@ -526,16 +551,21 @@
 		resizeObs = null;
 		intersectObs?.disconnect();
 		intersectObs = null;
-		viewportFadeObs?.disconnect();
-		viewportFadeObs = null;
+		unbindBook?.();
+		unbindBook = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = null;
 		clearCardTimer();
 	});
 </script>
 
-<div class="wrap" class:js-viewport-fade={viewportFadeMode} aria-label="Project selector" bind:this={wrapEl}>
-	<div class="reel" class:viewport-revealed={reelViewportRevealed} aria-label="Project slot reel" bind:this={reelEl}>
+<div
+	class="wrap"
+	class:book-flat={bookFlat}
+	aria-label="Project selector"
+	bind:this={wrapEl}
+>
+	<div class="reel" aria-label="Project slot reel" bind:this={reelEl}>
 		<div class="reel-window" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--top" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--bottom" aria-hidden="true"></div>
@@ -548,7 +578,6 @@
 			tabindex="0"
 			onkeydown={onListKeyDown}
 			onscroll={requestUpdateActiveFromCenter}
-			onwheel={onReelWheel}
 		>
 			{#each projects as p (p.id)}
 				<button
@@ -581,13 +610,7 @@
 		</div>
 	</div>
 
-	<div
-		class="desc"
-		class:deck-moving={cardBusy}
-		class:viewport-revealed={descViewportRevealed}
-		aria-live="polite"
-		bind:this={descEl}
-	>
+	<div class="desc" class:deck-moving={cardBusy} aria-live="polite">
 		{#key shownId}
 			<div
 				class="desc-inner"
@@ -673,21 +696,71 @@
 		--select-border-strong: rgba(22, 95, 82, 0.55);
 		--select-accent: rgba(30, 110, 95, 0.12);
 		--select-shadow: 45, 125, 110;
+		/* Closed until scroll lays the spread flat. */
+		--book-open: 0;
+		perspective: 1100px;
+		perspective-origin: calc(var(--project-reel-w) + 8px) 46%;
 	}
 
-	.wrap.js-viewport-fade .reel:not(.viewport-revealed),
-	.wrap.js-viewport-fade .desc:not(.viewport-revealed) {
-		opacity: 0;
+	/* Two leaves hinged on the gutter. Closed, they stand up toward the camera. */
+	.wrap:not(.book-flat) {
+		pointer-events: none;
 	}
 
-	.wrap.js-viewport-fade .reel,
-	.wrap.js-viewport-fade .desc {
-		transition: opacity 1.1s ease;
+	.reel {
+		transform-origin: right center;
+		transform: translateX(calc((1 - var(--book-open)) * 8px))
+			rotateY(calc((1 - var(--book-open)) * 78deg));
 	}
 
-	.wrap.js-viewport-fade .reel.viewport-revealed,
-	.wrap.js-viewport-fade .desc.viewport-revealed {
-		opacity: 1;
+	.desc {
+		transform-origin: left center;
+		transform: translateX(calc((1 - var(--book-open)) * -8px))
+			rotateY(calc((1 - var(--book-open)) * -78deg));
+	}
+
+	/* Identity, not rotateY(0). A transform here would trap the opened card. */
+	.wrap.book-flat .reel,
+	.wrap.book-flat .desc {
+		transform: none;
+	}
+
+	.reel::after,
+	.desc::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: 4;
+		pointer-events: none;
+		opacity: calc(1 - var(--book-open));
+	}
+
+	.reel::after {
+		background: linear-gradient(to left, rgba(11, 18, 32, 0.34), transparent 52%);
+		border-radius: 16px;
+	}
+
+	.desc::after {
+		background: linear-gradient(to right, rgba(11, 18, 32, 0.34), transparent 58%);
+		border-radius: 5.5% / 3.94%;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.wrap,
+		.wrap:not(.book-flat) {
+			--book-open: 1;
+			pointer-events: auto;
+		}
+
+		.wrap .reel,
+		.wrap .desc {
+			transform: none;
+		}
+
+		.reel::after,
+		.desc::after {
+			opacity: 0;
+		}
 	}
 
 	.desc {
@@ -913,6 +986,21 @@
 		overflow: hidden;
 	}
 
+	/* No photo grid, so the title and write-up center as one block. */
+	:global(.info-card--project)
+		:global(.card-row--back)
+		:global(.card-content):has(.project-back:not(.project-back--with-photos)) {
+		justify-content: safe center;
+		padding-top: var(--back-pad, 2.6cqw);
+	}
+
+	:global(.info-card--project)
+		:global(.card-content):has(.project-back:not(.project-back--with-photos))
+		:global(.card-back-main),
+	.project-back:not(.project-back--with-photos) {
+		flex: 0 1 auto;
+	}
+
 	.project-back--with-photos {
 		display: flex;
 		flex-direction: column;
@@ -956,7 +1044,7 @@
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		grid-template-rows: 1fr 1fr;
 		gap: var(--back-gap-xs, 0.6cqw);
-		flex: 0 0 42%;
+		flex: 0 0 40%;
 		width: 100%;
 		min-height: 0;
 		align-self: stretch;

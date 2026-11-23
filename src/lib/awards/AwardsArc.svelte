@@ -3,6 +3,7 @@
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
 	import { isCardModalOpen } from '$lib/cardModal';
+	import { createWheelIntent, type WheelIntent } from '$lib/wheelIntent';
 	import type { AwardItem } from '$lib/awards/awards';
 	import ShutterHeading from '$lib/title/ShutterHeading.svelte';
 
@@ -20,24 +21,23 @@
 	export let durationMs = 9000;
 
 	// Visible arc window (0..1).
-	// Smaller window => more “gap/delay” between awards.
-	export let windowStart = 0.1;
-	export let windowEnd = 0.7;
+	// Wider window keeps more awards on the arc so several previews stay in view.
+	export let windowStart = 0.0;
+	export let windowEnd = 0.8;
 
 	// Higher = more slowdown at the tip (u≈0.5).
 	export let slowAtTip = 0.08; // 0..1 (must be < 1)
 
 	// Arc geometry in container coordinates.
-	// More pronounced arc: higher peak + lower base.
-	// Start well above the page, then arc down through the orbit.
-	export let peakY = -0.75; // fraction of height (negative => above top)
+	// Peak stays near the top of the orbit so preview cards above the focus remain on screen.
+	export let peakY = -0.16; // fraction of height (negative => above top)
 	// Center the active award at mid-screen.
 	export let centerY = 0.5; // fraction of height
 	// Controls how quickly the arc falls (higher => stays high longer, then drops).
-	export let fallExp = 1.6;
+	export let fallExp = 1.22;
 	// Narrower horizontal travel => awards sit closer together.
-	export let startX = -0.1; // fraction of width
-	export let endX = 1.1; // fraction of width
+	export let startX = -0.24; // fraction of width
+	export let endX = 1.24; // fraction of width
 
 	// Manual control (only while hovered).
 	export let wheelPhasePerPx = 0.00015; // cycles per px of wheel delta (lower = slower scroll/drag)
@@ -65,6 +65,8 @@
 	let wheelCapturedFromCard = false;
 	let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
 	let wheelGlobalListenerActive = false;
+	/** Armed only after the pointer moves on the awards block, never by the block sliding under a still cursor. */
+	let wheelIntent: WheelIntent | null = null;
 
 	// One-time “push” when the awards first scroll into view: phase spins then eases to rest.
 	let entryImpulseVelocity = 0; // cycles per second
@@ -73,6 +75,8 @@
 
 	let hoverCapable = false;
 	let allowManual = false; // true only while hovered (desktop)
+	/** Short landscape (flipped phone): keep the arc inside the viewport. */
+	let compactArc = false;
 	/** RAF timestamp when modal freeze began; used to shift phaseAnim clocks on resume. */
 	let modalFreezeAt: number | null = null;
 
@@ -275,7 +279,10 @@
 	}
 
 	function onGlobalWheelWhileCaptured(e: WheelEvent) {
-		if (!wheelCapturedFromCard) return;
+		if (!wheelCapturedFromCard || !wheelIntent?.claims()) {
+			endWheelCapture();
+			return;
+		}
 		if (!shouldAnimate()) {
 			endWheelCapture();
 			return;
@@ -288,17 +295,24 @@
 
 	/**
 	 * Opacity by distance from the arc tip, in award steps.
-	 * The centered award and the next one on each side stay solid. Farther
-	 * awards taper along the arc instead of blinking out beside the tip.
+	 * The focused award stays solid. Previews above and below it are lighter
+	 * and stay readable through the third card, with a hint of a fourth.
 	 */
 	function arcOpacity(stepsFromTip: number) {
 		const dist = Math.abs(stepsFromTip);
-		const solidUntil = 1.12;
-		const goneBy = 2.35;
-		if (dist <= solidUntil) return 1;
+		if (dist <= 0.2) return 1;
+		const goneBy = 4.2;
 		if (dist >= goneBy) return 0;
-		const t = (dist - solidUntil) / (goneBy - solidUntil);
-		return Math.cos(t * Math.PI * 0.5);
+		const t = clamp01((dist - 0.2) / (goneBy - 0.2));
+		// First preview is already translucent; the third stays readable.
+		return 0.46 * Math.pow(1 - t, 0.62);
+	}
+
+	/** Focused card stays full size. Previews shrink so three or more fit on the arc. */
+	function arcScale(stepsFromTip: number) {
+		const dist = Math.abs(stepsFromTip);
+		const lead = Math.max(0, dist - 0.12);
+		return clamp(1 / (1 + lead * 0.95), 0.3, 1);
 	}
 
 	/** Avoid translucent award surfaces during modal open/close (backdrop-filter / clip toggles flash them). */
@@ -316,10 +330,17 @@
 		}
 	}
 
+	function readCompactArc() {
+		compactArc =
+			typeof window !== 'undefined' &&
+			window.matchMedia('(max-height: 520px) and (min-aspect-ratio: 1)').matches;
+	}
+
 	function shouldAnimate() {
 		if (typeof window === 'undefined') return false;
 		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
-		if (window.matchMedia('(max-width: 720px)').matches) return false;
+		// Narrow portrait falls back to a static stack. Landscape phones keep the arc.
+		if (window.matchMedia('(max-width: 720px) and (max-aspect-ratio: 1)').matches) return false;
 		return true;
 	}
 
@@ -389,12 +410,17 @@
 			const w = orbitEl.clientWidth;
 			const h = orbitEl.clientHeight;
 
-			const x0 = startX * w;
-			const x1 = endX * w;
-			const yPeak = peakY * h;
+			const arcStart = compactArc ? 0.2 : startX;
+			const arcEnd = compactArc ? 0.8 : endX;
+			const arcPeak = compactArc ? 0.28 : peakY;
+			const arcCenter = compactArc ? 0.48 : centerY;
+			const arcFall = compactArc ? 1.05 : fallExp;
+			const x0 = arcStart * w;
+			const x1 = arcEnd * w;
+			const yPeak = arcPeak * h;
 			// Choose yBase so that at p=0.5 the award sits at centerY * h.
-			const k = Math.pow(0.5, Math.max(0.3, fallExp));
-			const yCenter = clamp(centerY, 0.2, 0.8) * h;
+			const k = Math.pow(0.5, Math.max(0.3, arcFall));
+			const yCenter = clamp(arcCenter, 0.2, 0.8) * h;
 			const yBase = yPeak + (yCenter - yPeak) / k;
 			const tip = tipPhase();
 			const step = 1 / n;
@@ -415,14 +441,28 @@
 				const a = clamp(slowAtTip, 0, 0.98);
 				const p = u + (a / (2 * Math.PI)) * Math.sin(2 * Math.PI * u);
 
-				const x = x0 + (x1 - x0) * p;
-				// Enter from above, then arc down as p progresses.
-				const y = yPeak + (yBase - yPeak) * Math.pow(p, Math.max(0.3, fallExp));
-				const rot = 360 * (p - 0.5);
+				const along = clamp(p, 0, 1);
+				const fromMid = Math.abs(along - 0.5) * 2;
+				// Hold the path beside the focused card, then hook the ends
+				// so awards arrive from the top and leave through the bottom.
+				const hookStart = 0.26;
+				const hookT = clamp((fromMid - hookStart) / (1 - hookStart), 0, 1);
+				const curl = hookT * hookT * (3 - 2 * hookT);
+				const curlLift = (compactArc ? 0.1 : 0.26) * h;
+				const curlTuck = (compactArc ? 0.1 : 0.38) * (x1 - x0);
+				const side = along < 0.5 ? -1 : 1;
+				const x = x0 + (x1 - x0) * along - side * curl * curlTuck;
+				const y =
+					yPeak +
+					(yBase - yPeak) * Math.pow(along, Math.max(0.3, arcFall)) +
+					side * curl * curlLift;
+				const rawTilt = 360 * (along - 0.5) * (compactArc ? 0.32 : 1);
+				const rot = clamp(rawTilt * Math.pow(1 - curl, 1.15), -62, 62);
 
 				// Signed award-steps from this card to the tip (positive = still incoming).
 				const stepsToTip = shortestDelta(phaseI, tip) / step;
 				const opacity = arcOpacity(stepsToTip);
+				const scale = arcScale(stepsToTip);
 				// Nearer cards paint above farther ones. The header is a later sibling
 				// stacking context, so these stay underneath the title and nav.
 				const depth = Math.min(Math.abs(stepsToTip), 8);
@@ -430,7 +470,7 @@
 				el.style.visibility = opacity < 0.02 ? 'hidden' : 'visible';
 				el.style.pointerEvents = opacity < 0.12 ? 'none' : 'auto';
 				el.style.zIndex = String(Math.round(40 - depth * 5));
-				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg)`;
+				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg) scale(${scale})`;
 				if (surface) surface.style.opacity = String(opacity);
 			}
 
@@ -444,9 +484,13 @@
 		if (typeof window !== 'undefined') {
 			lastNow = performance.now();
 			hoverCapable = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+			readCompactArc();
 		}
 
-		const onResize = () => start();
+		const onResize = () => {
+			readCompactArc();
+			start();
+		};
 
 		const onHoverCheck = (e: MouseEvent) => {
 			const t = e.target as HTMLElement | null;
@@ -460,6 +504,10 @@
 		const onWheel = (e: WheelEvent) => {
 			if (!shouldAnimate()) return;
 			if (!hoverCapable) return;
+			// Gesture owner was chosen on the first wheel event. A card that slides
+			// under a still cursor does not own it, so the page keeps scrolling.
+			if (!wheelIntent?.claims()) return;
+
 			const target = e.target as HTMLElement | null;
 			const overCard = !!target?.closest?.('.award-card-surface');
 
@@ -542,6 +590,13 @@
 			awardsRevealObserver.observe(awardsRootEl);
 		}
 
+		if (awardsRootEl) {
+			wheelIntent = createWheelIntent(awardsRootEl, (e) => {
+				const node = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement;
+				return !!node?.closest('.award-card-surface');
+			});
+		}
+
 		awardsRootEl?.addEventListener('mouseleave', onLeaveAwardsForWheel, { passive: true });
 		orbitEl?.addEventListener('mousemove', onHoverCheck, { passive: true });
 		orbitEl?.addEventListener('mouseleave', onLeaveOrbit, { passive: true });
@@ -553,6 +608,8 @@
 		window.addEventListener('resize', onResize);
 		return () => {
 			endWheelCapture();
+			wheelIntent?.destroy();
+			wheelIntent = null;
 			awardsRevealObserver?.disconnect();
 			if (snapTimer != null) window.clearTimeout(snapTimer);
 			awardsRootEl?.removeEventListener('mouseleave', onLeaveAwardsForWheel as EventListener);
@@ -795,6 +852,49 @@
 			width: var(--award-card-w);
 			height: var(--award-card-h);
 			margin-inline: auto;
+		}
+	}
+
+	/* Flipped phone: title sits above a shorter arc so cards stay inside the screen. */
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		.awards {
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			transform: translate(-50%, -50%);
+			width: calc(100% - 8px);
+			height: 100%;
+			padding: 0;
+			--award-card-w: clamp(100px, calc((100vh - 214px) * 5 / 7), var(--playing-card-w, 148px));
+			--award-card-w: clamp(100px, calc((100dvh - 214px) * 5 / 7), var(--playing-card-w, 148px));
+			--award-card-h: calc(var(--award-card-w) * 7 / 5);
+		}
+
+		.awards-carousel,
+		.awards-orbit,
+		.awards-ring {
+			position: absolute;
+			inset: 0;
+			display: block;
+			height: 100%;
+			padding: 0;
+		}
+
+		.award-item {
+			position: absolute;
+			top: 0;
+			left: 0;
+		}
+
+		.awards-header {
+			top: 6px;
+			width: min(440px, 94%);
+			transform: translate(-50%, 0);
+		}
+
+		.awards-nav-btn {
+			width: 30px;
+			height: 30px;
 		}
 	}
 </style>

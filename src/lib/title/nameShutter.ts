@@ -12,6 +12,17 @@ function smoothstep(t: number) {
 	return x * x * (3 - 2 * x);
 }
 
+function inverseSmoothstep(s: number) {
+	const x = clamp01(s);
+	const arg = Math.min(1, Math.max(-1, 1 - 2 * x));
+	return 0.5 - Math.sin(Math.asin(arg) / 3);
+}
+
+/** Share of the close spent bringing the left edge in, then the right. */
+const CLOSE_LEFT_PHASE = 0.42;
+const CLOSE_LEFT_INSET = 0.48;
+const CLOSE_RIGHT_INSET = 0.54;
+
 /**
  * `signedScroll` < 0 is the opening pose (far left of each glyph cut, fully open at 0).
  * `signedScroll` > 0 is user scroll: the left side of each glyph closes first, then the right,
@@ -28,36 +39,51 @@ export function nameShutterInsets(
 	}
 
 	const t = clamp01(signedScroll / Math.max(1, shutterSpanPx));
-	const leftPhase = 0.42;
-	if (t <= leftPhase) {
-		return { left: smoothstep(t / leftPhase) * 0.48, right: 0 };
+	if (t <= CLOSE_LEFT_PHASE) {
+		return { left: smoothstep(t / CLOSE_LEFT_PHASE) * CLOSE_LEFT_INSET, right: 0 };
 	}
-	const right = smoothstep((t - leftPhase) / (1 - leftPhase)) * 0.54;
-	return { left: 0.48, right };
+	const right = smoothstep((t - CLOSE_LEFT_PHASE) / (1 - CLOSE_LEFT_PHASE)) * CLOSE_RIGHT_INSET;
+	return { left: CLOSE_LEFT_INSET, right };
 }
 
-/** Covered before this point, then opening toward the midpoint. */
-const HEADER_COVERED_BEFORE = 0.35;
-/** Fully open here, while the section is centered. */
-const HEADER_OPEN_AT = 0.5;
-/** Covered again from here through the rest of the section. */
-const HEADER_COVERED_AFTER = 0.65;
+/**
+ * `0.3^p = 1/5`, so the heading is 80% open at 35% and 65% of its travel
+ * (0.3 of the way from center to either edge) and fully open at the center.
+ */
+const HEADER_OPEN_FALLOFF = Math.log(0.2) / Math.log(0.3);
+
+/**
+ * How open a section heading is while it travels across the screen.
+ * `progress` 0 is the previous section, 1 is the next.
+ * 0 at either edge, 0.8 at 35% and 65%, 1 while the section is centered.
+ */
+function headerOpenAmount(progress: number) {
+	const fromCenter = Math.abs(clamp01(progress) - 0.5) * 2;
+	return 1 - Math.pow(fromCenter, HEADER_OPEN_FALLOFF);
+}
+
+/** Covered amount (0 open, 1 shut) that leaves `open` of each glyph showing. */
+function coveredForOpenAmount(open: number) {
+	const visible = clamp01(open);
+	if (visible >= 1) return 0;
+	if (visible <= 0) return 1;
+	const afterLeft = 1 - CLOSE_LEFT_INSET;
+	if (visible >= afterLeft) {
+		return inverseSmoothstep((1 - visible) / CLOSE_LEFT_INSET) * CLOSE_LEFT_PHASE;
+	}
+	const rightPhase = (afterLeft - visible) / CLOSE_RIGHT_INSET;
+	if (rightPhase >= 1) return 1;
+	return CLOSE_LEFT_PHASE + inverseSmoothstep(rightPhase) * (1 - CLOSE_LEFT_PHASE);
+}
 
 /**
  * Glyph shutter for a section heading across the time that heading is displayed.
- * `progress` 0 is the previous section, 1 is the next. The heading is completely
- * covered at 35% and 65%, and fully open at 50%. The open and close use the
- * name's left-then-right shutter.
+ * `progress` 0 is the previous section, 1 is the next. The heading is covered at
+ * the edges, 80% open at 35% and 65%, and fully open at 50%. The open and close
+ * use the name's left-then-right shutter.
  */
 export function headerDisplayInsets(progress: number): { left: number; right: number } {
-	const openSpan = HEADER_OPEN_AT - HEADER_COVERED_BEFORE;
-	let covered = 1;
-	if (progress > HEADER_COVERED_BEFORE && progress < HEADER_OPEN_AT) {
-		covered = 1 - (progress - HEADER_COVERED_BEFORE) / openSpan;
-	} else if (progress >= HEADER_OPEN_AT && progress < HEADER_COVERED_AFTER) {
-		covered = (progress - HEADER_OPEN_AT) / (HEADER_COVERED_AFTER - HEADER_OPEN_AT);
-	}
-	return nameShutterInsets(covered, 1);
+	return nameShutterInsets(coveredForOpenAmount(headerOpenAmount(progress)), 1);
 }
 
 /** 1 when the heading letters are fully open, 0 when the shutter covers them. */

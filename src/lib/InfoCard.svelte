@@ -671,6 +671,12 @@
 		object-fit: contain;
 		opacity: 0.5;
 		filter: saturate(0.9) contrast(1.05);
+		transition: opacity 0.28s ease;
+	}
+
+	:global(.info-card--education.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
+		.education-bg-logo img {
+		opacity: 0.86;
 	}
 
 	.card-row--edu-bg > .card-logo,
@@ -738,6 +744,10 @@
 		overflow-x: hidden;
 		overflow-y: auto;
 		padding-inline: var(--copy-inset, 13cqw);
+	}
+
+	:global(.info-card--project) .card-row--back .card-content {
+		padding-top: 6.5cqw;
 	}
 
 	:global(.info-card--project) .card-row--back .experience-header {
@@ -1415,6 +1425,7 @@
 
 	:global(.info-card.info-card--award) .award-date-slot {
 		position: relative;
+		width: 100%;
 		min-height: 1.2em;
 	}
 
@@ -1425,13 +1436,17 @@
 	.award-hover-hint {
 		position: absolute;
 		top: 0;
-		left: 0;
+		left: 50%;
+		width: max-content;
 		margin: 0;
+		transform: translateX(-50%);
 		opacity: 0;
 		color: #e8f2ff;
-		font-size: 13px;
+		/* 13px label is ~12em wide; shrink only when the card is narrower than that. */
+		font-size: min(13px, calc((100cqw - 32px) / 12));
 		font-weight: 700;
 		letter-spacing: 0.04em;
+		text-align: center;
 		white-space: nowrap;
 		text-shadow:
 			0 1px 2px rgba(11, 18, 32, 0.85),
@@ -2059,7 +2074,8 @@
 
 	@media (prefers-reduced-motion: reduce) {
 		.card-main-content,
-		.card-hover-hint {
+		.card-hover-hint,
+		.education-bg-logo img {
 			transition: none;
 		}
 	}

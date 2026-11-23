@@ -11,7 +11,7 @@
 	} from '$lib/cardModal';
 	import { panelTrackLeft, RIBBON_SECTION_COUNT, RIBBON_VISIBLE_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import TitlePanel from '$lib/title/TitlePanel.svelte';
-	import { headerGlyphVisibility, NAME_INTRO_MS, NAME_INTRO_SHIFT_PX } from '$lib/title/nameShutter';
+	import { NAME_INTRO_MS, NAME_INTRO_SHIFT_PX } from '$lib/title/nameShutter';
 	import { syncSectionShutters } from '$lib/title/sectionShutter';
 	import ExperiencesPanel from '$lib/experiences/ExperiencesPanel.svelte';
 	import EducationPanel from '$lib/education/EducationPanel.svelte';
@@ -90,6 +90,12 @@
 
 	function easeOutCubic(t: number) {
 		return 1 - Math.pow(1 - t, 3);
+	}
+
+	/** Zero velocity and acceleration at both ends — the ease Apple uses between chapters. */
+	function smootherstep(t: number) {
+		const x = clamp01(t);
+		return x * x * x * (x * (x * 6 - 15) + 10);
 	}
 
 	function getMaxScrollLeft() {
@@ -175,9 +181,22 @@
 			return visibleStart + span * 0.48;
 		};
 
+		/**
+		 * Wheel pixels not yet turned into movement. Released on a short exponential
+		 * so a gesture keeps up with the finger and still has a little follow-through.
+		 */
+		let pendingInput = 0;
+		/** Integrator position. Kept separate so a touch scroll can be detected and adopted. */
+		let scrollPos = 0;
+		let scrollRaf = 0;
+		let scrollTickAt = 0;
+
 		const clampScroller = () => {
 			if (!scroller) return;
-			scroller.scrollLeft = clamp(scroller.scrollLeft, 0, getMaxScrollLeft());
+			const maxScroll = getMaxScrollLeft();
+			const left = clamp(scroller.scrollLeft, 0, maxScroll);
+			if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+			scrollPos = clamp(scrollPos, 0, maxScroll);
 		};
 
 		const measure = () => {
@@ -244,49 +263,125 @@
 
 		let ticking = false;
 
-		/** Pixels of travel per pixel of wheel while a heading is fully open. */
-		const HEADING_OPEN_GAIN = 0.36;
-		/** Pixels of travel per pixel of wheel while every heading is covered. */
-		const HEADING_GAP_GAIN = 2.05;
+		/** Screen px per wheel px while a section is held. */
+		const SECTION_DWELL_GAIN = 0.55;
+		/** Screen px per wheel px at the midpoint of the gap. Crest, not a flat cruise. */
+		const SECTION_GLIDE_GAIN = 3.2;
+		/** Fraction of the gap that stays at dwell speed — a short flat hold, not a peak on the letters. */
+		const SECTION_DWELL_FRACTION = 0.08;
+		/**
+		 * Fraction of the gap where glide speed is reached. 0.5 crests exactly between
+		 * sections; smootherstep's flat end keeps that crest smooth when the nearest
+		 * section flips.
+		 */
+		const SECTION_GLIDE_FRACTION = 0.5;
+		/**
+		 * How fast queued wheel input is released. Short on purpose: a Mac trackpad
+		 * already coasts, and a long blend would swim. This only gives the speed
+		 * change a body so it eases instead of shifting gears.
+		 */
+		const SCROLL_INPUT_TAU_MS = 64;
 
-		/** 0 between headings, 1 when a heading's letters are fully open. */
-		const headingShown = (scrollLeft: number) => {
-			if (panelOffsets.length === 0) return 0;
-			let shown = 0;
-			const shift = introShift.px;
-			for (let i = 0; i < panelOffsets.length; i++) {
-				const here = panelOffsets[i] ?? 0;
-				const prev = i > 0 ? panelOffsets[i - 1] : null;
-				const next = i < panelOffsets.length - 1 ? panelOffsets[i + 1] : null;
-				const before = prev != null ? here - prev : next != null ? next - here : window.innerWidth;
-				const after = next != null ? next - here : before;
-				const span = before + after;
-				const progress = span > 0 ? (scrollLeft - shift - (here - before)) / span : 0.5;
-				const visible = headerGlyphVisibility(progress);
-				if (visible > shown) shown = visible;
-			}
-			return shown;
-		};
-
-		/** Same input travels less while the shutter has most of a heading open. */
+		/**
+		 * Apple chapter curve. Flat dwell on a section, smootherstep up into a faster
+		 * glide across the gap, then the mirror image as the next section arrives.
+		 * Tuned so a full section crossing costs about the same wheel travel as before;
+		 * what changes is the shape (hold, ease out, glide, ease in).
+		 */
 		const scrollGain = (scrollLeft: number) => {
-			if (prefersReducedMotion()) return 1;
-			const shown = headingShown(scrollLeft);
-			const emphasis = shown <= 0 ? 0 : Math.pow(shown, 0.55);
-			return HEADING_GAP_GAIN + (HEADING_OPEN_GAIN - HEADING_GAP_GAIN) * emphasis;
+			if (prefersReducedMotion() || panelOffsets.length === 0) return 1;
+			let nearest = Infinity;
+			let pitch = panelW || window.innerWidth;
+			for (let i = 0; i < panelOffsets.length; i++) {
+				const anchor = panelOffsets[i] ?? 0;
+				const dist = Math.abs(scrollLeft - anchor);
+				if (dist < nearest) {
+					nearest = dist;
+					const prev = i > 0 ? panelOffsets[i - 1] : null;
+					const next = i < panelOffsets.length - 1 ? panelOffsets[i + 1] : null;
+					const gap =
+						prev != null && next != null
+							? Math.min(anchor - prev, next - anchor)
+							: prev != null
+								? anchor - prev
+								: next != null
+									? next - anchor
+									: pitch;
+					pitch = Math.max(1, gap);
+				}
+			}
+			const dwell = pitch * SECTION_DWELL_FRACTION;
+			const glideAt = pitch * SECTION_GLIDE_FRACTION;
+			const u = smootherstep((nearest - dwell) / Math.max(1, glideAt - dwell));
+			return SECTION_DWELL_GAIN + (SECTION_GLIDE_GAIN - SECTION_DWELL_GAIN) * u;
 		};
 
-		const applyScrollDelta = (delta: number) => {
-			if (!scroller || delta === 0) return;
+		const stopScrollGlide = () => {
+			if (scrollRaf !== 0) cancelAnimationFrame(scrollRaf);
+			scrollRaf = 0;
+		};
+
+		const tickScroll = (now: number) => {
+			scrollRaf = 0;
+			if (!scroller) return;
+			if (isCardModalOpen()) {
+				pendingInput = 0;
+				scrollPos = scroller.scrollLeft;
+				return;
+			}
+			// Touch or a modal pin moved the scroller; don't drag it back.
+			if (Math.abs(scroller.scrollLeft - scrollPos) > 2) {
+				pendingInput = 0;
+				scrollPos = scroller.scrollLeft;
+				return;
+			}
+
+			const dt = Math.min(50, Math.max(0, now - scrollTickAt));
+			scrollTickAt = now;
+			const release = 1 - Math.exp(-dt / SCROLL_INPUT_TAU_MS);
+			let take = pendingInput * release;
+			if (Math.abs(pendingInput - take) < 0.35) take = pendingInput;
+
 			const maxScroll = getMaxScrollLeft();
-			let remaining = delta;
-			const step = 18;
+			let remaining = take;
+			let consumed = 0;
+			let blocked = false;
+			const step = 8;
 			while (Math.abs(remaining) > 0.01) {
 				const bite = Math.abs(remaining) > step ? Math.sign(remaining) * step : remaining;
-				const next = clamp(scroller.scrollLeft + bite * scrollGain(scroller.scrollLeft), 0, maxScroll);
-				if (next === scroller.scrollLeft) break;
-				scroller.scrollLeft = next;
+				const next = clamp(scrollPos + bite * scrollGain(scrollPos), 0, maxScroll);
+				if (next === scrollPos) {
+					blocked = true;
+					break;
+				}
+				scrollPos = next;
 				remaining -= bite;
+				consumed += bite;
+			}
+			pendingInput = blocked ? 0 : pendingInput - consumed;
+
+			if (scroller.scrollLeft !== scrollPos) scroller.scrollLeft = scrollPos;
+			if (Math.abs(pendingInput) > 0.05) scrollRaf = requestAnimationFrame(tickScroll);
+			else pendingInput = 0;
+		};
+
+		const queueScrollInput = (delta: number) => {
+			if (!scroller || delta === 0) return;
+			if (Math.abs(scroller.scrollLeft - scrollPos) > 2) {
+				pendingInput = 0;
+				scrollPos = scroller.scrollLeft;
+			}
+			if (prefersReducedMotion()) {
+				const maxScroll = getMaxScrollLeft();
+				scrollPos = clamp(scrollPos + delta, 0, maxScroll);
+				pendingInput = 0;
+				scroller.scrollLeft = scrollPos;
+				return;
+			}
+			pendingInput += delta;
+			if (scrollRaf === 0) {
+				scrollTickAt = performance.now();
+				scrollRaf = requestAnimationFrame(tickScroll);
 			}
 		};
 
@@ -308,22 +403,25 @@
 				e.preventDefault();
 				return;
 			}
-			// Allow Awards arc to handle wheel only when hovering a card.
-			const target = e.target as HTMLElement | null;
-			if (target?.closest?.('.award-card-surface')) return;
+			// Awards and the project reel call stopPropagation only after the pointer
+			// has moved on them. Otherwise this handler keeps scrolling the page.
 
 			if (!scroller) return;
 			const absX = Math.abs(e.deltaX);
 			const absY = Math.abs(e.deltaY);
-			const delta = absX > absY ? e.deltaX : e.deltaY;
+			let delta = absX > absY ? e.deltaX : e.deltaY;
+			if (e.deltaMode === 1) delta *= 16;
+			else if (e.deltaMode === 2) delta *= scroller.clientWidth || window.innerWidth;
 			if (delta === 0) return;
 			e.preventDefault();
-			applyScrollDelta(delta);
+			queueScrollInput(delta);
 		};
 
 		const onScrollLock = () => {
 			if (!greetingScrollLocked) return;
 			if (!scroller) return;
+			pendingInput = 0;
+			scrollPos = 0;
 			if (scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
 		};
 
@@ -351,7 +449,12 @@
 		// Always start on the title (first) panel.
 		// Use scrollTo(...behavior:'auto') to avoid smooth scrolling, and re-apply after rAF/timeout
 		// in case the browser restores scroll position after mount.
-		const resetToTitle = () => scroller?.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+		const resetToTitle = () => {
+			pendingInput = 0;
+			scrollPos = 0;
+			stopScrollGlide();
+			scroller?.scrollTo({ left: 0, top: 0, behavior: 'auto' });
+		};
 		resetToTitle();
 		requestAnimationFrame(resetToTitle);
 		setTimeout(resetToTitle, 50);
@@ -405,6 +508,7 @@
 			scroller?.removeEventListener('scroll', onScrollLock);
 			window.removeEventListener('keydown', keyLock);
 			cancelEduSpreadAnim();
+			stopScrollGlide();
 			if (introRaf != null) cancelAnimationFrame(introRaf);
 			syncScrollState = undefined;
 		};
@@ -573,6 +677,43 @@
 
 		#projects.panel .panel-inner {
 			--projects-lift: calc(130px + 15vh);
+		}
+	}
+
+	/* Flipped phone: drop the desktop top inset and center each section in the short viewport. */
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		.panel,
+		#greeting.panel,
+		#experiences.panel,
+		#education.panel,
+		#projects.panel {
+			padding: 10px 16px 8px;
+			place-items: center;
+		}
+
+		#education.panel .panel-inner,
+		#experiences.panel .panel-inner,
+		#projects.panel .panel-inner {
+			padding: 0;
+			height: auto;
+		}
+
+		#education.panel .panel-inner,
+		#projects.panel .panel-inner {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+		}
+
+		#projects.panel .panel-inner {
+			--projects-lift: 0px;
+			position: relative;
+			bottom: auto;
+		}
+
+		#experiences.panel .panel-inner {
+			--panel-max: 100%;
+			width: 100%;
 		}
 	}
 

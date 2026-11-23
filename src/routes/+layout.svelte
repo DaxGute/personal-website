@@ -144,15 +144,45 @@
 		box-sizing: border-box;
 	}
 
+	@property --vignette-rx {
+		syntax: '<length>';
+		inherits: false;
+		initial-value: 120vmax;
+	}
+
+	@property --vignette-ry {
+		syntax: '<length>';
+		inherits: false;
+		initial-value: 120vmax;
+	}
+
+	@property --vignette-cx {
+		syntax: '<length-percentage>';
+		inherits: false;
+		initial-value: 50%;
+	}
+
+	@property --vignette-cy {
+		syntax: '<length-percentage>';
+		inherits: false;
+		initial-value: 50%;
+	}
+
 	:global(.card-modal-backdrop) {
 		position: fixed;
 		inset: 0;
 		z-index: 9998;
 		pointer-events: none;
-		opacity: 0;
-		/* Opacity only — an animated mask-image redraws this full-screen layer every frame. */
-		transition: opacity var(--card-modal-ms, 760ms)
-			var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		--vignette-rx: 120vmax;
+		--vignette-ry: 120vmax;
+		--vignette-cx: 50%;
+		--vignette-cy: 50%;
+		/* Hole shrinks from full-bleed to a point; the shade is the area outside the circle. */
+		transition:
+			--vignette-rx var(--card-modal-ms, 760ms)
+				var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1)),
+			--vignette-ry var(--card-modal-ms, 760ms)
+				var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		background: radial-gradient(
 			ellipse 120vmax 120vmax at 50% 50%,
 			rgba(11, 18, 32, 0.28) 0%,
@@ -160,10 +190,27 @@
 			rgba(11, 18, 32, 0.68) 78%,
 			rgba(7, 12, 22, 0.82) 100%
 		);
+		-webkit-mask-image:
+			linear-gradient(#fff, #fff),
+			radial-gradient(
+				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
+				#000 0%,
+				#000 100%,
+				transparent 100%
+			);
+		-webkit-mask-composite: xor;
+		mask-image:
+			linear-gradient(#fff, #fff),
+			radial-gradient(
+				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
+				#000 0%,
+				#000 100%,
+				transparent 100%
+			);
+		mask-composite: exclude;
 	}
 
 	:global(.card-modal-backdrop.is-visible) {
-		opacity: 1;
 		pointer-events: auto;
 		cursor: pointer;
 	}
@@ -172,6 +219,9 @@
 	@media (max-width: 900px) {
 		:global(.card-modal-backdrop) {
 			background: #000;
+			opacity: 0;
+			-webkit-mask-image: none;
+			mask-image: none;
 			transition: opacity var(--card-modal-ms, 760ms)
 				var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		}
@@ -411,6 +461,15 @@
 	@media (max-width: 900px) {
 		:global(:root) {
 			--playing-card-w: 168px;
+		}
+	}
+
+	/* Flipped phone: short and wide. Shrink cards so a row still fits under the heading. */
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		:global(:root) {
+			--playing-card-w: clamp(112px, calc((100vh - 168px) * 5 / 7), 148px);
+			--playing-card-w: clamp(112px, calc((100dvh - 168px) * 5 / 7), 148px);
+			--heading-size: clamp(28px, 7.2vh, 40px);
 		}
 	}
 

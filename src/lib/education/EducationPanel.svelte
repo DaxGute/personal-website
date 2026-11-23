@@ -283,6 +283,32 @@
 		}
 	}
 
+	/* Flipped phone: keep the fan, but small enough that rotated cards stay on screen. */
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		.education-carousel {
+			--edu-t: 1;
+			--edu-spread: calc(var(--edu-card-width) * 0.7);
+			top: 0;
+			left: 0;
+			margin: 6px auto 0;
+		}
+
+		.education-card[data-slot='0'] {
+			--fan-rot: -6deg;
+			--fan-y: 0px;
+		}
+
+		.education-card[data-slot='1'] {
+			--fan-rot: 0deg;
+			--fan-y: 0px;
+		}
+
+		.education-card[data-slot='2'] {
+			--fan-rot: 6deg;
+			--fan-y: 0px;
+		}
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.education-carousel {
 			width: min(980px, 100%);

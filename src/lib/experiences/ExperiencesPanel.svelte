@@ -662,4 +662,138 @@
 			z-index: 18;
 		}
 	}
+
+	/*
+	  Flipped phone. The desktop fan and the wide 2×2 grid both leave cards
+	  off-screen in a short landscape viewport. One centered row instead;
+	  Show more joins the same row at a smaller size.
+	*/
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		.experiences-panel {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			width: 100%;
+			gap: 8px;
+		}
+
+		.experiences-header {
+			position: relative;
+			z-index: 2;
+			width: auto;
+			max-width: 100%;
+			text-align: center;
+		}
+
+		:global(#experiences) .experience-list {
+			--ls-gap: 8px;
+			--ls-more: 112px;
+			--ls-card: min(
+				var(--playing-card-w),
+				calc((100vw - 40px - var(--ls-more) - 3 * var(--ls-gap)) / 4)
+			);
+			position: relative;
+			top: auto;
+			left: auto;
+			display: flex;
+			flex-wrap: nowrap;
+			justify-content: center;
+			align-items: center;
+			gap: var(--ls-gap);
+			width: 100%;
+			min-height: 0;
+			margin: 0;
+			padding: 0 0 26px;
+			grid-template-columns: none;
+			grid-template-rows: none;
+		}
+
+		:global(#experiences) .experience-list.is-expanded {
+			--ls-card: min(var(--playing-card-w), calc((100vw - 40px - 6 * var(--ls-gap)) / 7));
+		}
+
+		.experience-item,
+		:global(#experiences) .experience-item,
+		:global(#experiences) .experience-item:nth-child(n) {
+			position: relative;
+			inset: auto;
+			top: auto;
+			right: auto;
+			bottom: auto;
+			left: auto;
+			z-index: 1;
+			width: var(--ls-card);
+			height: calc(var(--ls-card) * 7 / 5);
+			min-height: 0;
+			margin: 0;
+			transform: none;
+			will-change: auto;
+		}
+
+		/* Hint lives in the 4th card; keep that card from trapping it so it can center on the row. */
+		:global(#experiences) .experience-item:nth-child(4) {
+			position: static;
+		}
+
+		:global(#experiences) .experience-item.experience-item--more:nth-child(n):not(.is-in) {
+			position: absolute;
+			width: 0;
+			height: 0;
+			min-height: 0;
+			overflow: hidden;
+			opacity: 0;
+			pointer-events: none;
+			transform: none;
+		}
+
+		:global(#experiences) .experience-item.experience-item--more:nth-child(n).is-in {
+			position: relative;
+			width: var(--ls-card);
+			height: calc(var(--ls-card) * 7 / 5);
+			opacity: 1;
+			pointer-events: auto;
+			overflow: visible;
+			transform: none;
+		}
+
+		.show-more-slot,
+		.show-more-slot.is-gone {
+			position: relative;
+			top: auto;
+			left: auto;
+			width: var(--show-more-w);
+			height: var(--show-more-h);
+			transform: none;
+		}
+
+		.show-more-slot.is-gone {
+			position: absolute;
+			width: 0;
+			height: 0;
+			overflow: hidden;
+			opacity: 0;
+		}
+
+		.show-more {
+			opacity: 0.92;
+		}
+
+		.exp-click-hint {
+			top: auto;
+			bottom: 0;
+			left: 50%;
+			width: max-content;
+			max-width: calc(100vw - 32px);
+			transform: translateX(-50%);
+		}
+
+		.exp-click-hint-arrow {
+			display: none;
+		}
+
+		.exp-click-hint-text {
+			font-size: 11px;
+		}
+	}
 </style>

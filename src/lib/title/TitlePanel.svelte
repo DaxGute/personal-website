@@ -152,6 +152,24 @@
 		}
 	}
 
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		.greeting-layout {
+			margin-top: 0;
+			transform: none;
+			width: 100%;
+		}
+
+		.greeting {
+			display: flex;
+			justify-content: center;
+			width: 100%;
+		}
+
+		.title-row {
+			margin-top: 0;
+		}
+	}
+
 	.greeting {
 		width: min(calc(860px * 1.3), 100%);
 		padding: 6px;
