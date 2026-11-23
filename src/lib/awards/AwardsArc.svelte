@@ -4,12 +4,11 @@
 	import { abbreviateMonths } from '$lib/format';
 	import { isCardModalOpen } from '$lib/cardModal';
 	import type { AwardItem } from '$lib/awards/awards';
+	import ShutterHeading from '$lib/title/ShutterHeading.svelte';
 
 	type Award = AwardItem;
 
-	export let kicker: string | undefined = undefined;
 	export let title: string;
-	export let body: string;
 	export let awards: Award[] = [];
 
 	// Repeat the awards list to tighten pacing while keeping spacing constant.
@@ -288,20 +287,18 @@
 	}
 
 	/**
-	 * Fade in while the next award moves into the tip (current stays opaque).
-	 * At rested steps (≥ 1), opacity is 0 so card open/close can't flash a mid-fade.
+	 * Opacity by distance from the arc tip, in award steps.
+	 * The centered award and the next one on each side stay solid. Farther
+	 * awards taper along the arc instead of blinking out beside the tip.
 	 */
-	function arcEnterOpacity(stepsToTip: number, fadeStartSteps = 1, fadeEndSteps = 0.15) {
-		if (stepsToTip <= fadeEndSteps) return 1;
-		if (stepsToTip >= fadeStartSteps) return 0;
-		return 1 - (stepsToTip - fadeEndSteps) / (fadeStartSteps - fadeEndSteps);
-	}
-
-	/** After the arc tip (p=0.5), fade out quickly and stay hidden for the rest of the arc. */
-	function arcExitOpacity(p: number, fadeStart = 0.5, fadeEnd = 0.57) {
-		if (p <= fadeStart) return 1;
-		if (p >= fadeEnd) return 0;
-		return 1 - (p - fadeStart) / (fadeEnd - fadeStart);
+	function arcOpacity(stepsFromTip: number) {
+		const dist = Math.abs(stepsFromTip);
+		const solidUntil = 1.12;
+		const goneBy = 2.35;
+		if (dist <= solidUntil) return 1;
+		if (dist >= goneBy) return 0;
+		const t = (dist - solidUntil) / (goneBy - solidUntil);
+		return Math.cos(t * Math.PI * 0.5);
 	}
 
 	/** Avoid translucent award surfaces during modal open/close (backdrop-filter / clip toggles flash them). */
@@ -423,12 +420,16 @@
 				const y = yPeak + (yBase - yPeak) * Math.pow(p, Math.max(0.3, fallExp));
 				const rot = 360 * (p - 0.5);
 
-				// Positive = still on the entry side of the tip (incoming awards).
+				// Signed award-steps from this card to the tip (positive = still incoming).
 				const stepsToTip = shortestDelta(phaseI, tip) / step;
-				const opacity = arcEnterOpacity(stepsToTip) * arcExitOpacity(p);
+				const opacity = arcOpacity(stepsToTip);
+				// Nearer cards paint above farther ones. The header is a later sibling
+				// stacking context, so these stay underneath the title and nav.
+				const depth = Math.min(Math.abs(stepsToTip), 8);
 
 				el.style.visibility = opacity < 0.02 ? 'hidden' : 'visible';
 				el.style.pointerEvents = opacity < 0.12 ? 'none' : 'auto';
+				el.style.zIndex = String(Math.round(40 - depth * 5));
 				el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${rot}deg)`;
 				if (surface) surface.style.opacity = String(opacity);
 			}
@@ -596,54 +597,29 @@
 	</div>
 
 	<div class="awards-header" aria-label="Awards summary">
-		{#if kicker}
-			<p class="kicker">{kicker}</p>
-		{/if}
 		<div class="awards-title-row" aria-label="Awards title and navigation">
 			<button type="button" class="awards-nav-btn" aria-label="Previous award" onclick={() => stepCentered(1)}>
 				<span aria-hidden="true">‹</span>
 			</button>
-			<h1 class="title">{title}</h1>
+			<ShutterHeading {title} flush />
 			<button type="button" class="awards-nav-btn" aria-label="Next award" onclick={() => stepCentered(-1)}>
 				<span aria-hidden="true">›</span>
 			</button>
 		</div>
-		<p class="body">{body}</p>
 	</div>
 </div>
 
 <style>
-	.kicker {
-		margin: 0 0 10px;
-		color: var(--muted);
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		font-size: 12px;
-	}
-
-	.title {
-		margin: 0 0 10px;
-		font-size: clamp(32px, 4vw, 54px);
-		line-height: 1.05;
-		letter-spacing: -0.03em;
-	}
-
-	.body {
-		margin: 0 0 18px;
-		color: var(--muted);
-		font-size: 16px;
-		line-height: 1.6;
-	}
-
 	.awards {
 		position: absolute;
 		left: 50%;
 		top: 50%;
 		transform: translate(-50%, -50%);
-		width: min(980px, 92%);
+		width: min(calc(980px * 1.3), calc(100% - 46.8px));
 		height: min(720px, 76vh);
 		isolation: isolate;
+		--award-card-w: var(--playing-card-w, 220px);
+		--award-card-h: var(--playing-card-h, 308px);
 	}
 
 	.awards-carousel {
@@ -695,10 +671,9 @@
 	}
 
 	.award-card-surface {
-		--award-card-w: 390px;
-		--award-card-h: 88px;
 		width: var(--award-card-w);
 		height: var(--award-card-h);
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
 		position: relative;
 		opacity: 1;
 		will-change: opacity;
@@ -711,14 +686,12 @@
 		z-index: 2;
 		pointer-events: none;
 		/* Keep copy just below the arc focal point */
-		transform: translate(-50%, calc(clamp(48px, 7vh, 96px) + 20px));
+		transform: translate(-50%, calc(var(--award-card-h) / 2 + 36px));
 		text-align: center;
 		width: min(520px, 92%);
 	}
 
-	.awards-header .kicker,
-	.awards-header .title,
-	.awards-header .body {
+	.awards-header :global(.shutter-title) {
 		pointer-events: none;
 	}
 
@@ -728,15 +701,6 @@
 		justify-content: center;
 		gap: 10px;
 		pointer-events: auto;
-	}
-
-	.awards-title-row .title {
-		margin: 0;
-		text-shadow:
-			0 0 28px rgba(255, 255, 255, 1),
-			0 0 56px rgba(255, 255, 255, 0.85),
-			0 0 100px rgba(255, 255, 255, 0.55),
-			0 0 160px rgba(255, 255, 255, 0.35);
 	}
 
 	.awards-nav-btn {
@@ -764,10 +728,6 @@
 		transform: translateY(0);
 	}
 
-	.awards-header .body {
-		margin-bottom: 0;
-	}
-
 	@media (prefers-reduced-motion: reduce) {
 		.awards {
 			position: relative;
@@ -776,7 +736,7 @@
 			transform: none;
 			width: 100%;
 			height: auto;
-			padding: clamp(90px, 12vh, 140px) 18px 24px;
+			padding: clamp(90px, 12vh, 140px) calc(18px * 1.3) 24px;
 		}
 		.awards-carousel {
 			padding-top: 0;
@@ -811,7 +771,7 @@
 			transform: none;
 			width: 100%;
 			height: auto;
-			padding: clamp(90px, 12vh, 140px) 18px 24px;
+			padding: clamp(90px, 12vh, 140px) calc(18px * 1.3) 24px;
 		}
 		.awards-carousel {
 			padding-top: 0;

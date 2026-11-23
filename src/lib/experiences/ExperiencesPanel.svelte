@@ -2,14 +2,15 @@
 	import { onDestroy, onMount } from 'svelte';
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
-	import { experiences } from '$lib/experiences/experiences';
+	import { experiences, moreExperiences } from '$lib/experiences/experiences';
+	import ShutterHeading from '$lib/title/ShutterHeading.svelte';
 
-	export let kicker: string | undefined = undefined;
 	export let title: string;
-	export let body: string;
 
 	let panelEl: HTMLElement | null = null;
 	let hintRevealed = false;
+	let moreShown = false;
+	let motionReady = false;
 	let rafId: number | null = null;
 
 	/**
@@ -73,7 +74,12 @@
 		rafId = requestAnimationFrame(tick);
 	}
 
+	function showMore() {
+		moreShown = true;
+	}
+
 	onMount(() => {
+		motionReady = true;
 		// Disabled on mobile — no hint, no animation.
 		if (isMobile()) return;
 		if (prefersReducedMotion()) {
@@ -89,22 +95,23 @@
 
 <div class="experiences-panel" bind:this={panelEl}>
 	<div class="experiences-header">
-		{#if kicker}
-			<p class="kicker">{kicker}</p>
-		{/if}
-		<h1 class="title">{title}</h1>
-		<p class="body">{body}</p>
+		<ShutterHeading {title} />
 	</div>
 
-	<ul class="experience-list" aria-label="Jobs and internships list">
-		{#each experiences as exp}
+	<ul
+		class="experience-list"
+		class:motion-ready={motionReady}
+		class:is-expanded={moreShown}
+		aria-label="Jobs and internships list"
+	>
+		{#each experiences as exp, i}
 			<li class="experience-item">
 				<InfoCard
 					variant="experience"
 					heading={exp.company}
-					subheading={`${exp.title} · ${exp.location}`}
+					subheading={exp.title}
+					location={exp.location}
 					dates={abbreviateMonths(exp.dates)}
-					items={exp.highlights}
 					logoSrc={exp.logoSrc}
 					logoAlt={exp.logoAlt}
 					backImageSrc={exp.backImageSrc}
@@ -112,10 +119,11 @@
 					backImageHref={exp.backImageHref}
 					backLinkLabel={exp.backLinkLabel}
 					backImageGrayscale={exp.backImageGrayscale ?? false}
-					backParagraphs={exp.backParagraphs ?? []}
+					backLead={exp.backLead}
+					backBullets={exp.backBullets}
 					skills={exp.skills ?? []}
 				/>
-				{#if exp.company === 'City of San Diego'}
+				{#if i === experiences.length - 1}
 					<div class="exp-click-hint" class:is-visible={hintRevealed} aria-hidden="true">
 						<svg
 							class="exp-click-hint-arrow"
@@ -145,31 +153,50 @@
 				{/if}
 			</li>
 		{/each}
+		{#each moreExperiences as exp (exp.company)}
+			<li
+				class="experience-item experience-item--more"
+				class:is-in={moreShown}
+				aria-hidden={moreShown ? undefined : true}
+				inert={moreShown ? undefined : true}
+			>
+				<InfoCard
+					variant="experience"
+					heading={exp.company}
+					subheading={exp.title}
+					location={exp.location}
+					dates={abbreviateMonths(exp.dates)}
+					logoSrc={exp.logoSrc}
+					logoAlt={exp.logoAlt}
+					backImageSrc={exp.backImageSrc}
+					backImageAlt={exp.backImageAlt}
+					backImageHref={exp.backImageHref}
+					backLinkLabel={exp.backLinkLabel}
+					backImageGrayscale={exp.backImageGrayscale ?? false}
+					backLead={exp.backLead}
+					backBullets={exp.backBullets}
+					skills={exp.skills ?? []}
+				/>
+			</li>
+		{/each}
+		<li class="show-more-slot" class:is-gone={moreShown} aria-hidden={moreShown || undefined} inert={moreShown || undefined}>
+			<button
+				type="button"
+				class="show-more"
+				aria-expanded={moreShown}
+				on:click={showMore}
+			>
+				Show more
+			</button>
+		</li>
 	</ul>
 </div>
 
 <style>
-	.kicker {
-		margin: 0 0 10px;
-		color: var(--muted);
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		font-size: 12px;
-	}
-
-	.title {
-		margin: 0 0 10px;
-		font-size: clamp(32px, 4vw, 54px);
-		line-height: 1.05;
-		letter-spacing: -0.03em;
-	}
-
-	.body {
-		margin: 0 0 18px;
-		color: var(--muted);
-		font-size: 16px;
-		line-height: 1.6;
+	@property --enter {
+		syntax: '<number>';
+		inherits: false;
+		initial-value: 0;
 	}
 
 	.experience-list {
@@ -185,26 +212,164 @@
 		position: relative;
 		margin-bottom: 0;
 		margin-top: 18px;
-		min-height: clamp(420px, 62vh, 620px);
+		min-height: clamp(560px, 72vh, 700px);
 	}
 
 	.experience-item {
-		--t: var(--exp-t, 1);
+		/* Each card eases in on its own clock. --clump-start delays that card
+		   without changing where the whole fan finishes. */
+		--t: clamp(0, (var(--exp-t, 1) - var(--clump-start, 0)) / (1 - var(--clump-start, 0)), 1);
+		--clump-start: 0;
+		--clump-rot: 0deg;
 		--spread-x: 0px;
 		--spread-y: 0px;
-		--exp-card-w: 573px;
-		--exp-card-h: 112px;
+		--enter: 0;
+		--enter-x: 0px;
+		--enter-y: 0px;
+		--enter-rot: 0deg;
+		--exp-card-w: var(--playing-card-w, 220px);
+		--exp-card-h: var(--playing-card-h, 308px);
 		position: relative;
 		z-index: 1;
 		width: var(--exp-card-w);
 		height: var(--exp-card-h);
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
 		min-height: var(--exp-card-h);
+		transform: translate3d(
+				calc(var(--spread-x) * (1 - var(--t)) + var(--enter-x) * var(--enter)),
+				calc(var(--spread-y) * (1 - var(--t)) + var(--enter-y) * var(--enter)),
+				0
+			)
+			rotate(calc(var(--clump-rot) * (1 - var(--t)) + var(--enter-rot) * var(--enter)));
+		will-change: transform;
+	}
+
+	.experience-item--more {
+		--enter: 1;
+		--fade-dur: 0.8s;
+		--enter-dur: 0.95s;
+		--enter-delay: 0ms;
+		--enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
+		opacity: 0;
+		pointer-events: none;
+		transition: none;
+	}
+
+	/* Show-more cards. Each one travels a different path into the checkerboard. */
+	:global(#experiences) .experience-item--more:nth-child(5) {
+		--clump-start: 0.04;
+		--clump-rot: -6deg;
+		--spread-x: 70px;
+		--spread-y: 230px;
+		--enter-x: 180px;
+		--enter-y: 300px;
+		--enter-rot: 9deg;
+		--enter-dur: 1.08s;
+		--enter-delay: 30ms;
+		--fade-dur: 0.72s;
+		--enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	:global(#experiences) .experience-item--more:nth-child(6) {
+		--clump-start: 0.22;
+		--clump-rot: 7deg;
+		--spread-x: 150px;
+		--spread-y: -210px;
+		--enter-x: 280px;
+		--enter-y: -250px;
+		--enter-rot: -8deg;
+		--enter-dur: 0.86s;
+		--enter-delay: 0ms;
+		--fade-dur: 0.58s;
+		--enter-ease: cubic-bezier(0.22, 1.15, 0.36, 1);
+	}
+
+	:global(#experiences) .experience-item--more:nth-child(7) {
+		--clump-start: 0.12;
+		--clump-rot: -3deg;
+		--spread-x: 300px;
+		--spread-y: -30px;
+		--enter-x: 480px;
+		--enter-y: 90px;
+		--enter-rot: 5deg;
+		--enter-dur: 1.2s;
+		--enter-delay: 150ms;
+		--fade-dur: 0.84s;
+		--enter-ease: cubic-bezier(0.05, 0.7, 0.2, 1);
+	}
+
+	.motion-ready .experience-item--more {
+		transition:
+			opacity var(--fade-dur) ease var(--enter-delay),
+			--enter var(--enter-dur) var(--enter-ease) var(--enter-delay);
+	}
+
+	.experience-item--more.is-in {
+		--enter: 0;
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	.show-more-slot {
+		--t: var(--exp-t, 1);
+		--spread-x: -70px;
+		--spread-y: 90px;
+		--show-more-w: 132px;
+		--show-more-h: 36px;
+		position: absolute;
+		z-index: 30;
+		top: 512px;
+		left: 230px;
+		width: var(--show-more-w);
+		height: var(--show-more-h);
+		margin: 0;
 		transform: translate3d(
 			calc(var(--spread-x) * (1 - var(--t))),
 			calc(var(--spread-y) * (1 - var(--t))),
 			0
 		);
-		will-change: transform;
+		transition: opacity 0.4s ease;
+	}
+
+	.show-more-slot.is-gone {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.show-more {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		padding: 0 12px;
+		border: 1.5px solid rgba(11, 18, 32, 0.5);
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.28);
+		box-shadow: none;
+		color: rgba(11, 18, 32, 0.78);
+		font: inherit;
+		font-size: 13px;
+		font-weight: 650;
+		letter-spacing: 0.02em;
+		cursor: pointer;
+		opacity: 0.55;
+		transition:
+			opacity 0.22s ease,
+			background-color 0.22s ease,
+			border-color 0.22s ease;
+	}
+
+	.show-more:hover {
+		opacity: 1;
+		background: rgba(255, 255, 255, 0.92);
+		border-color: rgba(11, 18, 32, 0.72);
+		color: rgba(11, 18, 32, 0.94);
+	}
+
+	.show-more:focus-visible {
+		outline: 2px solid rgba(11, 18, 32, 0.72);
+		outline-offset: 3px;
 	}
 
 	.exp-click-hint {
@@ -307,6 +472,11 @@
 		.exp-click-hint.is-visible .exp-click-hint-text {
 			transition-delay: 0s;
 		}
+
+		.motion-ready .experience-item--more,
+		.show-more-slot {
+			transition: none;
+		}
 	}
 
 	:global(#experiences) .experience-item:nth-child(1) {
@@ -334,16 +504,6 @@
 			z-index: 2;
 			width: min(420px, 46vw);
 			max-width: none;
-		}
-
-		.experiences-header .title {
-			font-size: clamp(36px, 5.5vw, 54px);
-		}
-
-		.experiences-header .body {
-			margin-bottom: 0;
-			font-size: 15px;
-			line-height: 1.55;
 		}
 
 		:global(#experiences) .experience-list {
@@ -386,6 +546,45 @@
 		:global(#experiences) .experience-item:nth-child(4) {
 			transform: translateY(-70%);
 		}
+
+		:global(#experiences) .experience-item.experience-item--more {
+			position: absolute;
+			z-index: 4;
+			opacity: 0;
+			pointer-events: none;
+			transform: translate3d(
+					calc(var(--enter-x) * var(--enter)),
+					calc(var(--enter-y) * var(--enter)),
+					0
+				)
+				rotate(calc(var(--enter-rot) * var(--enter)));
+		}
+
+		:global(#experiences) .experience-item.experience-item--more.is-in {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		:global(#experiences) .experience-item--more:nth-child(5) {
+			top: calc(var(--exp-card-h) + 28px);
+			left: 0;
+		}
+
+		:global(#experiences) .experience-item--more:nth-child(6) {
+			top: calc(var(--exp-card-h) * 0.35);
+			left: calc(var(--exp-card-w) + 16px);
+		}
+
+		:global(#experiences) .experience-item--more:nth-child(7) {
+			top: calc(var(--exp-card-h) + 28px);
+			left: calc(var(--exp-card-w) + 16px);
+		}
+
+		.show-more-slot {
+			top: calc(var(--exp-card-h) * 1.2);
+			left: calc(var(--exp-card-w) * 1.45);
+			transform: none;
+		}
 	}
 
 	@media (min-width: 901px) {
@@ -399,39 +598,68 @@
 		}
 
 		:global(#experiences) .experience-item:nth-child(1) {
-			--spread-x: -240px;
-			--spread-y: 150px;
-			top: 150px;
-			left: -60px;
+			--clump-start: 0;
+			--clump-rot: -7deg;
+			--spread-x: -180px;
+			--spread-y: 120px;
+			top: 168px;
+			left: 0;
 			right: auto;
-			z-index: 5;
+			z-index: 10;
 		}
 
 		:global(#experiences) .experience-item:nth-child(2) {
-			--spread-x: -40px;
-			--spread-y: -150px;
-			top: -90px;
-			left: calc(var(--exp-card-w) + 100px);
+			--clump-start: 0.18;
+			--clump-rot: 5deg;
+			--spread-x: 40px;
+			--spread-y: -130px;
+			top: 12px;
+			left: 680px;
 			right: auto;
-			z-index: 5;
+			z-index: 8;
 		}
 
 		:global(#experiences) .experience-item:nth-child(3) {
+			--clump-start: 0.08;
+			--clump-rot: -4deg;
 			--spread-x: -140px;
-			--spread-y: 90px;
+			--spread-y: 60px;
 			top: 0;
-			left: 0;
+			left: 236px;
 			right: auto;
 			bottom: auto;
+			z-index: 9;
 		}
 
 		:global(#experiences) .experience-item:nth-child(4) {
-			--spread-x: -140px;
-			--spread-y: -90px;
-			top: 44px;
-			left: calc(var(--exp-card-w) + 28px);
+			--clump-start: 0.24;
+			--clump-rot: 6deg;
+			--spread-x: -40px;
+			--spread-y: -20px;
+			top: 176px;
+			left: 456px;
 			right: auto;
 			bottom: auto;
+			z-index: 14;
+		}
+
+		/* Continue the checkerboard past Benevolent: down-right, up-right, then right. */
+		:global(#experiences) .experience-item:nth-child(5) {
+			top: 176px;
+			left: 904px;
+			z-index: 16;
+		}
+
+		:global(#experiences) .experience-item:nth-child(6) {
+			top: 0;
+			left: 1128px;
+			z-index: 11;
+		}
+
+		:global(#experiences) .experience-item:nth-child(7) {
+			top: 176px;
+			left: 1352px;
+			z-index: 18;
 		}
 	}
 </style>

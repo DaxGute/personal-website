@@ -18,7 +18,7 @@ export type AwardItem = {
 export const awards: AwardItem[] = [
 	{
 		heading: 'Oracle Java 8 SE Programmer',
-		dates: 'May 2023',
+		dates: 'August 2021',
 		items: [
 			'Issued by Oracle',
 			'An Oracle Certified Associate, Java SE 8 Programmer has demonstrated knowledge of object-oriented concepts, the Java programming language and general knowledge of Java platforms and technologies.'
@@ -30,7 +30,7 @@ export const awards: AwardItem[] = [
 	},
 	{
 		heading: 'International Youth Leader of the Year',
-		dates: 'March 2022',
+		dates: 'October 2022',
 		items: [
 			'Issued by The International Rescue Committee (IRC - San Diego)',
 			"IRC's Youth Leader of the Year was presented to Daxton Gutekunst for his work in founding and operating his non-profit, Kid By Kid, and for his civic engagement championing support for Refugee Youth, as a City of San Diego Youth Commissioner (2021-2023). The award honors the incredible impact of a past volunteer with IRC Youth Programs, Richard L'Heureux."
@@ -40,23 +40,22 @@ export const awards: AwardItem[] = [
 	},
 	{
 		heading: 'Daily Point of Light Honoree',
-		dates: 'September 2022',
+		dates: 'April 2022',
 		items: [
-			'Issued by Points Of Light',
-			'The Daily Point of Light Award is presented by @PointsofLight, celebrating the power of individuals to spark change and improve the world. Daily Point of Light award was presented during #GlobalVolunteerMonth; honoring individuals across the nation who collectively create change.'
+			'Issued by Points of Light',
+			'Honored during Global Volunteer Month for sparking change through community service. The Daily Point of Light Award recognizes people across the country who improve their communities.'
 		],
 		logoSrc: pointOfLightLogo,
 		logoAlt: 'Daily Point of Light Award logo'
 	},
 	{
 		heading: 'National Merit Scholarship Finalist',
-		dates: 'February 2023',
+		dates: 'April 2023',
 		items: [
-			'Issued by The National Merit® Scholarship Program',
-			"The National Merit® Scholarship Program is an academic competition for recognition and scholarships that began in 1955. Approximately 1.5 million high school students enter the program each year. The strongest semifinalist applicants, approximately 15,000 students from across the nation, are named National Merit Scholarship Finalists and are notified during the second semester of their senior year. Advancing to Finalist standing, a Finalist represents the top 1% of their respective states' test-takers."
+			'Issued by the National Merit Scholarship Program',
+			'Named a National Merit Scholarship Finalist, a standing that represents about the top 1% of test-takers in each state. Roughly 15,000 students nationwide reach Finalist from 1.5 million entrants each year.'
 		],
 		logoSrc: nationalMeritLogo,
-		logoAlt: 'National Merit Scholarship Corporation logo',
-		backTextScale: 0.8
+		logoAlt: 'National Merit Scholarship Corporation logo'
 	}
 ];

@@ -19,6 +19,8 @@
 	export let items: string[] = [];
 	export let backItems: string[] = [];
 	export let backParagraphs: { heading: string; body: string }[] = [];
+	export let backLead: string | null = null;
+	export let backBullets: string[] = [];
 	export let skills: string[] = [];
 	export let logoSrc: string | null = null;
 	export let logoAlt: string | null = null;
@@ -85,12 +87,12 @@
 			<div class="card-header experience-header" class:experience-header--award={variant === 'award'}>
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
-					{#if variant !== 'award'}
+					{#if variant !== 'award' && (subheading || location)}
 						<p
 							class="experience-sub"
 							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
 						>
-							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
+							{subheading}{#if location}<span class="experience-location">{location}</span>{/if}
 						</p>
 					{:else if dates}
 						<div class="award-date-slot">
@@ -113,7 +115,7 @@
 				{/if}
 			</div>
 
-			{#if variant !== 'award'}
+			{#if variant !== 'award' && (customFrontBody || !!body || items.length > 0)}
 				<div class="card-main">
 					<div class="card-main-content" class:card-main-content--custom={customFrontBody}>
 						{#if customFrontBody}
@@ -292,7 +294,11 @@
 				<div
 					class="card-back-main"
 					class:card-back-main--with-image={(!sidePhotoOnBack && !!backImageSrc) || !!backImageHref}
-					class:card-back-main--with-copy={backItems.length > 0 || backParagraphs.length > 0 || skills.length > 0}
+					class:card-back-main--with-copy={backItems.length > 0 ||
+						backParagraphs.length > 0 ||
+						backBullets.length > 0 ||
+						!!backLead ||
+						skills.length > 0}
 					class:card-back-main--custom={customBackBody}
 				>
 					{#if customBackBody}
@@ -356,8 +362,18 @@
 							<p class="card-back-marker">backside</p>
 						{/if}
 						{#if variant === 'experience'}
-							{#if backParagraphs.length}
+							{#if backLead || backBullets.length || backParagraphs.length}
 								<div class="experience-back-copy" aria-label="Experience details">
+									{#if backLead}
+										<p class="experience-back-lead">{backLead}</p>
+									{/if}
+									{#if backBullets.length}
+										<ul class="experience-back-bullets">
+											{#each backBullets as bullet}
+												<li>{bullet}</li>
+											{/each}
+										</ul>
+									{/if}
 									{#each backParagraphs as paragraph}
 										<p class="experience-back-paragraph">
 											<strong>{paragraph.heading}</strong>
@@ -466,6 +482,38 @@
 		overflow: hidden;
 	}
 
+	:global(.info-card--project) .card-row:not(.card-row--back) {
+		flex-direction: column;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .card-logo {
+		flex: 1 1 auto;
+		width: 100%;
+		height: auto;
+		min-height: 0;
+		padding: 22px 18px 6px;
+		border-right: none;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .card-content {
+		flex: 0 0 auto;
+		align-items: center;
+		text-align: center;
+		padding: 4px 14px 16px;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .experience-header {
+		justify-content: center;
+		margin: 0;
+	}
+
+	:global(.info-card--project) .card-row:not(.card-row--back) .experience-company {
+		text-align: center;
+		font-size: 16px;
+	}
+
 	:global(.info-card--project) .card-logo {
 		align-self: stretch;
 		align-items: center;
@@ -484,50 +532,66 @@
 		overflow: hidden;
 	}
 
-	:global(.info-card--experience) .card-logo {
+	:global(.info-card--experience) .card-row:not(.card-row--back) {
+		flex-direction: column;
+	}
+
+	:global(.info-card--experience) .card-row:not(.card-row--back) .card-logo {
 		align-self: stretch;
-		flex: 0 0 var(--exp-card-h, 112px);
-		width: var(--exp-card-h, 112px);
-		height: var(--exp-card-h, 112px);
-		padding: 0;
+		flex: 1 1 auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: auto;
+		min-height: 0;
+		padding: 18px 16px 8px;
 		overflow: hidden;
 		border-right: none;
 		background: transparent;
 		box-shadow: none;
 	}
 
-	:global(.info-card--experience) .card-logo img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
+	:global(.info-card--experience) .card-row:not(.card-row--back) .card-logo img {
+		position: static;
+		width: auto;
+		height: auto;
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
 		object-position: center;
 	}
 
-	/* Modal back: square photo matching card height, flush top / bottom / left. */
-	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo,
-	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo--back-photo {
-		flex: 0 0 auto;
-		width: auto;
-		height: 100%;
-		aspect-ratio: 1 / 1;
-		align-self: stretch;
-		padding: 0;
-		margin: 0;
-		border-right: none;
-		background: transparent;
-		box-shadow: none;
-		border-radius: 4px 0 0 4px;
+	:global(.info-card--experience) .card-row--back {
+		flex-direction: column;
 	}
 
-	:global(.info-card--experience) .card-logo--back-photo {
+	/* Square photo inset from the card edges; the write-up sits underneath. */
+	:global(.info-card--experience) .card-row--back .card-logo,
+	:global(.info-card--experience) .card-logo--back-photo,
+	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo,
+	:global(.info-card--experience.info-card--modal) .card-row--back .card-logo--back-photo {
 		position: relative;
-		align-self: stretch;
-		flex: 0 0 var(--exp-card-h, 112px);
-		width: var(--exp-card-h, 112px);
-		height: 100%;
+		flex: 0 0 auto;
+		align-self: center;
+		width: 74%;
+		height: auto;
+		aspect-ratio: 1;
+		margin: 5.6cqw 0 0;
+		padding: 0;
+		overflow: hidden;
+		border-right: none;
+		background: var(--hp-surface-hover, var(--hp-surface, #b4bdd8));
+		box-shadow: none;
+		border-radius: 3.2cqw;
+		isolation: isolate;
 	}
 
 	:global(.info-card--experience) .card-logo--back-photo img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		object-fit: cover;
 		object-position: center;
 	}
@@ -539,6 +603,14 @@
 	:global(.info-card--experience) .card-content {
 		min-height: 0;
 		overflow: hidden;
+	}
+
+	:global(.info-card--experience) .card-row:not(.card-row--back) .card-content {
+		justify-content: center;
+	}
+
+	:global(.info-card--experience) .card-row:not(.card-row--back) .experience-header {
+		margin-bottom: 0;
 	}
 
 	:global(.info-card--project) .card-content {
@@ -585,18 +657,20 @@
 		inset: 0;
 		z-index: 0;
 		display: grid;
-		place-items: center;
+		place-items: start center;
+		padding-top: 11%;
 		pointer-events: none;
 		overflow: hidden;
 	}
 
 	.education-bg-logo img {
 		display: block;
-		width: 260px;
-		height: 260px;
+		width: 62%;
+		height: auto;
+		max-height: 54%;
 		object-fit: contain;
-		opacity: 0.22;
-		filter: saturate(0.85) contrast(1.05);
+		opacity: 0.5;
+		filter: saturate(0.9) contrast(1.05);
 	}
 
 	.card-row--edu-bg > .card-logo,
@@ -657,13 +731,29 @@
 		padding: var(--back-pad, 1.38cqw);
 	}
 
-	:global(.info-card--experience.info-card--modal) .card-row--back .card-content {
-		padding: var(--back-pad, 1.38cqw) var(--back-pad, 1.38cqw) var(--back-pad, 1.38cqw)
-			calc(var(--back-pad, 1.38cqw) * 1.4);
+	:global(.info-card--experience) .card-row--back .card-content {
+		flex: 1 1 auto;
+		justify-content: safe center;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+		padding-inline: var(--copy-inset, 13cqw);
+	}
+
+	:global(.info-card--project) .card-row--back .experience-header {
+		padding-inline: calc(var(--copy-inset, 13cqw) - var(--back-pad, 2.6cqw));
+	}
+
+	:global(.info-card--experience) .card-row--back .card-back-main {
+		flex: 0 1 auto;
+	}
+
+	:global(.info-card--experience) .card-row--back .experience-skills {
+		margin-top: var(--back-gap-sm, 1.1cqw);
 	}
 
 	:global(.info-card--experience.info-card--modal) .card-row--back .experience-header {
-		margin-bottom: var(--back-gap-sm, 1.13cqw);
+		margin-bottom: var(--back-gap, 2.2cqw);
 	}
 
 	.card-main {
@@ -821,16 +911,21 @@
 		aspect-ratio: auto;
 		margin: 0;
 		border-radius: 0;
-		border-color: rgba(255, 255, 255, 0.28);
-		background: rgba(11, 18, 32, 0.42);
+		border-color: transparent;
+		background: transparent;
 		color: #fff;
 		text-shadow: 0 1px 2px rgba(11, 18, 32, 0.55);
 		box-shadow: none;
 	}
 
+	:global(.info-card:not(.info-card--modal):not(.info-card--face-open)) .card-back-link-box--overlay {
+		visibility: hidden;
+	}
+
 	.card-back-link-box.card-back-link-box--overlay .card-back-link-label,
 	.card-back-link-box.card-back-link-box--overlay .card-back-link-icon {
 		color: #fff;
+		opacity: 0;
 	}
 
 	.card-back-link-box.card-back-link-box--overlay .card-back-link-icon {
@@ -843,6 +938,7 @@
 		border-color: rgba(255, 255, 255, 0.4);
 	}
 
+	.card-back-link-box.card-back-link-box--overlay:hover .card-back-link-label,
 	.card-back-link-box.card-back-link-box--overlay:hover .card-back-link-icon {
 		opacity: 1;
 	}
@@ -978,12 +1074,68 @@
 		font-size: 13px;
 	}
 
-	:global(.info-card.info-card--blue) .card-content {
-		padding: 14px 14px;
+	:global(.info-card--education) .card-row:not(.card-row--back) .card-content,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .card-content {
+		justify-content: flex-end;
+		text-align: center;
+		padding: 18px 12px 14px;
+		background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.2) 58%, rgba(255, 255, 255, 0.72) 100%);
+	}
+
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-header,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-header {
+		flex-direction: column;
+		align-items: center;
+		margin: 0;
+		gap: 2px;
+		text-align: center;
+	}
+
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-meta,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-meta {
+		justify-items: center;
+		text-align: center;
+	}
+
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-company,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-company,
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-sub,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-sub,
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-dates,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-dates {
+		text-align: center;
+		white-space: normal;
+	}
+
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-sub,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-sub {
+		letter-spacing: 0.01em;
+		font-size: 12px;
+		line-height: 1.3;
+	}
+
+	:global(.info-card--education) .card-row:not(.card-row--back) .experience-location,
+	:global(.info-card--blue) .card-row:not(.card-row--back) .experience-location {
+		display: block;
+		margin-top: 1px;
+		letter-spacing: 0.02em;
+		font-weight: 500;
 	}
 
 	:global(.info-card.info-card--blue.info-card--modal) .card-row--back .card-content {
 		padding: var(--back-pad, 1.38cqw);
+	}
+
+	:global(.info-card--education) .card-row--back .education-logo {
+		display: none;
+	}
+
+	:global(.info-card--education) .card-row--back .card-content:not(:has(.edu-photo-row)) {
+		justify-content: center;
+	}
+
+	:global(.info-card--education) .card-row--back .card-content:not(:has(.edu-photo-row)) .card-back-main {
+		flex: 0 1 auto;
 	}
 
 	:global(.info-card.info-card--blue) .experience-header {
@@ -1034,11 +1186,14 @@
 
 	:global(.info-card.info-card--experience) .experience-sub,
 	:global(.info-card.info-card--experience) .experience-location {
-		color: #e8f2ff;
 		font-weight: 600;
 		white-space: nowrap;
 		overflow: visible;
 		text-overflow: unset;
+	}
+
+	:global(.info-card.info-card--experience) .experience-sub {
+		color: #e8f2ff;
 		text-shadow:
 			0 1px 2px rgba(11, 18, 32, 0.85),
 			0 0 12px rgba(170, 210, 255, 0.4);
@@ -1054,9 +1209,29 @@
 		overflow: visible;
 	}
 
-	:global(.info-card.info-card--experience.info-card--modal) .card-row--back .experience-header {
-		column-gap: var(--back-gap, 1.8cqw);
-		row-gap: var(--back-gap-xs, 0.45cqw);
+	:global(.info-card.info-card--experience) .card-row--back .experience-header {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--back-gap-xs, 0.55cqw);
+		column-gap: 0;
+		row-gap: var(--back-gap-xs, 0.55cqw);
+	}
+
+	:global(.info-card.info-card--experience) .card-row--back .experience-meta {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--back-gap-xs, 0.55cqw);
+	}
+
+	:global(.info-card.info-card--experience) .card-row--back .experience-side {
+		align-items: flex-start;
+	}
+
+	:global(.info-card.info-card--experience) .card-row--back .experience-sub,
+	:global(.info-card.info-card--experience) .card-row--back .experience-dates {
+		white-space: normal;
 	}
 
 	:global(.info-card.info-card--experience) .experience-meta {
@@ -1077,6 +1252,58 @@
 	:global(.info-card.info-card--experience) .experience-side {
 		grid-column: 2;
 		grid-row: 1;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .card-content {
+		flex: 0 0 auto;
+		padding: 8px 12px 12px;
+		text-align: center;
+		background: color-mix(in srgb, var(--hp-surface, #e4e8f2) 92%, white);
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-header {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: auto;
+		margin: 0;
+		gap: 2px;
+		text-align: center;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-meta {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2px;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-company,
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-sub,
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-dates {
+		white-space: normal;
+		text-align: center;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-company {
+		font-size: 14px;
+		line-height: 1.15;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-sub,
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-dates {
+		font-size: 11px;
+		line-height: 1.35;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-location {
+		display: block;
+		margin-top: 1px;
+	}
+
+	:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-side {
+		align-items: center;
 	}
 
 	:global(.info-card.info-card--award .info-card-face--front .info-card-surface) {
@@ -1100,9 +1327,60 @@
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-header {
-		margin-bottom: 0;
-		height: 100%;
+		display: flex;
+		flex-direction: column;
 		align-items: center;
+		justify-content: flex-end;
+		text-align: center;
+		height: 100%;
+		margin: 0;
+		gap: 6px;
+		padding-bottom: 6px;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-side {
+		order: -1;
+		flex: 1 1 auto;
+		align-items: center;
+		justify-content: center;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
+		width: 128px;
+		height: 128px;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-meta {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 3px;
+		width: 100%;
+		padding: 10px 12px 2px;
+		background: color-mix(in srgb, var(--hp-surface, #d7e6e2) 90%, white);
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-side {
+		order: -1;
+		align-items: center;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-company,
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .award-dates {
+		width: 100%;
+		text-align: center;
+		white-space: normal;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-company {
+		font-size: 15px;
+		line-height: 1.25;
+		overflow-wrap: normal;
+	}
+
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
+		width: 128px;
+		height: 128px;
 	}
 
 	:global(.info-card.info-card--award.info-card--modal) .card-row--back .experience-header {
@@ -1221,13 +1499,47 @@
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
-		width: 40px;
-		height: 40px;
+		width: 128px;
+		height: 128px;
+		padding: 0;
+		border: 0;
+		border-radius: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .award-back {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		gap: 2.2cqw;
+		height: 100%;
+		padding: 5cqw 3.4cqw;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .award-back-side {
+		order: -1;
+		flex-direction: column-reverse;
+		align-items: center;
+		gap: 1.4cqw;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .award-back-main {
+		align-items: center;
+		width: 100%;
+		overflow: visible;
+	}
+
+	:global(.info-card.info-card--award.info-card--modal) .award-back .experience-company,
+	:global(.info-card.info-card--award.info-card--modal) .award-details {
+		text-align: center;
 	}
 
 	:global(.info-card.info-card--award.info-card--modal) .card-row--back .education-logo {
-		width: var(--back-logo, 4.5cqw);
-		height: var(--back-logo, 4.5cqw);
+		width: 34cqw;
+		height: 34cqw;
 	}
 
 	.award-dates {
@@ -1311,6 +1623,27 @@
 
 	.experience-back-paragraph strong {
 		font-weight: 700;
+		color: inherit;
+	}
+
+	.experience-back-lead {
+		margin: 0;
+		color: #000;
+		font-size: 12.5px;
+		line-height: 1.45;
+	}
+
+	.experience-back-bullets {
+		margin: 0;
+		padding-left: 1.15em;
+		color: #000;
+		font-size: 12.5px;
+		line-height: 1.45;
+		display: grid;
+		gap: 0.4em;
+	}
+
+	.experience-back-bullets li::marker {
 		color: inherit;
 	}
 
@@ -1488,8 +1821,25 @@
 		gap: var(--back-gap-lg, 2.25cqw);
 	}
 
-	.card-row--back .experience-back-paragraph {
+	.card-row--back .experience-back-paragraph,
+	.card-row--back .experience-back-lead,
+	.card-row--back .experience-back-bullets {
 		font-size: var(--back-fs-sm, 2.02cqw);
+	}
+
+	:global(.info-card--experience) .card-row--back .experience-back-lead,
+	:global(.info-card--experience) .card-row--back .experience-back-bullets {
+		line-height: 1.35;
+	}
+
+	:global(.info-card--experience) .card-row--back .experience-back-bullets {
+		gap: 0.28em;
+	}
+
+	:global(.info-card--experience) .card-back-main--with-copy {
+		justify-content: flex-start;
+		gap: var(--back-gap-sm, 1.13cqw);
+		overflow-y: auto;
 	}
 
 	.card-row--back .education-details {

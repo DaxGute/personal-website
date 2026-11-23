@@ -34,8 +34,26 @@ export type Education = {
 export const educations: Education[] = [
 	{
 		school: 'Stanford University',
-		location: 'Stanford CA',
-		degree: 'Data Science [BS]',
+		location: 'Stanford, CA',
+		degree: 'M.S. MS&E',
+		dates: 'Incoming',
+		details: [],
+		logoSrc: stanfordLogo,
+		logoAlt: 'Stanford logo',
+		backSections: [
+			{
+				heading: 'Academics',
+				items: [
+					'Incoming M.S. in MS&E at Stanford, following a B.S. in Data Science.',
+					'Senior coursework spans Data Science and Symbolic Systems.'
+				]
+			}
+		]
+	},
+	{
+		school: 'Stanford University',
+		location: 'Stanford, CA',
+		degree: 'B.S. Data Science',
 		dates: 'September 2023 - Present',
 		details: [
 			'Pursuing a Bachelor of Science in Data Science while complementing my studies with Computational Neuroscience and Symbolic Systems. My coursework focuses on machine learning, statistics, artificial intelligence, and computational methods for solving real-world problems.'
@@ -56,7 +74,7 @@ export const educations: Education[] = [
 			{
 				heading: 'Academics',
 				items: [
-					'B.S. in Data Science with a 3.85 GPA.',
+					'B.S. in Data Science with a 3.86 GPA.',
 					'Computational Neuroscience Concentration.',
 					'Symbolic Systems Minor.',
 					'Coursework in Machine Learning, Artificial Intelligence, Statistics, Optimization, Economics, and Neuroscience.'
@@ -93,9 +111,9 @@ export const educations: Education[] = [
 		]
 	},
 	{
-		school: 'The Bishops School',
-		location: 'San Diego CA',
-		degree: 'HS Diploma',
+		school: "The Bishop's School",
+		location: 'San Diego, CA',
+		degree: 'High School Diploma',
 		dates: 'August 2017 - June 2023',
 		details: [
 			'Graduated Cum Laude with a 4.82 GPA while pursuing advanced coursework in mathematics, computer science, economics, and Chinese. Beyond academics, I was deeply involved in leadership, service, and technology initiatives across the school community.'

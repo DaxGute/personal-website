@@ -13,11 +13,6 @@ import raqiPoster from '$lib/assets/project/raqi_poster.png';
 
 export type ProjectLink = { label: string; href: string };
 
-export type ProjectBackSection = {
-	heading: string;
-	items: string[];
-};
-
 export type ProjectBackParagraph = {
 	heading: string;
 	body: string;
@@ -34,7 +29,8 @@ export type Project = {
 	blurb: string;
 	description: string;
 	highlights?: string[];
-	backSections?: ProjectBackSection[];
+	backLead?: string;
+	backBullets?: string[];
 	backParagraphs?: ProjectBackParagraph[];
 	backImages?: ProjectBackImage[];
 	tech?: string[];
@@ -45,40 +41,16 @@ export const projects: Project[] = [
 	{
 		id: 'project-2',
 		name: 'RiseAQI',
-		blurb: 'Built a Real-Time Community Air Quality Platform Serving South San Francisco Residents',
+		blurb: 'Hyperlocal air quality for South San Francisco',
 		description:
-			'Designed and developed a bilingual web and mobile platform that integrates PurpleAir and Clarity sensor networks with spatial interpolation, wind forecasting, historical trends, and personalized alerts to deliver hyperlocal air quality information for South San Francisco in partnership with Rise South City.',
-		highlights: [
-		],
-		backSections: [
-			{
-				heading: 'Overview',
-				items: [
-					'Developed Rise AQI with Rise South City to deliver neighborhood-level air quality data for South San Francisco residents.',
-					'Combined real-time monitoring, predictive modeling, and education into one platform that makes environmental data actionable.'
-				]
-			},
-			{
-				heading: 'Technical Development',
-				items: [
-					'Built with React Native (Expo), Supabase, and automated cloud infrastructure.',
-					'Integrated PurpleAir, Clarity, and Open-Meteo into Edge Functions that ingest, validate, and store hourly observations.'
-				]
-			},
-			{
-				heading: 'Air Quality Modeling',
-				items: [
-					'Designed spatial interpolation between stations and hourly forecasting using pollutant and wind data.',
-					'Implemented validation, quality controls, and interactive heat maps for neighborhood-level pollution.'
-				]
-			},
-			{
-				heading: 'Community Impact',
-				items: [
-					'Created bilingual (EN/ES) resources on air quality, wildfire smoke, health impacts, and protective actions.',
-					'Built customizable alerts and partnered with Rise South City on environmental justice initiatives.'
-				]
-			}
+			'Designed, engineered, and deployed a bilingual iOS application delivering real-time air-quality monitoring and short-term forecasts for South San Francisco.',
+		highlights: [],
+		backLead:
+			'Designed, engineered, and deployed a bilingual iOS application delivering real-time air-quality monitoring and short-term forecasts for South San Francisco.',
+		backBullets: [
+			'Built a React Native frontend with Mapbox heatmaps, interactive sensor visualizations, and bilingual educational resources.',
+			'Developed a Supabase backend integrating PurpleAir, Clarity, EPA AQS, and NOAA data through automated ingestion and aggregation pipelines.',
+			'Implemented spatial interpolation and wind-informed AQI forecasting to generate neighborhood-level pollution estimates and short-term predictions.'
 		],
 		backImages: [
 			{ src: raqiMap, alt: 'RiseAQI map view with air quality estimate popup' },
@@ -100,40 +72,16 @@ export const projects: Project[] = [
 	{
 		id: 'project-1',
 		name: 'Kid By Kid',
-		blurb: 'Paired Hundreds of Tutors and Learners through 13,000+ Hours of 1-on-1 Tutoring',
+		blurb: 'Free tutoring led by students',
 		description:
-			'Through free online one-on-one tutoring, Kid By Kid Middle and High School student Mentors work with under-served Elementary and Middle School-aged immigrant, refugee, and ESL Learners to provide life-changing academic opportunity, and support.',
-		highlights: [
-		],
-		backSections: [
-			{
-				heading: 'Overview',
-				items: [
-					'Founded a student-led nonprofit providing free one-on-one online tutoring for immigrant, refugee, and ELL students.',
-					'Facilitated 13,000+ tutoring hours while pairing hundreds of mentors and learners.'
-				]
-			},
-			{
-				heading: 'Organization & Leadership',
-				items: [
-					'Served as Executive Director, overseeing growth, operations, and organizational policy.',
-					'Built tutor applications, matching systems, and onboarding materials.'
-				]
-			},
-			{
-				heading: 'Program Design',
-				items: [
-					'Designed personalized mentor matching by academic need, grade, subject, and availability.',
-					'Coordinated scheduling, communication, and progress tracking for tutors and families.'
-				]
-			},
-			{
-				heading: 'Community Impact',
-				items: [
-					'Partnered with schools and community orgs to reach students needing academic support.',
-					'Expanded affordable tutoring access while developing volunteer leadership skills.'
-				]
-			}
+			'Founded and led Kid By Kid, a 501(c)(3) nonprofit empowering young people to develop and lead community service initiatives.',
+		highlights: [],
+		backLead:
+			'Founded and led Kid By Kid, a 501(c)(3) nonprofit empowering young people to develop and lead community service initiatives.',
+		backBullets: [
+			'Expanded the organization to 50+ schools, engaging students in youth-led service projects and community partnerships.',
+			'Organized and supported initiatives generating over 13,000 hours of community service across participating schools.',
+			"Directed organizational strategy, partnerships, and volunteer recruitment, while developing the organization's website and digital outreach infrastructure."
 		],
 		backImages: [
 			{ src: kbkTutoring, alt: 'Tutoring session with Kid By Kid logo on screen' },
@@ -149,14 +97,15 @@ export const projects: Project[] = [
 	{
 		id: 'project-3',
 		name: 'ConfCap',
-		blurb: 'Designed and Built a Conference Bounty App from Ground Up',
+		blurb: 'Capture research from scientific conferences',
 		description:
-			'ConfCap is a media capturing software that distributes real bounties to conference attendees who submit papers and presentations.',
-		backParagraphs: [
-			{
-				heading: '⚠️ WIP ⚠️',
-				body: ''
-			}
+			'Independently designed and developed ConfCap, a mobile platform for capturing and sharing emerging scientific research through a $10,000 development contract.',
+		backLead:
+			'Independently designed and developed ConfCap, a mobile platform for capturing and sharing emerging scientific research through a $10,000 development contract.',
+		backBullets: [
+			'Built a React Native application enabling users to discover scientific conferences, capture research presentations, and share findings with interested researchers.',
+			'Developed location-based event discovery, multimedia submissions, and research organization features using Expo and Supabase.',
+			'Implemented a bounty-based contribution system connecting research requests with conference attendees, including submission verification and review workflows.'
 		]
 	},
 ];

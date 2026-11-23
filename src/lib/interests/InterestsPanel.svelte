@@ -1,15 +1,10 @@
 <script lang="ts">
 	import Polaroid from '$lib/interests/Polaroid.svelte';
 	import { interests } from '$lib/interests/interests';
-	import ContactFanout from '$lib/title/ContactFanout.svelte';
+	import ShutterHeading from '$lib/title/ShutterHeading.svelte';
 
-	export let kicker: string | undefined = undefined;
 	export let title: string;
-	export let body: string;
 	export let sourceCodeHref: string;
-	export let linkedinHref: string;
-	export let githubHref: string;
-	export let emailHref: string;
 
 	const layoutClass: Record<string, string> = {
 		ski: 'interest-ski',
@@ -24,11 +19,7 @@
 </script>
 
 <div class="interests-copy">
-	{#if kicker}
-		<p class="kicker">{kicker}</p>
-	{/if}
-	<h1 class="title">{title}</h1>
-	<p class="body">{body}</p>
+	<ShutterHeading {title} />
 </div>
 
 <div class="interests-content" aria-label="Interests">
@@ -57,7 +48,6 @@
 </div>
 
 <div class="page-end">
-	<ContactFanout {linkedinHref} {githubHref} {emailHref} />
 	<div class="repo-note">
 		<span>Like my website? The code can be found </span>
 		<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a>
@@ -66,36 +56,13 @@
 </div>
 
 <style>
-	.kicker {
-		margin: 0 0 10px;
-		color: var(--muted);
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		font-size: 12px;
-	}
-
-	.title {
-		margin: 0 0 10px;
-		font-size: clamp(32px, 4vw, 54px);
-		line-height: 1.05;
-		letter-spacing: -0.03em;
-	}
-
-	.body {
-		margin: 0 0 18px;
-		color: var(--muted);
-		font-size: 16px;
-		line-height: 1.6;
-	}
-
 	.interests-copy {
 		position: absolute;
 		top: clamp(110px, 14vh, 170px);
 		right: 0;
 		z-index: 3;
 		max-width: min(980px, 100%);
-		padding-right: 20px;
+		padding-right: calc(20px * 1.3);
 		text-align: right;
 	}
 
@@ -103,13 +70,13 @@
 		position: absolute;
 		inset: 0;
 		z-index: 1;
-		--float-card-w: 260px;
+		--float-card-w: calc(260px * 1.15);
 	}
 
 	.interest-ski {
 		position: absolute;
 		top: 5%;
-		right: 80%;
+		right: 76%;
 		width: var(--float-card-w);
 		transform: rotate(-3deg);
 		transform-origin: top left;
@@ -175,11 +142,6 @@
 		align-items: flex-end;
 		gap: 14px;
 		pointer-events: none;
-	}
-
-	/* Scale into the corner instead of out past the viewport edge. */
-	.page-end :global(.contact-menu) {
-		transform-origin: bottom right;
 	}
 
 	.repo-note {

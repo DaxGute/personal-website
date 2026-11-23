@@ -9,11 +9,27 @@ export const RIBBON_RENDER_HEIGHT_PX = 1200;
 /** Mobile / short viewports: absolute painted height (px). Desktop stays `RIBBON_RENDER_HEIGHT_PX`. */
 export const RIBBON_MOBILE_HEIGHT_PX = 90;
 
+/** Slots drawn in `static/background.svg`. Panel anchors stay on this grid. */
+export const RIBBON_SECTION_COUNT = 6;
+
+/** Trailing slots not shown (interests). The viewBox is cropped so that tail stays off-screen. */
+export const RIBBON_OMITTED_SECTION_COUNT = 1;
+
+export const RIBBON_VISIBLE_SECTION_COUNT = RIBBON_SECTION_COUNT - RIBBON_OMITTED_SECTION_COUNT;
+
+/** ViewBox width after dropping the omitted tail, at the same scale as the full path. */
+export const RIBBON_VISIBLE_VIEWBOX_W =
+	(RIBBON_VIEWBOX_W * RIBBON_VISIBLE_SECTION_COUNT) / RIBBON_SECTION_COUNT;
+
+/** Painted width of that cropped ribbon at the design scale (`RIBBON_RENDER_WIDTH_PX`). */
+export const RIBBON_VISIBLE_RENDER_WIDTH_PX =
+	(RIBBON_RENDER_WIDTH_PX * RIBBON_VISIBLE_SECTION_COUNT) / RIBBON_SECTION_COUNT;
+
 /** First panel anchor along the ribbon (px from scroll-track left). */
 export const PANEL_TRACK_ORIGIN_PX = 15;
 
 /** Horizontal start position for panel `sectionIndex` (0 = title) along the ribbon. */
-export function panelTrackLeft(sectionIndex: number, sectionCount = 6): number {
+export function panelTrackLeft(sectionIndex: number, sectionCount = RIBBON_SECTION_COUNT): number {
 	return PANEL_TRACK_ORIGIN_PX + (RIBBON_RENDER_WIDTH_PX / sectionCount) * sectionIndex;
 }
 

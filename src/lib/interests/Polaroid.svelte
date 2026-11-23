@@ -145,7 +145,8 @@
 <style>
 	.polaroid-root {
 		width: 100%;
-		height: 100%;
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
+		height: auto;
 	}
 
 	:global(.polaroid-card:hover) {
@@ -277,6 +278,8 @@
 
 	.photo {
 		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
 		width: 100%;
 		border-radius: 3px;
 		overflow: hidden;
@@ -285,7 +288,6 @@
 		box-shadow:
 			inset 0 0 0 1px rgba(255, 255, 255, 0.45),
 			inset 0 0 24px rgba(255, 255, 255, 0.08);
-		aspect-ratio: 1 / 1;
 	}
 
 	.photo img {

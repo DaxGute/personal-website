@@ -1,22 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { GREETING_SCROLL_UNLOCK_MS } from '$lib/ribbon';
+	import { nameShutterInsets } from '$lib/title/nameShutter';
 
-	export let kicker: string | undefined = undefined;
 	export let title: string;
-	export let body: string;
+	export let linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
+	export let githubHref = 'https://github.com/DaxGute';
 	export let resumeHref: string | undefined = '/daxton-gutekunst-resume.pdf';
 	export let resumeFilename = 'Daxton-Gutekunst-Resume.pdf';
-	export let scrollLocked = true;
-	export let onUnlock: (() => void) | undefined = undefined;
 
-	let timelineOn = false;
-	let dotsOn = false;
-	let dotsTimer: number | null = null;
-
-	function prefersReducedMotion() {
-		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	}
+	let titleEl: HTMLHeadingElement | null = null;
+	let nameRow: HTMLDivElement | null = null;
+	let cachedSpan = 640;
+	let cachedVw = -1;
 
 	function splitTitle(name: string): { first: string; last: string } {
 		const parts = (name ?? '')
@@ -27,87 +22,116 @@
 		return { first: parts[0] ?? '', last: parts.slice(1).join(' ') };
 	}
 
-	function splitSuffixFade(text: string, suffix: string): { prefix: string; fade: string } {
-		const t = (text ?? '').trim();
-		const s = (suffix ?? '').trim();
-		if (!t || !s) return { prefix: t, fade: '' };
-		if (t.toLowerCase().endsWith(s.toLowerCase())) {
-			return { prefix: t.slice(0, -s.length), fade: t.slice(-s.length) };
-		}
-		return { prefix: t, fade: '' };
-	}
-
-	function splitHeadFadeRest(text: string, headChars = 1): { head: string; fade: string } {
-		const t = (text ?? '').trim();
-		const n = Math.max(0, Math.min(t.length, Math.floor(headChars)));
-		return { head: t.slice(0, n), fade: t.slice(n) };
+	function charsOf(text: string): string[] {
+		return [...(text ?? '')];
 	}
 
 	$: parts = splitTitle(title);
-	$: firstParts = splitSuffixFade(parts.first, 'ton');
-	$: lastParts = splitHeadFadeRest(parts.last, 1);
+
+	/** Scroll-linked per-letter shutter. `introShiftPx` is the opening pan still remaining. */
+	export function syncShutter(scrollLeft: number, introShiftPx: number) {
+		if (!titleEl) return;
+		const vw = window.innerWidth;
+		const box = titleEl.getBoundingClientRect();
+		if (box.width > 40 && vw !== cachedVw) {
+			cachedVw = vw;
+			const naturalRight = scrollLeft + box.right - introShiftPx;
+			if (naturalRight > 80) cachedSpan = Math.max(420, naturalRight * 0.62);
+		}
+		const signed = scrollLeft - introShiftPx;
+		const { left, right } = nameShutterInsets(signed, cachedSpan);
+		const clipHost = nameRow ?? titleEl;
+		if (left < 0.004 && right < 0.004) {
+			clipHost.style.setProperty('--char-clip', 'none');
+			return;
+		}
+		clipHost.style.setProperty(
+			'--char-clip',
+			`inset(0 ${(right * 100).toFixed(2)}% 0 ${(left * 100).toFixed(2)}%)`
+		);
+	}
 
 	onMount(() => {
-		requestAnimationFrame(() => {
-			timelineOn = true;
-			if (prefersReducedMotion()) {
-				dotsOn = true;
-				scrollLocked = false;
-				onUnlock?.();
-				return;
-			}
-			dotsTimer = window.setTimeout(() => {
-				dotsOn = true;
-				scrollLocked = false;
-				onUnlock?.();
-			}, GREETING_SCROLL_UNLOCK_MS);
-		});
-
-		return () => {
-			if (dotsTimer != null) window.clearTimeout(dotsTimer);
-			dotsTimer = null;
-		};
+		const scroller = document.querySelector('.scroller');
+		const track = document.querySelector('.scroll-track');
+		const shift = parseFloat(getComputedStyle(track ?? document.body).getPropertyValue('--intro-shift')) || 0;
+		syncShutter(scroller?.scrollLeft ?? 0, shift);
 	});
 </script>
 
 <div class="greeting-layout">
-	<div class="greeting" class:greeting--animate={timelineOn}>
-		{#if kicker}
-			<p class="kicker greeting-kicker">{kicker}</p>
-		{/if}
-		<div class="title-row">
-			<h1 class="title title--greeting">
-				<span class="title-first"
-					><span class="first-static">{firstParts.prefix}</span
-					>{#if firstParts.fade}<span class="first-fade">{firstParts.fade}</span>{/if}</span
-				>{#if parts.last}<span class="title-last"
-					><span class="last-g">{lastParts.head}</span><span class="last-fade">{lastParts.fade}</span></span
+	<div class="greeting">
+		<div class="title-row" bind:this={nameRow}>
+			<h1 class="title title--greeting" bind:this={titleEl} aria-label={title}>
+				<span class="title-first" aria-hidden="true"
+					>{#each charsOf(parts.first) as ch, i (i)}<span class="char">{ch}</span>{/each}</span
+				>{#if parts.last}<span class="title-last" aria-hidden="true"
+					>{#each charsOf(parts.last) as ch, i (`l${i}`)}<span class="char">{ch}</span>{/each}</span
 				>{/if}
 			</h1>
-			{#if resumeHref}
-				<a class="resume-link" href={resumeHref} download={resumeFilename} aria-label="Download résumé">
-					<svg
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M12 15V3"></path>
-						<path d="m7 10 5 5 5-5"></path>
-						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-					</svg>
-					<span class="resume-tooltip" aria-hidden="true">Download résumé</span>
+			<div class="social-row">
+				<a
+					class="social-link"
+					href={linkedinHref}
+					target="_blank"
+					rel="noreferrer"
+					aria-label="LinkedIn"
+				>
+					<span class="icon-shutter">
+						<svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="currentColor"
+								d="M20.45 20.45h-3.55v-5.56c0-1.33-.03-3.04-1.86-3.04-1.86 0-2.15 1.45-2.15 2.95v5.65H9.34V9h3.4v1.56h.05c.47-.89 1.62-1.83 3.33-1.83 3.56 0 4.22 2.34 4.22 5.38v6.34ZM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12ZM3.56 20.45h3.56V9H3.56v11.45Z"
+							/>
+						</svg>
+					</span>
+					<span class="social-tooltip" aria-hidden="true">LinkedIn</span>
 				</a>
-			{/if}
+				<a
+					class="social-link"
+					href={githubHref}
+					target="_blank"
+					rel="noreferrer"
+					aria-label="GitHub"
+				>
+					<span class="icon-shutter">
+						<svg class="social-icon" viewBox="0 0 24 24" aria-hidden="true">
+							<path
+								fill="currentColor"
+								d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.58.1.8-.25.8-.56v-2.1c-3.26.7-3.95-1.38-3.95-1.38-.54-1.36-1.32-1.72-1.32-1.72-1.08-.74.08-.73.08-.73 1.2.08 1.83 1.23 1.83 1.23 1.06 1.82 2.78 1.3 3.46 1 .11-.78.42-1.3.76-1.6-2.6-.3-5.34-1.3-5.34-5.78 0-1.28.46-2.32 1.22-3.14-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.28 1.2a11.3 11.3 0 0 1 5.98 0c2.28-1.52 3.28-1.2 3.28-1.2.65 1.65.24 2.87.12 3.17.76.82 1.22 1.86 1.22 3.14 0 4.5-2.75 5.48-5.37 5.77.43.37.82 1.1.82 2.22v3.3c0 .31.22.67.8.56A11.5 11.5 0 0 0 12 .5Z"
+							/>
+						</svg>
+					</span>
+					<span class="social-tooltip" aria-hidden="true">GitHub</span>
+				</a>
+				{#if resumeHref}
+					<a
+						class="social-link"
+						href={resumeHref}
+						download={resumeFilename}
+						aria-label="Download résumé"
+					>
+						<span class="icon-shutter">
+							<svg
+								class="social-icon"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								aria-hidden="true"
+							>
+								<path d="M12 15V3"></path>
+								<path d="m7 10 5 5 5-5"></path>
+								<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+							</svg>
+						</span>
+						<span class="social-tooltip" aria-hidden="true">Download résumé</span>
+					</a>
+				{/if}
+			</div>
 		</div>
-		<p class="body greeting-body">
-			{body}<span class="jump-dots" class:jump-dots--on={dotsOn} aria-hidden="true"
-				><span>.</span><span>.</span><span>.</span></span
-			>
-		</p>
 	</div>
 </div>
 
@@ -129,7 +153,7 @@
 	}
 
 	.greeting {
-		width: min(860px, 100%);
+		width: min(calc(860px * 1.3), 100%);
 		padding: 6px;
 		flex: 1 1 auto;
 		min-width: 0;
@@ -137,92 +161,61 @@
 			0 0 18px rgba(255, 255, 255, 0.9),
 			0 0 36px rgba(255, 255, 255, 0.6),
 			0 0 64px rgba(255, 255, 255, 0.35);
-		--greeting-sub-glow:
-			0 0 28px rgba(255, 255, 255, 1),
-			0 0 56px rgba(255, 255, 255, 1),
-			0 0 100px rgba(255, 255, 255, 0.98),
-			0 0 160px rgba(255, 255, 255, 0.6);
-	}
-
-	.kicker {
-		margin: 0 0 10px;
-		color: var(--muted);
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		font-size: 12px;
-	}
-
-	.greeting .kicker {
-		margin-top: 20px;
 	}
 
 	.title {
 		margin: 0 0 10px;
-		font-size: clamp(32px, 4vw, 54px);
+		font-size: var(--heading-size);
 		line-height: 1.05;
-		letter-spacing: -0.03em;
-	}
-
-	.body {
-		margin: 0 0 18px;
-		color: var(--muted);
-		font-size: 16px;
-		line-height: 1.6;
 	}
 
 	.title--greeting {
 		white-space: nowrap;
 	}
 
-	/* Wrapper owns the heading's bottom margin so flex centering aligns to the text line. */
+	/* Owns the shared shutter so the name and the icons below it open together. */
 	.title-row {
 		display: flex;
+		flex-direction: column;
 		align-items: center;
-		margin: 0 0 10px;
+		width: max-content;
+		max-width: 100%;
+		/* Holds the name where it sat under the old kicker, clear of the ribbon. */
+		margin: 44px 0 0;
+		/* First paint matches the opening pose: far left of each glyph is already cut. */
+		--shutter-left: 34%;
+		--shutter-right: 0%;
 	}
 
 	.title-row .title {
 		margin: 0;
 	}
 
-	.resume-link {
+	.social-row {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		margin-top: 16px;
+	}
+
+	.social-link {
 		position: relative;
-		flex: 0 0 auto;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		margin-left: 0.3em;
-		padding: 0.08em;
-		border-radius: 8px;
-		font-size: clamp(32px, 4vw, 54px);
-		color: rgba(11, 18, 32, 0.12);
-		text-decoration: none;
-		opacity: 0;
-		transition: color 320ms ease;
-	}
-
-	.resume-link svg {
-		width: 0.4em;
-		height: 0.4em;
-		display: block;
-	}
-
-	.greeting--animate .resume-link {
-		animation: resumeFadeIn 900ms ease-out 1600ms forwards;
-	}
-
-	.resume-link:hover,
-	.resume-link:focus-visible {
+		padding: 4px;
 		color: var(--fg);
+		text-decoration: none;
+		border-radius: 6px;
 	}
 
-	.resume-link:focus-visible {
-		outline: 3px solid rgba(124, 58, 237, 0.25);
-		outline-offset: 2px;
+	.social-link:hover .icon-shutter,
+	.social-link:focus-visible .icon-shutter {
+		transform: scale(1.12);
 	}
 
-	.resume-tooltip {
+	.social-tooltip {
 		position: absolute;
 		top: calc(100% + 6px);
 		left: 50%;
@@ -245,32 +238,45 @@
 			transform 200ms ease;
 	}
 
-	.resume-link:hover .resume-tooltip,
-	.resume-link:focus-visible .resume-tooltip {
+	.social-link:hover .social-tooltip,
+	.social-link:focus-visible .social-tooltip {
 		opacity: 1;
 		transform: translate(-50%, 0);
 		transition-delay: 150ms;
 	}
 
-	.title--greeting .first-static,
-	.title--greeting .first-fade,
-	.title--greeting .last-g,
-	.title--greeting .last-fade {
+	.social-link:focus-visible {
+		outline: 3px solid rgba(124, 58, 237, 0.25);
+		outline-offset: 2px;
+	}
+
+	/* Pad sits in the opening slit so the mark is whole while the letters are still cut. */
+	.icon-shutter {
+		display: inline-flex;
+		padding-left: 13px;
+		margin-left: -13px;
+		clip-path: var(--char-clip, inset(0 var(--shutter-right) 0 var(--shutter-left)));
+		transition: transform 220ms ease;
+	}
+
+	.social-icon {
+		width: 22px;
+		height: 22px;
+		display: block;
+		filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.9))
+			drop-shadow(0 0 22px rgba(255, 255, 255, 0.5));
+	}
+
+	.title--greeting .char {
+		display: block;
+		flex: 0 0 auto;
+		letter-spacing: -0.03em;
 		text-shadow: var(--title-outer-glow);
+		clip-path: var(--char-clip, inset(0 var(--shutter-right) 0 var(--shutter-left)));
 	}
 
 	.title-first {
-		display: inline-block;
-	}
-
-	.first-static {
-		display: inline-block;
-	}
-
-	.first-fade {
-		display: inline-block;
-		opacity: 0;
-		will-change: opacity;
+		display: inline-flex;
 	}
 
 	.title-last {
@@ -278,182 +284,14 @@
 		margin-left: 0.22em;
 	}
 
-	.last-g {
-		display: inline-block;
-		opacity: 0;
-		transform: translateX(-14px);
-		will-change: transform, opacity;
-	}
-
-	.last-fade {
-		display: inline-block;
-		opacity: 0;
-		transform: translateX(-14px);
-		will-change: transform, opacity;
-	}
-
-	.greeting-kicker,
-	.greeting-body {
-		opacity: 0;
-		transform: translateY(10px);
-		will-change: transform, opacity;
-		text-shadow: var(--greeting-sub-glow);
-	}
-
-	.greeting-kicker {
-		transform: translateY(-10px);
-	}
-
-	.greeting--animate .first-fade {
-		animation: greetTonIn 1200ms ease-out 0ms forwards;
-	}
-
-	.greeting--animate .last-g {
-		animation: greetGIn 650ms cubic-bezier(0.16, 1, 0.3, 1) 0ms forwards;
-	}
-
-	.greeting--animate .last-fade {
-		animation:
-			greetTonIn 1200ms ease-out 0ms forwards,
-			greetSlideXIn 650ms cubic-bezier(0.16, 1, 0.3, 1) 0ms forwards;
-	}
-
-	.greeting--animate .greeting-kicker {
-		animation: greetTopTextIn 420ms cubic-bezier(0.16, 1, 0.3, 1) 560ms forwards;
-	}
-
-	.greeting--animate .greeting-body {
-		animation: greetContinueIn 420ms cubic-bezier(0.16, 1, 0.3, 1) 1080ms forwards;
-	}
-
-	.jump-dots {
-		display: inline-flex;
-		gap: 3px;
-		margin-left: 4px;
-	}
-
-	.jump-dots > span {
-		display: inline-block;
-		transform: translateY(0);
-		animation: none;
-		opacity: 0.65;
-	}
-
-	.jump-dots.jump-dots--on > span {
-		animation: dotJump 1s infinite ease-in-out;
-	}
-
-	.jump-dots.jump-dots--on > span:nth-child(2) {
-		animation-delay: 0.12s;
-	}
-	.jump-dots.jump-dots--on > span:nth-child(3) {
-		animation-delay: 0.24s;
-	}
-
-	@keyframes greetTonIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	@keyframes greetGIn {
-		from {
-			opacity: 0;
-			transform: translateX(-14px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0);
-		}
-	}
-
-	@keyframes greetSlideXIn {
-		from {
-			transform: translateX(-14px);
-		}
-		to {
-			transform: translateX(0);
-		}
-	}
-
-	@keyframes greetTopTextIn {
-		from {
-			opacity: 0;
-			transform: translateY(-10px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	@keyframes greetContinueIn {
-		from {
-			opacity: 0;
-			transform: translateY(10px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	@keyframes resumeFadeIn {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
-	}
-
-	@keyframes dotJump {
-		0%,
-		80%,
-		100% {
-			transform: translateY(0);
-			opacity: 0.65;
-		}
-		40% {
-			transform: translateY(-6px);
-			opacity: 1;
-		}
-	}
-
 	@media (prefers-reduced-motion: reduce) {
-		.title-first,
-		.title-last,
-		.greeting-kicker,
-		.greeting-body {
-			animation: none !important;
-			opacity: 1 !important;
-			transform: none !important;
+		.title-row {
+			--shutter-left: 0%;
+			--shutter-right: 0%;
 		}
 
-		.first-fade {
-			opacity: 1 !important;
-		}
-
-		.last-g,
-		.last-fade {
-			opacity: 1 !important;
-			transform: none !important;
-		}
-
-		.jump-dots > span {
-			animation: none !important;
-		}
-
-		.resume-link {
-			animation: none !important;
-			opacity: 1 !important;
-		}
-
-		.resume-link,
-		.resume-tooltip {
+		.icon-shutter,
+		.social-tooltip {
 			transition: none;
 		}
 	}

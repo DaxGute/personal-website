@@ -2,28 +2,23 @@
 	import InfoCard from '$lib/InfoCard.svelte';
 	import { abbreviateMonths } from '$lib/format';
 	import { educations } from '$lib/education/education';
+	import ShutterHeading from '$lib/title/ShutterHeading.svelte';
 
-	export let kicker: string | undefined = undefined;
 	export let title: string;
-	export let body: string;
 </script>
 
-{#if kicker}
-	<p class="kicker">{kicker}</p>
-{/if}
-<h1 class="title">{title}</h1>
-<p class="body">{body}</p>
+<ShutterHeading {title} />
 
 <div class="education-carousel" aria-label="Education carousel">
-	{#each educations.slice(0, 2) as edu (edu.school)}
-		<article class="education-card" class:is-stanford={edu.school === 'Stanford University'}>
+	{#each educations as edu, i (`${edu.school}|${edu.degree}`)}
+		<article class="education-card" class:is-stanford={edu.school === 'Stanford University'} data-slot={i}>
 			{#if edu.backSections?.length || edu.backImages?.length}
 				<InfoCard
 					variant="education"
 					heading={edu.school}
-					subheading={`${edu.degree} · ${edu.location}`}
-					dates={abbreviateMonths(edu.dates)}
-					items={edu.details}
+					subheading={edu.degree}
+					location={edu.location}
+					dates={edu.dates ? abbreviateMonths(edu.dates) : null}
 					logoSrc={edu.logoSrc}
 					logoAlt={edu.logoAlt}
 					customBackBody
@@ -31,27 +26,22 @@
 					<div
 						slot="backBody"
 						class="edu-back"
-						class:edu-back--copy={!!edu.backSections?.length}
 						class:edu-back--photos={!!edu.backImages?.length}
-						class:edu-back--hybrid={!!edu.backSections?.length && !!edu.backImages?.length}
 						aria-label="{edu.school} details"
 					>
+						{#if edu.backImages?.length}
+							<div class="edu-photo-row">
+								{#each edu.backImages as image}
+									<figure class="edu-shot">
+										<img src={image.src} alt={image.alt} loading="lazy" decoding="async" />
+									</figure>
+								{/each}
+							</div>
+						{/if}
 						{#if edu.backSections?.length}
 							<div class="edu-copy">
-								{#if edu.backImages?.length}
-									<!--
-										Zero-width spacer pushes the mid-right exclusion down WITHOUT
-										stealing horizontal space (margin-top on a float would).
-									-->
-									<div class="edu-shim edu-shim--primary-spacer" aria-hidden="true"></div>
-									<div class="edu-shim edu-shim--primary" aria-hidden="true"></div>
-									<div class="edu-shim edu-shim--secondary" aria-hidden="true"></div>
-								{/if}
 								{#each edu.backSections as section}
-									<div
-										class="edu-section-heading-row"
-										class:edu-section-heading-row--spaced={section.heading === 'Highlights'}
-									>
+									<div class="edu-section-heading-row">
 										<h2 class="edu-section-heading">{section.heading}</h2>
 										{#if section.link}
 											<a
@@ -80,215 +70,188 @@
 								{/each}
 							</div>
 						{/if}
-
-						{#if edu.backImages?.length}
-							<div class="edu-photos" aria-label="{edu.school} photos">
-								<figure class="edu-photo edu-photo--primary">
-									<img
-										src={edu.backImages[0].src}
-										alt={edu.backImages[0].alt}
-										loading="lazy"
-										decoding="async"
-									/>
-								</figure>
-								<figure class="edu-photo edu-photo--secondary">
-									<img
-										src={edu.backImages[1].src}
-										alt={edu.backImages[1].alt}
-										loading="lazy"
-										decoding="async"
-									/>
-								</figure>
-							</div>
-						{/if}
 					</div>
 				</InfoCard>
 			{:else}
 				<InfoCard
 					variant="education"
 					heading={edu.school}
-					subheading={`${edu.degree} · ${edu.location}`}
-					dates={abbreviateMonths(edu.dates)}
-					items={edu.details}
+					subheading={edu.degree}
+					location={edu.location}
+					dates={edu.dates ? abbreviateMonths(edu.dates) : null}
 					logoSrc={edu.logoSrc}
 					logoAlt={edu.logoAlt}
-				/>
+					customBackBody
+				>
+					<div slot="backBody" class="edu-back edu-back--empty" aria-label="{edu.school} details"></div>
+				</InfoCard>
 			{/if}
 		</article>
 	{/each}
 </div>
 
 <style>
-	.kicker {
-		margin: 0 0 10px;
-		color: var(--muted);
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		font-size: 12px;
-	}
-
-	.title {
-		margin: 0 0 10px;
-		font-size: clamp(32px, 4vw, 54px);
-		line-height: 1.05;
-		letter-spacing: -0.03em;
-	}
-
-	.body {
-		margin: 0 0 18px;
-		color: var(--muted);
-		font-size: 16px;
-		line-height: 1.6;
-	}
-
 	.education-carousel {
 		position: relative;
 		isolation: isolate;
-		--edu-card-width: 371px;
-		--edu-card-height: 371px;
-		--edu-base-x: 140px;
-		--edu-split: 160px;
+		--edu-card-width: var(--playing-card-w, 220px);
+		--edu-card-height: var(--playing-card-h, 308px);
+		--edu-base-x: calc(var(--edu-card-width) * 0.22);
+		--edu-spread: calc(var(--edu-card-width) * 0.92);
 		--edu-stack-sep: 8px;
 		--edu-stack-x: 14px;
-		width: min(980px, 100%);
+		width: min(calc(980px * 1.15), 100%);
 		height: var(--edu-card-height);
 		margin: 18px auto 0;
-		top: -71px;
+		top: 12px;
 		left: 0;
 	}
 
 	.education-card {
+		--fan-rot: 0deg;
+		--fan-x: 0px;
+		--fan-y: 0px;
+		--stack-x: 0px;
+		--stack-y: 0px;
 		position: absolute;
 		top: 0;
 		left: 50%;
 		width: var(--edu-card-width);
 		height: var(--edu-card-height);
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
 		margin: 0;
 		transform-origin: bottom left;
-		transform: translate3d(-50%, 0, 0);
-		will-change: transform;
-	}
-
-	.education-card.is-stanford {
-		z-index: 2;
-		transform: rotate(calc(-9deg * var(--edu-t, 0)))
-			translate3d(-50%, 0, 0)
-			translateX(calc(var(--edu-base-x) - var(--edu-split) * var(--edu-t, 0)))
-			translateY(calc(-1 * var(--edu-stack-sep) * var(--edu-t, 0)))
-			translateZ(0);
-	}
-
-	.education-card:not(.is-stanford) {
-		z-index: 1;
-		transform: rotate(calc(11deg * var(--edu-t, 0)))
+		transform: rotate(calc(var(--fan-rot) * var(--edu-t, 0)))
 			translate3d(-50%, 0, 0)
 			translateX(
 				calc(
-					var(--edu-base-x) + var(--edu-stack-x) * (1 - var(--edu-t, 0)) +
-						var(--edu-split) * var(--edu-t, 0)
+					var(--edu-base-x) + var(--stack-x) * (1 - var(--edu-t, 0)) + var(--fan-x) * var(--edu-t, 0)
 				)
 			)
-			translateY(calc(-10px + var(--edu-stack-sep) * var(--edu-t, 0)))
+			translateY(calc(var(--stack-y) * (1 - var(--edu-t, 0)) + var(--fan-y) * var(--edu-t, 0)))
 			translateZ(0);
+		will-change: transform;
+	}
+
+	/* Same fan as before: left card leans back, right card leans forward, tops stay level. */
+	.education-card[data-slot='0'] {
+		z-index: 3;
+		--fan-rot: -9deg;
+		--fan-x: calc(-1 * var(--edu-spread));
+		--fan-y: -8px;
+	}
+
+	.education-card[data-slot='1'] {
+		z-index: 2;
+		--fan-rot: 1deg;
+		--fan-x: 0px;
+		--fan-y: -4px;
+		--stack-x: var(--edu-stack-x);
+		--stack-y: -10px;
+	}
+
+	.education-card[data-slot='2'] {
+		z-index: 1;
+		--fan-rot: 11deg;
+		--fan-x: var(--edu-spread);
+		--fan-y: -2px;
+		--stack-x: calc(var(--edu-stack-x) * 2);
+		--stack-y: -18px;
 	}
 
 	.edu-back {
-		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: var(--back-gap, 1.8cqw);
 		flex: 1 1 auto;
 		min-height: 0;
 		width: 100%;
 		height: 100%;
 		overflow: hidden;
-		--edu-photo-size: 33.12%;
 	}
 
-	.edu-back--copy:not(.edu-back--hybrid),
-	.edu-back--hybrid {
+	.edu-photo-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: var(--back-gap-sm, 1.13cqw);
+		flex: 0 0 30%;
+		min-height: 0;
+	}
+
+	.edu-shot {
+		margin: 0;
+		min-width: 0;
+		min-height: 0;
 		overflow: hidden;
+		border-radius: 4px;
+		background: rgba(140, 180, 220, 0.12);
+	}
+
+	.edu-shot img {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.education-card.is-stanford .edu-shot:first-child img {
+		object-position: center 40%;
+	}
+
+	.education-card.is-stanford .edu-shot:last-child img {
+		object-position: center 22%;
+	}
+
+	.education-card:not(.is-stanford) .edu-shot:first-child img {
+		object-position: center 18%;
+	}
+
+	.education-card:not(.is-stanford) .edu-shot:last-child img {
+		object-position: center 55%;
 	}
 
 	.edu-copy {
-		position: relative;
-		z-index: 0;
-		box-sizing: border-box;
-		width: 100%;
-		height: 100%;
-		/* Normal block flow — required for floats + line-box wrapping. */
-		display: block;
-		/*
-		 * Indent in cqw (same scale as --back-fs), not em. em on .edu-section-body
-		 * resolved against the page font, so the inset stayed ~fixed px while body
-		 * text shrank with the card — breaking layout on small viewports.
-		 */
-		--edu-indent: calc(2.5 * var(--back-fs, 2.15cqw));
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
 	}
 
 	.edu-section-heading-row {
 		display: flex;
 		align-items: baseline;
 		justify-content: flex-start;
-		flex-wrap: nowrap;
-		gap: 0 0.6em;
-		margin: var(--back-gap-lg, 2.25cqw) 0 var(--back-gap-xs, 0.45cqw);
+		flex-wrap: wrap;
+		gap: 0.35em 0.7em;
+		margin: 0 0 var(--back-gap-xs, 0.45cqw);
 	}
 
-	.edu-section-heading-row--spaced {
-		/*
-		 * Do NOT clear the left float here. The 2nd photo floats bottom-left and
-		 * reaches the card's bottom edge, so clearing it would push Highlights past
-		 * the (overflow: hidden) bottom and clip it. Instead let Highlights wrap into
-		 * the bottom-right, pushed right by the 2nd image.
-		 */
-		margin-top: calc(
-			var(--back-gap-lg, 2.25cqw) + 1.5 * 1.35 * var(--back-fs-md, 2.41cqw)
-		);
-	}
-
-	.edu-shim--secondary + .edu-section-heading-row {
-		margin-top: 0;
+	.edu-section-heading-row + .edu-section-body + .edu-section-heading-row,
+	.edu-section-body + .edu-section-heading-row {
+		margin-top: var(--back-gap, 1.8cqw);
 	}
 
 	.edu-section-heading {
 		display: inline;
 		margin: 0;
 		color: #000;
-		font-size: var(--back-fs-md, 2.41cqw);
+		font-size: var(--back-fs-md, 2.7cqw);
 		font-weight: 700;
 		line-height: 1.25;
-		white-space: nowrap;
 	}
 
-	/*
-	 * Indent under the section title. Use margin-left (not padding) so the shift
-	 * stays visible even when line boxes wrap around the photo floats.
-	 */
 	.edu-section-body {
 		box-sizing: border-box;
-		margin: 0 0 var(--back-gap-xs, 0.45cqw) var(--edu-indent);
-	}
-
-	/*
-	 * Highlights sits beside the bottom-left float. margin-left from the card edge
-	 * is swallowed by that float (~33% wide), so indent is invisible. Shrink into
-	 * the remaining column first, then pad inside it.
-	 */
-	.edu-section-heading-row--spaced + .edu-section-body {
-		display: flow-root;
-		margin-left: 0;
-		padding-left: var(--edu-indent);
+		margin: 0;
 	}
 
 	.edu-section-item,
 	.edu-activities {
 		display: block;
-		width: auto;
-		max-width: none;
 		margin: 0 0 var(--back-gap-xs, 0.45cqw);
-		padding-left: 0;
 		color: #000;
-		font-size: var(--back-fs, 2.15cqw);
-		line-height: 1.35;
+		font-size: var(--back-fs, 2.45cqw);
+		line-height: 1.4;
 		overflow-wrap: break-word;
 	}
 
@@ -300,121 +263,23 @@
 		display: inline;
 		margin: 0;
 		color: #000;
-		font-size: var(--back-fs, 2.15cqw);
+		font-size: var(--back-fs-sm, 2.2cqw);
 		font-weight: 700;
 		line-height: 1.25;
 		text-decoration: underline;
 		text-underline-offset: 2px;
-		white-space: nowrap;
 	}
 
 	.edu-section-link:hover {
 		text-decoration-thickness: 2px;
 	}
 
-	.edu-photos {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-		width: 100%;
-		height: 100%;
-		min-height: 0;
-		overflow: visible;
-		pointer-events: none;
-	}
-
-	.edu-photo {
-		position: absolute;
-		margin: 0;
-		width: var(--edu-photo-size);
-		height: var(--edu-photo-size);
-		overflow: hidden;
-		border-radius: 2px;
-		pointer-events: auto;
-		background: rgba(140, 180, 220, 0.12);
-		box-shadow:
-			0 2px 4px rgba(40, 70, 110, 0.16),
-			0 10px 22px rgba(40, 70, 110, 0.22);
-	}
-
-	.edu-photo img {
-		display: block;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-
-	.edu-photo--primary {
-		top: 50%;
-		right: var(--back-gap-sm, 1.13cqw);
-		transform: translateY(-50%);
-	}
-
-	.edu-photo--secondary {
-		bottom: var(--back-gap-sm, 1.13cqw);
-		left: var(--back-gap-sm, 1.13cqw);
-	}
-
-	/*
-	 * Invisible floats reserve the same boxes as the absolute photos.
-	 * Primary uses a 0-width spacer so top lines stay full-width; a float
-	 * with margin-top would still steal horizontal space for its margin box.
-	 */
-	.edu-shim {
-		box-sizing: border-box;
-		pointer-events: none;
-		opacity: 0;
-	}
-
-	.edu-shim--primary-spacer {
-		float: right;
-		width: 0;
-		height: 33.44%;
-		margin: 0;
-	}
-
-	.edu-shim--primary {
-		float: right;
-		clear: right;
-		width: var(--edu-photo-size);
-		aspect-ratio: 1 / 1;
-		margin: 0 var(--back-gap-sm, 1.13cqw) var(--back-gap, 1.8cqw) var(--back-gap, 1.8cqw);
-		shape-outside: border-box;
-		shape-margin: var(--back-gap-sm, 1.13cqw);
-	}
-
-	.edu-shim--secondary {
-		float: left;
-		clear: right;
-		width: var(--edu-photo-size);
-		aspect-ratio: 1 / 1;
-		margin: 0 var(--back-gap, 1.8cqw) var(--back-gap-sm, 1.13cqw) var(--back-gap-sm, 1.13cqw);
-		shape-outside: border-box;
-		shape-margin: var(--back-gap-sm, 1.13cqw);
-	}
-
-	.education-card.is-stanford .edu-photo--primary img {
-		object-position: center 40%;
-	}
-
-	.education-card.is-stanford .edu-photo--secondary img {
-		object-position: center 20%;
-	}
-
-	.education-card:not(.is-stanford) .edu-photo--primary img {
-		object-position: center 18%;
-	}
-
-	.education-card:not(.is-stanford) .edu-photo--secondary img {
-		object-position: center 55%;
-	}
-
 	/* Mobile: always splayed, shifted up and right. */
 	@media (max-width: 900px) {
 		.education-carousel {
 			--edu-t: 1;
-			top: -160px;
-			left: calc(160px + 5%);
+			top: 0;
+			left: 8%;
 		}
 	}
 

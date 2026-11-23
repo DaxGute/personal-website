@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import {
 		claimCardModal,
 		computeStageZoomTransform,
@@ -31,14 +31,10 @@
 
 	let anchorEl: HTMLElement | null = null;
 	let rootEl: HTMLElement | null = null;
-	let tiltEl: HTMLElement | null = null;
 	let flipEl: HTMLElement | null = null;
-	let surfaceEl: HTMLElement | null = null;
-	let backSurfaceEl: HTMLElement | null = null;
 
 	let expanded = false;
 	let animating = false;
-	let hoverLocked = false;
 	let dismissing = false;
 	let openingScrollLeft = 0;
 	let zoomTarget: StageZoomTransform | null = null;
@@ -47,51 +43,50 @@
 	let openPinStart: PinMotionState | null = null;
 	let openPinEnd: PinMotionState | null = null;
 	let pinPlaceholderSize: { w: number; h: number } | null = null;
-	let lastPointerX = 0;
-	let lastPointerY = 0;
-
-	function trackPointer(clientX: number, clientY: number) {
-		lastPointerX = clientX;
-		lastPointerY = clientY;
-	}
-
-	function pointerEventAtLastPointer(): PointerEvent {
-		return { clientX: lastPointerX, clientY: lastPointerY } as PointerEvent;
-	}
-
-	function isPointerOverCard() {
-		const surface = activeSurfaceEl();
-		if (!surface) return false;
-		const rect = surface.getBoundingClientRect();
-		return (
-			lastPointerX >= rect.left &&
-			lastPointerX <= rect.right &&
-			lastPointerY >= rect.top &&
-			lastPointerY <= rect.bottom
-		);
-	}
+	/** Layout center the pinned card is positioned at. Motion is a transform delta from here. */
+	let pinOrigin: { x: number; y: number } | null = null;
 
 	let faceOpen = false;
-
-	function activeSurfaceEl(): HTMLElement | null {
-		if (!expanded) return surfaceEl;
-		if (!enableFlip) return surfaceEl;
-		if (faceOpen) return backSurfaceEl ?? surfaceEl;
-		return surfaceEl;
-	}
-
-	function prefersReducedMotion() {
-		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-	}
-
-	const MAX_TILT_DEG = 9;
-	const TILT_PERSPECTIVE_PX = 900;
-
-	function clamp(n: number, min: number, max: number) {
-		return Math.max(min, Math.min(max, n));
-	}
 	const FLIP_OPEN_DEG = 180;
 	const FLIP_CLOSED_DEG = 0;
+	/** Degrees the flip axis leans off vertical. Picked again each open. */
+	let flipTilt = 0;
+
+	function pickFlipTilt() {
+		const magnitude = 12 + Math.random() * 10;
+		flipTilt = (Math.random() < 0.5 ? -1 : 1) * magnitude;
+	}
+
+	function deg(n: number) {
+		return `${n.toFixed(2)}deg`;
+	}
+
+	/** 180° spin about an axis leaned `flipTilt` degrees off vertical. Ends upright. */
+	function axisFlip(yaw: number) {
+		if (!flipTilt || prefersMobileCardFade()) return `rotateY(${deg(yaw)})`;
+		return `rotateZ(${deg(flipTilt)}) rotateY(${deg(yaw)}) rotateZ(${deg(-flipTilt)})`;
+	}
+
+	function syncBackFaceTilt(flipTarget: HTMLElement) {
+		const back = flipTarget.querySelector<HTMLElement>('.info-card-face--back');
+		if (!back) return;
+		if (!flipTilt || prefersMobileCardFade()) {
+			back.style.removeProperty('transform');
+			return;
+		}
+		back.style.transform = `rotateZ(${deg(flipTilt)}) rotateY(180deg) rotateZ(${deg(-flipTilt)})`;
+	}
+
+	function clearFlipTilt(flipTarget: HTMLElement | null) {
+		flipTilt = 0;
+		if (!flipTarget) return;
+		const back = flipTarget.querySelector<HTMLElement>('.info-card-face--back');
+		back?.style.removeProperty('transform');
+		if (prefersMobileCardFade()) return;
+		flipTarget.style.transition = 'none';
+		flipTarget.style.transform = 'rotateY(0deg)';
+		void flipTarget.offsetHeight;
+	}
 
 	type PinMotionState = {
 		cx: number;
@@ -180,8 +175,10 @@
 		unpinZoomCard();
 	}
 
-	function pinTransform(scaleX: number, scaleY: number, rotZ: number) {
-		return `translate(-50%, -50%) rotate(${rotZ.toFixed(3)}deg) scale(${scaleX}, ${scaleY})`;
+	function pinTransform(dx: number, dy: number, scaleX: number, scaleY: number, rotZ: number) {
+		// Pixel delta is applied after the centering translate so it stays in screen space
+		// while scale/rotate still happen around the card center. left/top stay fixed.
+		return `translate(${dx.toFixed(2)}px, ${dy.toFixed(2)}px) translate(-50%, -50%) rotate(${rotZ.toFixed(3)}deg) scale(${scaleX}, ${scaleY})`;
 	}
 
 	function parentSkipsPinPlaceholder(parent: HTMLElement) {
@@ -220,11 +217,19 @@
 
 	function applyPinState(state: PinMotionState) {
 		if (!ensurePinMounted(state.layoutW, state.layoutH)) return;
-		anchorEl!.style.left = `${state.cx}px`;
-		anchorEl!.style.top = `${state.cy}px`;
-		anchorEl!.style.width = `${state.layoutW}px`;
-		anchorEl!.style.height = `${state.layoutH}px`;
-		anchorEl!.style.transform = pinTransform(state.scaleX, state.scaleY, state.rotZ);
+		if (!pinOrigin) pinOrigin = { x: state.cx, y: state.cy };
+		const el = anchorEl!;
+		el.style.left = `${pinOrigin.x}px`;
+		el.style.top = `${pinOrigin.y}px`;
+		el.style.width = `${state.layoutW}px`;
+		el.style.height = `${state.layoutH}px`;
+		el.style.transform = pinTransform(
+			state.cx - pinOrigin.x,
+			state.cy - pinOrigin.y,
+			state.scaleX,
+			state.scaleY,
+			state.rotZ
+		);
 	}
 
 	function setPinTransition(enabled: boolean) {
@@ -234,8 +239,8 @@
 			anchorEl.style.transition = 'none';
 			return;
 		}
-		// Layout size stays fixed — only position + transform animate.
-		anchorEl.style.transition = [`left ${motion}`, `top ${motion}`, `transform ${motion}`].join(', ');
+		// left/top/width/height stay put — animating them lays out the card every frame.
+		anchorEl.style.transition = `transform ${motion}`;
 	}
 
 	function snapPinState(state: PinMotionState) {
@@ -252,26 +257,11 @@
 	async function waitPinMotion() {
 		if (!anchorEl) return;
 		const ms = modalMotionMs();
-		await Promise.all([
-			waitTransition(anchorEl, 'transform', ms),
-			waitTransition(anchorEl, 'left', ms),
-			waitTransition(anchorEl, 'top', ms)
-		]);
+		await waitTransition(anchorEl, 'transform', ms);
 	}
 
 	function isInteractiveTarget(target: EventTarget | null) {
 		return target instanceof Element && !!target.closest('a, button, input, textarea, select, label');
-	}
-
-	function tiltTransform(rotXDeg: number, rotYDeg: number) {
-		return `perspective(${TILT_PERSPECTIVE_PX}px) rotateX(${rotXDeg.toFixed(3)}deg) rotateY(${rotYDeg.toFixed(3)}deg)`;
-	}
-
-	function resetTiltInstant() {
-		if (!tiltEl) return;
-		tiltEl.style.transition = 'none';
-		tiltEl.style.transform = tiltTransform(0, 0);
-		void tiltEl.offsetHeight;
 	}
 
 	function setFaceOpenClass(open: boolean) {
@@ -279,25 +269,27 @@
 		rootEl?.classList.toggle('info-card--face-open', open);
 	}
 
-	function setFlipDeg(flipTarget: HTMLElement, deg: number) {
-		const open = deg === FLIP_OPEN_DEG;
+	function setFlipDeg(flipTarget: HTMLElement, degValue: number) {
+		const open = degValue === FLIP_OPEN_DEG;
 		setFaceOpenClass(open);
+		syncBackFaceTilt(flipTarget);
 		if (prefersMobileCardFade()) {
 			flipTarget.style.transform = 'none';
 			return;
 		}
-		flipTarget.style.transform = `rotateY(${deg}deg)`;
+		flipTarget.style.transform = axisFlip(degValue);
 	}
 
-	function resetFlipInstant(flipTarget: HTMLElement, deg: number) {
-		const open = deg === FLIP_OPEN_DEG;
+	function resetFlipInstant(flipTarget: HTMLElement, degValue: number) {
+		const open = degValue === FLIP_OPEN_DEG;
 		setFaceOpenClass(open);
 		flipTarget.style.transition = 'none';
 		rootEl?.classList.add('info-card--no-face-transition');
+		syncBackFaceTilt(flipTarget);
 		if (prefersMobileCardFade()) {
 			flipTarget.style.transform = 'none';
 		} else {
-			flipTarget.style.transform = `rotateY(${deg}deg)`;
+			flipTarget.style.transform = axisFlip(degValue);
 		}
 		void flipTarget.offsetHeight;
 	}
@@ -611,38 +603,6 @@
 		return focusTargetSize(width, height);
 	}
 
-	function setHoverTilt(rotXDeg: number, rotYDeg: number) {
-		if (!tiltEl) return;
-		tiltEl.style.transform = tiltTransform(rotXDeg, rotYDeg);
-	}
-
-	function tiltAnglesFromPointer(clientX: number, clientY: number) {
-		if (!rootEl) return { rotXDeg: 0, rotYDeg: 0 };
-		const r = rootEl.getBoundingClientRect();
-		if (r.width <= 0 || r.height <= 0) return { rotXDeg: 0, rotYDeg: 0 };
-		const dx = (clientX - r.left) / r.width - 0.5;
-		const dy = (clientY - r.top) / r.height - 0.5;
-		return {
-			rotXDeg: clamp(dy * 2 * MAX_TILT_DEG, -MAX_TILT_DEG, MAX_TILT_DEG),
-			rotYDeg: clamp(-dx * 2 * MAX_TILT_DEG, -MAX_TILT_DEG, MAX_TILT_DEG)
-		};
-	}
-
-	/** Ease tilt to a target so open/close don't pop between flat and cursor tilt. */
-	function easeTiltTo(rotXDeg: number, rotYDeg: number, ms = 160) {
-		if (!tiltEl) return Promise.resolve();
-		if (prefersReducedMotion() || modalMotionMs() === 0 || ms === 0) {
-			tiltEl.style.transition = 'none';
-			setHoverTilt(rotXDeg, rotYDeg);
-			return Promise.resolve();
-		}
-		tiltEl.style.transition = `transform ${ms}ms ease-out`;
-		setHoverTilt(rotXDeg, rotYDeg);
-		return waitTransition(tiltEl, 'transform', ms).then(() => {
-			if (tiltEl) tiltEl.style.transition = 'none';
-		});
-	}
-
 	async function waitFlipMotion(flipTarget: HTMLElement | null) {
 		if (!enableFlip || !flipTarget) return;
 		const ms = modalMotionMs();
@@ -651,82 +611,6 @@
 			return;
 		}
 		await waitTransition(flipTarget, 'transform', ms);
-	}
-
-	function clearSurfaceGlow(surface: HTMLElement | null | undefined) {
-		if (!surface) return;
-		surface.classList.add('info-card-surface--spotlight-off');
-		surface.style.setProperty('--spotlight', '0');
-		void surface.offsetHeight;
-		surface.classList.remove('info-card-surface--spotlight-off');
-	}
-
-	function clearAllSpotlights() {
-		for (const surface of [surfaceEl, backSurfaceEl]) {
-			clearSurfaceGlow(surface);
-		}
-	}
-
-	function setPointerGlow(e: PointerEvent) {
-		const surface = activeSurfaceEl();
-		if (!surface || animating) return;
-		// Mobile: no spotlight dots on the back face.
-		if (prefersMobileCardFade() && surface === backSurfaceEl) {
-			clearAllSpotlights();
-			return;
-		}
-
-		const surfaceRect = surface.getBoundingClientRect();
-		if (surfaceRect.width <= 0 || surfaceRect.height <= 0) return;
-
-		const u = (e.clientX - surfaceRect.left) / surfaceRect.width;
-		const v = (e.clientY - surfaceRect.top) / surfaceRect.height;
-
-		if (expanded && rootEl) {
-			for (const candidate of rootEl.querySelectorAll('.info-card-surface')) {
-				if (candidate !== surface && candidate instanceof HTMLElement) {
-					clearSurfaceGlow(candidate);
-				}
-			}
-		} else {
-			const inactive = surface === surfaceEl ? backSurfaceEl : surfaceEl;
-			clearSurfaceGlow(inactive);
-		}
-
-		surface.classList.remove('info-card-surface--spotlight-off');
-		surface.style.setProperty('--pointer-u', `${(u * 100).toFixed(3)}%`);
-		surface.style.setProperty('--pointer-v', `${(v * 100).toFixed(3)}%`);
-		surface.style.setProperty('--spotlight', '1');
-	}
-
-	function syncModalSpotlight(e: PointerEvent) {
-		if (!expanded || animating || hoverLocked) return;
-		if (isPointerOverCard()) setPointerGlow(e);
-		else clearAllSpotlights();
-	}
-
-	/** Modal-only: tilt always follows cursor position relative to the card. */
-	function applyCursorTilt(clientX: number, clientY: number) {
-		if (!expanded || !rootEl || !tiltEl || animating || hoverLocked) return;
-		if (prefersReducedMotion() || prefersMobileCardFade()) {
-			setHoverTilt(0, 0);
-			return;
-		}
-		const { rotXDeg, rotYDeg } = tiltAnglesFromPointer(clientX, clientY);
-		setHoverTilt(rotXDeg, rotYDeg);
-	}
-
-	/** Grid/non-modal: spotlight dots only while hovering the card. */
-	function onGridPointer(e: PointerEvent) {
-		if (expanded || animating || hoverLocked) return;
-		trackPointer(e.clientX, e.clientY);
-		setPointerGlow(e);
-	}
-
-	function onGridPointerLeave() {
-		if (expanded || animating) return;
-		clearAllSpotlights();
-		resetTiltInstant();
 	}
 
 	function unpinZoomCard() {
@@ -744,6 +628,7 @@
 		anchorEl.style.transformOrigin = '';
 		anchorEl.style.willChange = '';
 		anchorEl.style.visibility = '';
+		pinOrigin = null;
 		anchorHome.parent.insertBefore(anchorEl, anchorPlaceholder ?? anchorHome.next);
 		anchorPlaceholder?.remove();
 		anchorPlaceholder = null;
@@ -752,22 +637,13 @@
 		clearFrontGridLayout();
 	}
 
-	function clearHoverVisuals() {
-		clearAllSpotlights();
-		resetTiltInstant();
-	}
-
 	async function expandCard() {
-		if (!expandOnClick || !rootEl || !anchorEl || !tiltEl || expanded || animating) return;
+		if (!expandOnClick || !rootEl || !anchorEl || expanded || animating) return;
 		if (enableFlip && !flipEl) return;
 
 		await claimCardModal(collapseCard);
 
 		openingScrollLeft = readScrollLeft();
-		if (tiltEl) {
-			tiltEl.style.transition = 'none';
-			tiltEl.style.transform = tiltTransform(0, 0);
-		}
 		void rootEl.offsetHeight;
 
 		const startVisual = readCardRect(rootEl, anchorEl, { visual: true });
@@ -809,17 +685,17 @@
 		lockCardModal(openingScrollLeft);
 
 		expanded = true;
-		hoverLocked = true;
 		animating = true;
-		clearAllSpotlights();
 		onModalOpen?.();
 
 		// Front keeps grid layout coords; shell is modal-resolution. Hide until both are applied.
 		configureFrontGridLayout(gridLayoutW, gridLayoutH, openLayoutW, openLayoutH);
 		anchorEl.style.visibility = 'hidden';
 		snapPinState(openPinStart);
-		resetTiltInstant();
-		if (enableFlip && flipEl) resetFlipInstant(flipEl, FLIP_CLOSED_DEG);
+		if (enableFlip && flipEl) {
+			pickFlipTilt();
+			resetFlipInstant(flipEl, FLIP_CLOSED_DEG);
+		}
 		setFlipTransition(flipEl, false);
 		void anchorEl.getBoundingClientRect();
 		anchorEl.style.visibility = '';
@@ -863,17 +739,6 @@
 		// Flight end is already the settled geometry — no layout/scale handoff.
 		animating = false;
 		await tick();
-		const e = pointerEventAtLastPointer();
-		syncModalSpotlight(e);
-		// Ease into cursor tilt (keep hoverLocked so pointermove can't snap mid-ease).
-		// Mobile stays flat — no tilt.
-		if (!prefersReducedMotion() && !prefersMobileCardFade()) {
-			const { rotXDeg, rotYDeg } = tiltAnglesFromPointer(e.clientX, e.clientY);
-			await easeTiltTo(rotXDeg, rotYDeg);
-		} else {
-			resetTiltInstant();
-		}
-		hoverLocked = false;
 	}
 
 	async function collapseCard() {
@@ -881,10 +746,6 @@
 
 		animating = true;
 		dismissing = true;
-		hoverLocked = true;
-		clearAllSpotlights();
-		// Flatten tilt as the close flight begins so it doesn't pop off at the end.
-		void easeTiltTo(0, 0);
 
 		setFlipTransition(flipEl, modalMotionMs() > 0);
 
@@ -928,37 +789,21 @@
 		zoomTarget = null;
 		openPinStart = null;
 		openPinEnd = null;
-		clearHoverVisuals();
 		await tick();
 
 		dismissing = false;
 		animating = false;
-		hoverLocked = false;
 		openingScrollLeft = 0;
 		unlockCardModal();
 		releaseCardModal(collapseCard);
-		requestAnimationFrame(() => {
-			if (isPointerOverCard()) setPointerGlow(pointerEventAtLastPointer());
-		});
+		if (enableFlip && flipEl) clearFlipTilt(flipEl);
 	}
 
 	function handleClick(e: MouseEvent) {
 		if (!expandOnClick || expanded || animating || isInteractiveTarget(e.target)) return;
-		trackPointer(e.clientX, e.clientY);
 		e.stopPropagation();
 		void expandCard();
 	}
-
-	onMount(() => {
-		const onPointerMove = (e: PointerEvent) => {
-			trackPointer(e.clientX, e.clientY);
-			if (!expanded || animating) return;
-			applyCursorTilt(e.clientX, e.clientY);
-			syncModalSpotlight(e);
-		};
-		window.addEventListener('pointermove', onPointerMove, { passive: true });
-		return () => window.removeEventListener('pointermove', onPointerMove);
-	});
 
 	onDestroy(() => {
 		if (typeof document === 'undefined') return;
@@ -980,24 +825,16 @@
 		class:info-card--dismissing={dismissing}
 		bind:this={rootEl}
 		on:click={handleClick}
-		on:pointerenter={onGridPointer}
-		on:pointermove={onGridPointer}
-		on:pointerleave={onGridPointerLeave}
 	>
 		<div class="info-card-hover-lift">
-			<div class="info-card-tilt hover-polaroid-tilt" bind:this={tiltEl}>
+			<div class="info-card-tilt hover-polaroid-tilt">
 				{#if enableFlip}
 					<div class="info-card-flip-stage">
 						<div class="info-card-flip" bind:this={flipEl}>
 							<div class="info-card-face info-card-face--front">
 								<div class="info-card-front-layout">
-									<div
-										class="info-card-surface hover-polaroid-surface {surfaceClass}"
-										bind:this={surfaceEl}
-									>
+									<div class="info-card-surface hover-polaroid-surface {surfaceClass}">
 										<div class="holo-layer" aria-hidden="true"></div>
-										<div class="grid-base" aria-hidden="true"></div>
-										<div class="grid-cursor" aria-hidden="true"></div>
 										<slot name="front" />
 									</div>
 								</div>
@@ -1006,11 +843,8 @@
 								<div class="info-card-back-layout">
 									<div
 										class="info-card-surface info-card-surface--back hover-polaroid-surface {surfaceClass}"
-										bind:this={backSurfaceEl}
 									>
 										<div class="holo-layer" aria-hidden="true"></div>
-										<div class="grid-base" aria-hidden="true"></div>
-										<div class="grid-cursor" aria-hidden="true"></div>
 										<slot name="back" />
 									</div>
 								</div>
@@ -1018,13 +852,8 @@
 						</div>
 					</div>
 				{:else}
-					<div
-						class="info-card-surface hover-polaroid-surface {surfaceClass}"
-						bind:this={surfaceEl}
-					>
+					<div class="info-card-surface hover-polaroid-surface {surfaceClass}">
 						<div class="holo-layer" aria-hidden="true"></div>
-						<div class="grid-base" aria-hidden="true"></div>
-						<div class="grid-cursor" aria-hidden="true"></div>
 						<slot />
 					</div>
 				{/if}
@@ -1095,6 +924,18 @@
 	.info-card.info-card--modal-centered {
 		pointer-events: auto;
 		cursor: default;
+	}
+
+	/* The flip axis leans, so at rest the wrapper is still a rotated slab around the
+	   upright back face. That slab was catching clicks in the empty space beside the card. */
+	.info-card.info-card--face-open .info-card-flip,
+	.info-card.info-card--face-open .info-card-face--front,
+	.info-card.info-card--face-open .info-card-face--front * {
+		pointer-events: none;
+	}
+
+	.info-card.info-card--face-open .info-card-face--back {
+		pointer-events: auto;
 	}
 
 	.info-card.info-card--modal-centered {
@@ -1372,12 +1213,8 @@
 		overflow: hidden;
 	}
 
-	/* Mobile: crossfade faces instead of rotateY flip; no tilt; no back-face dots. */
+	/* Mobile: crossfade faces instead of rotateY flip. */
 	@media (max-width: 900px) {
-		.info-card-tilt {
-			transform: none !important;
-		}
-
 		.info-card-flip-stage {
 			perspective: none;
 		}
@@ -1422,11 +1259,6 @@
 		.info-card.info-card--no-face-transition .info-card-face--back {
 			transition: none;
 		}
-
-		.info-card-surface--back .grid-cursor,
-		.info-card-surface--back .grid-base {
-			display: none;
-		}
 	}
 
 	@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
@@ -1466,56 +1298,65 @@
 		overscroll-behavior: contain;
 	}
 
-	/* Projects: ~2.25× smaller than default back type. */
+	/* Projects: card-relative type on a portrait playing card. */
 	:global(.info-card--project) .info-card-surface--back {
-		--back-fs-xs: 1.29cqw;
-		--back-fs-sm: 1.42cqw;
-		--back-fs: 1.51cqw;
-		--back-fs-md: 1.69cqw;
-		--back-fs-lg: 1.91cqw;
-		--back-chip-h: 2.89cqw;
-		--back-link-h: 3.11cqw;
+		--back-fs-xs: 2.15cqw;
+		--back-fs-sm: 2.4cqw;
+		--back-fs: 2.55cqw;
+		--back-fs-md: 2.85cqw;
+		--back-fs-lg: 3.2cqw;
+		--back-pad: 2.6cqw;
+		/* Body copy inset. Wider than the card pad so the write-up isn't flush to the edge. */
+		--copy-inset: 13cqw;
+		--back-gap-xs: 0.6cqw;
+		--back-gap-sm: 1.3cqw;
+		--back-gap: 1.8cqw;
+		--back-gap-lg: 2.2cqw;
+		--back-chip-h: 4.6cqw;
+		--back-link-h: 5cqw;
 	}
 
 	/* Awards: compact type pad, card-relative typography and logo. */
 	:global(.info-card--award) .info-card-surface--back {
-		--award-back-fs: 1.51cqw;
-		--award-back-fs-xs: 0.78cqw;
-		--back-pad: 1.9cqw;
-		--back-gap-xs: 0.25cqw;
-		--back-gap-sm: 0.8cqw;
-		--back-gap: 1.35cqw;
-		--back-gap-lg: 1.6cqw;
-		--back-icon: 3cqw;
-		--back-logo-sm: 12cqw;
-		--back-logo: 13.2cqw;
+		--award-back-fs: 2.55cqw;
+		--award-back-fs-xs: 1.7cqw;
+		--back-pad: 3.2cqw;
+		--back-gap-xs: 0.7cqw;
+		--back-gap-sm: 1.4cqw;
+		--back-gap: 2cqw;
+		--back-gap-lg: 2.4cqw;
+		--back-icon: 4.2cqw;
+		--back-logo-sm: 16cqw;
+		--back-logo: 18cqw;
 	}
 
-	/* Wide experience cards — keep the dialed-in cqw scale. */
+	/* Experience backs: type sized for a portrait playing card. */
 	:global(.info-card--experience) .info-card-surface--back {
-		--back-fs-xs: 1.09cqw;
-		--back-fs-sm: 1.2cqw;
-		--back-fs: 1.28cqw;
-		--back-fs-md: 1.43cqw;
-		--back-fs-lg: 1.61cqw;
-		--back-pad: 0.92cqw;
-		--back-gap-xs: 0.15cqw;
-		--back-gap-sm: 0.3cqw;
-		--back-gap: 0.45cqw;
-		--back-gap-lg: 0.55cqw;
-		--back-chip-h: 2.44cqw;
-		--back-link-h: 2.63cqw;
+		--back-fs-xs: 2.15cqw;
+		--back-fs-sm: 2.4cqw;
+		--back-fs: 2.55cqw;
+		--back-fs-md: 2.85cqw;
+		--back-fs-lg: 3.15cqw;
+		--back-pad: 2.8cqw;
+		/* Matches the side inset of the 74% back photo. */
+		--copy-inset: 13cqw;
+		--back-gap-xs: 0.55cqw;
+		--back-gap-sm: 1.1cqw;
+		--back-gap: 1.6cqw;
+		--back-gap-lg: 2cqw;
+		--back-chip-h: 4.8cqw;
+		--back-link-h: 5.1cqw;
 	}
 
 	/* Education-only: tuned text / section spacing on the back face. */
 	:global(.info-card--education) .info-card-surface--back,
 	:global(.info-card--blue) .info-card-surface--back {
-		--back-fs-xs: 1.84cqw;
-		--back-fs-sm: 2.02cqw;
-		--back-fs: 2.15cqw;
-		--back-fs-md: 2.41cqw;
-		--back-fs-lg: 2.71cqw;
-		--back-pad: 1.38cqw;
+		--back-fs-xs: 2.05cqw;
+		--back-fs-sm: 2.25cqw;
+		--back-fs: 2.45cqw;
+		--back-fs-md: 2.75cqw;
+		--back-fs-lg: 3.05cqw;
+		--back-pad: 3cqw;
 		--back-gap-xs: 0.45cqw;
 		--back-gap-sm: 1.13cqw;
 		--back-gap: 1.8cqw;
@@ -1530,12 +1371,6 @@
 	}
 
 	.info-card-surface {
-		--pointer-u: 50%;
-		--pointer-v: 50%;
-		--spotlight: 0;
-		--grid-dot: 1px;
-		--grid-fine: 15px;
-		--grid-spot-radius: 60px;
 		--hp-border: rgba(176, 196, 228, 0.62);
 		--hp-border-hover: rgba(230, 242, 255, 0.95);
 		--hp-bg:
@@ -1576,8 +1411,10 @@
 		height: 100%;
 		overflow: hidden;
 		border: 2px solid var(--hp-border);
-		border-radius: 6px;
-		backface-visibility: hidden;
+		/* Circular corner: 5.5% of width equals 3.94% of a 5:7 height. */
+		border-radius: 5.5% / 3.94%;
+		/* Blend modes stay inside the card so corner antialiasing does not pick up the page. */
+		isolation: isolate;
 		padding: 14px 14px;
 		color: #f6f9fc;
 		box-shadow: var(--hp-shadow);
@@ -1629,59 +1466,14 @@
 	.info-card-surface::before {
 		content: '';
 		position: absolute;
-		inset: 5px;
+		inset: 2.4cqw;
 		border: 1px solid rgba(160, 190, 230, 0.32);
-		border-radius: 2px;
+		border-radius: 3.2cqw;
 		box-shadow:
 			inset 0 0 28px rgba(140, 180, 220, 0.1),
 			0 0 16px rgba(140, 180, 220, 0.12);
 		pointer-events: none;
 		z-index: 0;
-	}
-
-	.grid-base,
-	.grid-cursor {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		z-index: 0;
-		border-radius: inherit;
-		background-size: var(--grid-fine) var(--grid-fine);
-	}
-
-	.grid-base {
-		background-image: none;
-	}
-
-	.grid-cursor {
-		background-image: radial-gradient(
-			circle,
-			rgba(210, 228, 255, 1) 0,
-			rgba(210, 228, 255, 1) var(--grid-dot),
-			transparent calc(var(--grid-dot) + 0.5px)
-		);
-		opacity: var(--spotlight, 0);
-		transition: opacity 0.16s ease;
-		-webkit-mask-image: radial-gradient(
-			circle var(--grid-spot-radius) at var(--pointer-u, 50%) var(--pointer-v, 50%),
-			rgba(0, 0, 0, 1) 0%,
-			rgba(0, 0, 0, 0.82) 28%,
-			rgba(0, 0, 0, 0.48) 52%,
-			rgba(0, 0, 0, 0.18) 76%,
-			transparent 100%
-		);
-		mask-image: radial-gradient(
-			circle var(--grid-spot-radius) at var(--pointer-u, 50%) var(--pointer-v, 50%),
-			rgba(0, 0, 0, 1) 0%,
-			rgba(0, 0, 0, 0.82) 28%,
-			rgba(0, 0, 0, 0.48) 52%,
-			rgba(0, 0, 0, 0.18) 76%,
-			transparent 100%
-		);
-	}
-
-	.info-card-surface.info-card-surface--spotlight-off .grid-cursor {
-		transition: none;
 	}
 
 	.info-card-surface::after {
@@ -1706,19 +1498,19 @@
 		transition: opacity 0.28s ease;
 	}
 
-	.info-card-surface > *:not(.holo-layer):not(.grid-base):not(.grid-cursor) {
+	.info-card-surface > *:not(.holo-layer) {
 		position: relative;
 		z-index: 1;
 	}
 
-	.info-card-surface:global(.has-logo) > *:not(.holo-layer):not(.grid-base):not(.grid-cursor) {
+	.info-card-surface:global(.has-logo) > *:not(.holo-layer) {
 		z-index: 2;
 	}
 
-	/* Grid hover chrome — not applied in modal (dots + tilt only). */
+	/* Grid hover chrome — brightness, border, and sheen. Not applied in the modal. */
 	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
 		.info-card-surface {
-		filter: brightness(1.12) saturate(1.15);
+		background: var(--hp-bg-hover);
 	}
 
 	:global(.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
@@ -1742,7 +1534,6 @@
 
 	/* Back face always uses hover chrome in modal — not pointer-driven. */
 	.info-card.info-card--modal .info-card-surface--back {
-		filter: brightness(1.12) saturate(1.15);
 		border-color: var(--hp-border-hover);
 		background: var(--hp-bg-hover);
 		box-shadow: var(--hp-shadow-hover);
@@ -1764,7 +1555,14 @@
 		animation-duration: 2.8s;
 	}
 
-	.info-card.info-card--modal:is(
+	/* Sheen and CSS filters repaint the flipping card every frame. Hold them until the flight settles. */
+	.info-card.info-card--animating .holo-layer {
+		animation-play-state: paused;
+	}
+
+	.info-card.info-card--animating .info-card-surface,
+	.info-card.info-card--animating.info-card--modal .info-card-surface--back,
+	.info-card.info-card--animating.info-card--modal:is(
 			.info-card--green,
 			.info-card--teal,
 			.info-card--aquamarine,
@@ -1772,7 +1570,7 @@
 			.info-card--periwinkle
 		)
 		.info-card-surface--back {
-		filter: brightness(1.04) saturate(1.1);
+		filter: none;
 	}
 
 	.info-card.info-card--modal:is(
@@ -1883,7 +1681,7 @@
 		overflow-wrap: anywhere;
 	}
 
-	/* Colored solid surfaces — holo / grid / tilt touches per tone */
+	/* Colored solid surfaces — holo and hover touches per tone */
 	.info-card--green .info-card-surface {
 		--hp-surface: #bbcab7;
 		--hp-surface-hover: #c7d5c4;
@@ -1896,7 +1694,6 @@
 		--tone-sub: 24, 34, 28;
 		--tone-accent: #2c4839;
 		--tone-grid: 50, 70, 55;
-		--tone-grid-cursor: 35, 55, 41;
 		--tone-shadow: 73, 98, 78;
 		--tone-glow: 187, 208, 182;
 		--tone-glow-2: 150, 175, 145;
@@ -1915,7 +1712,6 @@
 		--tone-sub: 24, 34, 34;
 		--tone-accent: #2d5252;
 		--tone-grid: 44, 71, 71;
-		--tone-grid-cursor: 33, 57, 58;
 		--tone-shadow: 68, 102, 102;
 		--tone-glow: 178, 212, 212;
 		--tone-glow-2: 140, 180, 180;
@@ -1934,7 +1730,6 @@
 		--tone-sub: 23, 35, 32;
 		--tone-accent: #2e574f;
 		--tone-grid: 45, 78, 72;
-		--tone-grid-cursor: 33, 63, 58;
 		--tone-shadow: 65, 105, 98;
 		--tone-glow: 171, 214, 204;
 		--tone-glow-2: 135, 185, 175;
@@ -1953,7 +1748,6 @@
 		--tone-sub: 27, 34, 44;
 		--tone-accent: #354b63;
 		--tone-grid: 63, 82, 107;
-		--tone-grid-cursor: 49, 67, 90;
 		--tone-shadow: 80, 102, 130;
 		--tone-glow: 191, 211, 234;
 		--tone-glow-2: 157, 182, 212;
@@ -1972,7 +1766,6 @@
 		--tone-sub: 28, 32, 42;
 		--tone-accent: #3e4d72;
 		--tone-grid: 70, 78, 110;
-		--tone-grid-cursor: 55, 63, 95;
 		--tone-shadow: 88, 98, 128;
 		--tone-glow: 188, 198, 228;
 		--tone-glow-2: 158, 170, 208;
@@ -2026,16 +1819,6 @@
 	}
 
 	.info-card:is(.info-card--green, .info-card--teal, .info-card--aquamarine, .info-card--blue, .info-card--periwinkle)
-		.grid-cursor {
-		background-image: radial-gradient(
-			circle,
-			rgba(var(--tone-grid-cursor), 1) 0,
-			rgba(var(--tone-grid-cursor), 1) var(--grid-dot),
-			transparent calc(var(--grid-dot) + 0.5px)
-		);
-	}
-
-	.info-card:is(.info-card--green, .info-card--teal, .info-card--aquamarine, .info-card--blue, .info-card--periwinkle)
 		.info-card-surface::after {
 		background: repeating-linear-gradient(
 			0deg,
@@ -2066,7 +1849,7 @@
 		.info-card-surface,
 	:global(.info-card--periwinkle.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
 		.info-card-surface {
-		filter: brightness(1.04) saturate(1.1);
+		background: var(--hp-bg-hover);
 	}
 
 	:global(.info-card--green.hover-polaroid-scale:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))

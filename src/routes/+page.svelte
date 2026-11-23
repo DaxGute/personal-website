@@ -3,73 +3,56 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Ribbon from '$lib/Ribbon.svelte';
-	import SectionNav from '$lib/SectionNav.svelte';
 	import {
 		isCardModalOpen,
 		layoutScrollLeft,
 		prefersMobileCardFade,
 		registerScrollContainer
 	} from '$lib/cardModal';
-	import { panelTrackLeft, RIBBON_RENDER_WIDTH_PX } from '$lib/ribbon';
+	import { panelTrackLeft, RIBBON_SECTION_COUNT, RIBBON_VISIBLE_RENDER_WIDTH_PX } from '$lib/ribbon';
 	import TitlePanel from '$lib/title/TitlePanel.svelte';
+	import { headerGlyphVisibility, NAME_INTRO_MS, NAME_INTRO_SHIFT_PX } from '$lib/title/nameShutter';
+	import { syncSectionShutters } from '$lib/title/sectionShutter';
 	import ExperiencesPanel from '$lib/experiences/ExperiencesPanel.svelte';
 	import EducationPanel from '$lib/education/EducationPanel.svelte';
 	import ProjectsPanel from '$lib/projects/ProjectsPanel.svelte';
 	import AwardsPanel from '$lib/awards/AwardsPanel.svelte';
-	import InterestsPanel from '$lib/interests/InterestsPanel.svelte';
 
 	type Panel = {
 		id: string;
 		title: string;
 		navTitle?: string;
-		kicker?: string;
-		body: string;
 	};
 
 	const panels: Panel[] = [
 		{
 			id: 'greeting',
-			kicker: "Stanford '27",
 			title: 'Daxton Gutekunst',
-			navTitle: 'Title',
-			body: 'Scroll to continue'
+			navTitle: 'Title'
 		},
 		{
 			id: 'experiences',
-			kicker: 'Jobs and Internships',
-			title: 'Experiences',
-			body: 'These are the roles that defined my professional growth.'
+			title: 'Experiences'
 		},
 		{
 			id: 'education',
-			kicker: 'Coursework and Focus Areas',
-			title: 'Education',
-			body: 'What I’m building expertise in.'
+			title: 'Education'
 		},
 		{
 			id: 'projects',
-			kicker: 'Applied Expertise',
-			title: 'Projects',
-			body: 'Pick a project to see details.'
+			title: 'Projects'
 		},
 		{
 			id: 'awards',
-			kicker: 'Honors and Accomplishments',
-			title: 'Awards',
-			body: 'For my dedication, I have been recognized with the following awards.'
-		},
-		{
-			id: 'interests',
-			kicker: 'Hobbies and extracurriculars',
-			title: 'Interests',
-			body: 'What do I get up to in my spare time'
+			title: 'Awards'
 		}
 	];
 
 	let scroller: HTMLElement | null = null;
-	/** Non-reactive: panel switches must not re-render the whole page (see setNavAriaCurrent). */
-	const activePanelRef = { id: panels[0]?.id ?? 'home' };
-	let scrollAnim: number | null = null;
+	let scrollTrackEl: HTMLElement | null = null;
+	/** Opening pan still applied to the track. Not reactive — updated imperatively. */
+	const introShift = { px: NAME_INTRO_SHIFT_PX };
+	let titleCmp: { syncShutter: (scrollLeft: number, introShiftPx: number) => void } | null = null;
 	let eduSpreadAnim: number | null = null;
 	let panelOffsets: number[] = [];
 	let panelW = 0;
@@ -81,16 +64,9 @@
 		syncLayout: (trackWidthPx: number) => void;
 	} | null = null;
 
-	/** Bottom section nav — scroll progress + reveal updated imperatively (same as ribbon). */
-	let sectionNavCmp: {
-		syncScrollRevealed: (scrollLeft: number) => void;
-		setProgressIndex: (progressIndex: number) => void;
-		setActiveId: (activeId: string) => void;
-	} | null = null;
-
 	// Decorative line from `static/background.svg` — panels anchored along the ribbon track.
 	/** Horizontal scroll extent (panel strip width); wash uses this so `scrollWidth` is not inflated. */
-	let scrollTrackW = RIBBON_RENDER_WIDTH_PX;
+	let scrollTrackW = RIBBON_VISIBLE_RENDER_WIDTH_PX;
 
 	let greetingScrollLocked = true;
 	let syncScrollState: (() => void) | undefined;
@@ -99,7 +75,6 @@
 	const linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
 	const githubHref = 'https://github.com/DaxGute';
 	const sourceCodeHref = 'https://github.com/DaxGute/personal-website';
-	const emailHref = 'mailto:daxton@gutekunst.com';
 
 	function prefersReducedMotion() {
 		return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -107,15 +82,6 @@
 
 	function clamp01(n: number) {
 		return Math.max(0, Math.min(1, n));
-	}
-
-	function easeInOutPow(t: number, power = 0.5) {
-		// Ease-in-out with adjustable "tail" length.
-		// Higher `power` = slower near the start/end, faster in the middle.
-		const x = clamp01(t);
-		if (x === 0 || x === 1) return x;
-		if (x < 0.5) return 0.5 * Math.pow(2 * x, power);
-		return 1 - 0.5 * Math.pow(2 * (1 - x), power);
 	}
 
 	function clamp(n: number, min: number, max: number) {
@@ -126,11 +92,6 @@
 		return 1 - Math.pow(1 - t, 3);
 	}
 
-	function cancelScrollAnim() {
-		if (scrollAnim != null) cancelAnimationFrame(scrollAnim);
-		scrollAnim = null;
-	}
-
 	function getMaxScrollLeft() {
 		if (!scroller) return 0;
 		const maxByTrack = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
@@ -138,52 +99,6 @@
 		if (lastPanelStart == null) return maxByTrack;
 		// Last panel is 100vw wide — don't scroll into empty track past its left edge.
 		return Math.min(maxByTrack, lastPanelStart);
-	}
-
-	function smoothScrollTo(left: number, durationMs?: number) {
-		if (!scroller) return;
-		cancelScrollAnim();
-
-		const target = clamp(left, 0, getMaxScrollLeft());
-
-		if (prefersReducedMotion()) {
-			scroller.scrollLeft = target;
-			syncScrollState?.();
-			return;
-		}
-
-		const startLeft = scroller.scrollLeft;
-		const delta = target - startLeft;
-		const start = performance.now();
-		const dist = Math.abs(delta);
-		const dur =
-			durationMs ??
-			// Slow, distance-aware duration so the nav feels consistent across jumps.
-			// (Tune these values to taste.)
-			clamp(1000 + dist * 0.35, 1100, 2600);
-
-		const tick = (now: number) => {
-			const t = Math.min(1, (now - start) / dur);
-			// Use an ease-in-out so it doesn't "snap" at the beginning.
-			scroller!.scrollLeft = clamp(
-				startLeft + delta * easeInOutPow(t, 3),
-				0,
-				getMaxScrollLeft()
-			);
-			syncScrollState?.();
-			if (t < 1) scrollAnim = requestAnimationFrame(tick);
-			else scrollAnim = null;
-		};
-
-		scrollAnim = requestAnimationFrame(tick);
-	}
-
-	function scrollToPanel(id: string) {
-		if (isCardModalOpen()) return;
-		if (!scroller) return;
-		const el = document.getElementById(id);
-		if (!el) return;
-		smoothScrollTo(el.offsetLeft);
 	}
 
 	onMount(() => {
@@ -268,9 +183,9 @@
 		const measure = () => {
 			if (!scroller) return;
 			panelW = scroller.clientWidth || window.innerWidth;
-			panelOffsets = panels.map((_, i) => panelTrackLeft(i, panels.length));
+			panelOffsets = panels.map((_, i) => panelTrackLeft(i, RIBBON_SECTION_COUNT));
 			scrollTrackW = Math.max(
-				RIBBON_RENDER_WIDTH_PX,
+				RIBBON_VISIBLE_RENDER_WIDTH_PX,
 				(panelOffsets[panelOffsets.length - 1] ?? 0) + panelW
 			);
 			ribbonCmp?.syncLayout(scrollTrackW);
@@ -283,21 +198,9 @@
 			clampScroller();
 			const x = layoutScrollLeft();
 			ribbonCmp?.syncRevealScroll(x);
-			sectionNavCmp?.syncScrollRevealed(x);
+			titleCmp?.syncShutter(x, introShift.px);
+			syncSectionShutters(x, introShift.px);
 			if (panelOffsets.length === 0) return;
-
-			let i = 0;
-			while (i < panelOffsets.length - 1 && x >= panelOffsets[i + 1]) i++;
-			const next = Math.min(i + 1, panelOffsets.length - 1);
-			const start = panelOffsets[i];
-			const end = panelOffsets[next];
-			const t = end === start ? 0 : Math.max(0, Math.min(1, (x - start) / (end - start)));
-
-			const progressIndex = i + t;
-			sectionNavCmp?.setProgressIndex(progressIndex);
-			const nextActiveId = panels[Math.round(progressIndex)]?.id ?? activePanelRef.id;
-			sectionNavCmp?.setActiveId(nextActiveId);
-			if (nextActiveId !== activePanelRef.id) activePanelRef.id = nextActiveId;
 
 			// Per-panel animation progress (used for Experiences card fan-in).
 			// Mobile uses a static 2×2 grid — skip the scroll-driven fan.
@@ -339,16 +242,58 @@
 
 		};
 
-		let lastX = 0;
-		let lastT = performance.now();
 		let ticking = false;
+
+		/** Pixels of travel per pixel of wheel while a heading is fully open. */
+		const HEADING_OPEN_GAIN = 0.36;
+		/** Pixels of travel per pixel of wheel while every heading is covered. */
+		const HEADING_GAP_GAIN = 2.05;
+
+		/** 0 between headings, 1 when a heading's letters are fully open. */
+		const headingShown = (scrollLeft: number) => {
+			if (panelOffsets.length === 0) return 0;
+			let shown = 0;
+			const shift = introShift.px;
+			for (let i = 0; i < panelOffsets.length; i++) {
+				const here = panelOffsets[i] ?? 0;
+				const prev = i > 0 ? panelOffsets[i - 1] : null;
+				const next = i < panelOffsets.length - 1 ? panelOffsets[i + 1] : null;
+				const before = prev != null ? here - prev : next != null ? next - here : window.innerWidth;
+				const after = next != null ? next - here : before;
+				const span = before + after;
+				const progress = span > 0 ? (scrollLeft - shift - (here - before)) / span : 0.5;
+				const visible = headerGlyphVisibility(progress);
+				if (visible > shown) shown = visible;
+			}
+			return shown;
+		};
+
+		/** Same input travels less while the shutter has most of a heading open. */
+		const scrollGain = (scrollLeft: number) => {
+			if (prefersReducedMotion()) return 1;
+			const shown = headingShown(scrollLeft);
+			const emphasis = shown <= 0 ? 0 : Math.pow(shown, 0.55);
+			return HEADING_GAP_GAIN + (HEADING_OPEN_GAIN - HEADING_GAP_GAIN) * emphasis;
+		};
+
+		const applyScrollDelta = (delta: number) => {
+			if (!scroller || delta === 0) return;
+			const maxScroll = getMaxScrollLeft();
+			let remaining = delta;
+			const step = 18;
+			while (Math.abs(remaining) > 0.01) {
+				const bite = Math.abs(remaining) > step ? Math.sign(remaining) * step : remaining;
+				const next = clamp(scroller.scrollLeft + bite * scrollGain(scroller.scrollLeft), 0, maxScroll);
+				if (next === scroller.scrollLeft) break;
+				scroller.scrollLeft = next;
+				remaining -= bite;
+			}
+		};
+
 		const onScroll = () => {
 			if (ticking) return;
 			ticking = true;
 			requestAnimationFrame(() => {
-				const now = performance.now();
-				lastX = scroller!.scrollLeft;
-				lastT = now;
 				updateProgress();
 				ticking = false;
 			});
@@ -368,28 +313,12 @@
 			if (target?.closest?.('.award-card-surface')) return;
 
 			if (!scroller) return;
-			const maxScroll = getMaxScrollLeft();
-			const cur = scroller.scrollLeft;
-
 			const absX = Math.abs(e.deltaX);
 			const absY = Math.abs(e.deltaY);
-
-			// Horizontal trackpad / shifted-axis: let the browser scroll (enables momentum + rubber-band at ends).
-			if (absX > 0 && absX >= absY) {
-				cancelScrollAnim();
-				return;
-			}
-
-			// Vertical wheel → horizontal (must intercept so the page doesn’t scroll vertically).
+			const delta = absX > absY ? e.deltaX : e.deltaY;
+			if (delta === 0) return;
 			e.preventDefault();
-			cancelScrollAnim();
-			const next = clamp(cur + e.deltaY, 0, maxScroll);
-			scroller.scrollTo({ left: next, top: 0, behavior: 'auto' });
-		};
-
-		const onModalScrollLock = () => {
-			if (!isCardModalOpen() || !scroller) return;
-			if (scroller.scrollLeft !== 0) scroller.scrollLeft = 0;
+			applyScrollDelta(delta);
 		};
 
 		const onScrollLock = () => {
@@ -426,30 +355,57 @@
 		resetToTitle();
 		requestAnimationFrame(resetToTitle);
 		setTimeout(resetToTitle, 50);
-		lastX = scroller.scrollLeft;
-		lastT = performance.now();
 		updateProgress();
-		sectionNavCmp?.setActiveId(activePanelRef.id);
 		syncScrollState = updateProgress;
+
+		let introRaf: number | null = null;
+		const setIntroShift = (px: number) => {
+			introShift.px = px;
+			scrollTrackEl?.style.setProperty('--intro-shift', `${px}px`);
+		};
+		const playNameIntro = () => {
+			if (prefersReducedMotion()) {
+				setIntroShift(0);
+				greetingScrollLocked = false;
+				updateProgress();
+				return;
+			}
+			const start = performance.now();
+			const from = NAME_INTRO_SHIFT_PX;
+			const tick = (now: number) => {
+				const t = Math.min(1, (now - start) / NAME_INTRO_MS);
+				const shift = t >= 1 ? 0 : Math.round(from * (1 - easeOutCubic(t)) * 10) / 10;
+				setIntroShift(shift);
+				updateProgress();
+				if (t < 1) introRaf = requestAnimationFrame(tick);
+				else {
+					introRaf = null;
+					greetingScrollLocked = false;
+					// Re-apply after the unlock render so the pan cannot spring back right.
+					requestAnimationFrame(() => setIntroShift(0));
+				}
+			};
+			setIntroShift(from);
+			introRaf = requestAnimationFrame(tick);
+		};
 
 		scroller.addEventListener('wheel', wheel, { passive: false });
 		scroller.addEventListener('scroll', onScroll, { passive: true });
 		scroller.addEventListener('scroll', onScrollLock, { passive: true });
-		scroller.addEventListener('scroll', onModalScrollLock, { passive: true });
 		window.addEventListener('keydown', keyLock);
 		window.addEventListener('resize', () => {
 			measure();
 			updateProgress();
 		});
+		playNameIntro();
 
 		return () => {
 			scroller?.removeEventListener('wheel', wheel as EventListener);
 			scroller?.removeEventListener('scroll', onScroll);
 			scroller?.removeEventListener('scroll', onScrollLock);
-			scroller?.removeEventListener('scroll', onModalScrollLock);
 			window.removeEventListener('keydown', keyLock);
-			cancelScrollAnim();
 			cancelEduSpreadAnim();
+			if (introRaf != null) cancelAnimationFrame(introRaf);
 			syncScrollState = undefined;
 		};
 	});
@@ -464,7 +420,7 @@
 		bind:this={scroller}
 		aria-label="Horizontally scrolling panels"
 	>
-		<div class="scroll-track" style:width={`${scrollTrackW}px`}>
+		<div class="scroll-track" bind:this={scrollTrackEl} style:width={`${scrollTrackW}px`}>
 			<!-- Scrolls natively with the strip (no JS pan); sits above wash, below panels. -->
 			<Ribbon bind:this={ribbonCmp} />
 
@@ -473,36 +429,26 @@
 					id={panel.id}
 					class="panel"
 					aria-label={panel.title}
-					style:left={`${panelTrackLeft(i, panels.length)}px`}
+					style:left={`${panelTrackLeft(i, RIBBON_SECTION_COUNT)}px`}
 				>
 				{#if panel.id === 'greeting'}
-					<TitlePanel
-						kicker={panel.kicker}
-						title={panel.title}
-						body={panel.body}
-						bind:scrollLocked={greetingScrollLocked}
-						onUnlock={() => syncScrollState?.()}
-					/>
+					<TitlePanel title={panel.title} {linkedinHref} {githubHref} bind:this={titleCmp} />
 				{:else}
 					<div class="panel-inner">
 						{#if panel.id === 'experiences'}
-							<ExperiencesPanel kicker={panel.kicker} title={panel.title} body={panel.body} />
+							<ExperiencesPanel title={panel.title} />
 						{:else if panel.id === 'education'}
-							<EducationPanel kicker={panel.kicker} title={panel.title} body={panel.body} />
+							<EducationPanel title={panel.title} />
 						{:else if panel.id === 'projects'}
-							<ProjectsPanel kicker={panel.kicker} title={panel.title} body={panel.body} />
+							<ProjectsPanel title={panel.title} />
 						{:else if panel.id === 'awards'}
-							<AwardsPanel kicker={panel.kicker} title={panel.title} body={panel.body} />
-						{:else if panel.id === 'interests'}
-							<InterestsPanel
-								kicker={panel.kicker}
-								title={panel.title}
-								body={panel.body}
-								{sourceCodeHref}
-								{linkedinHref}
-								{githubHref}
-								{emailHref}
-							/>
+							<AwardsPanel title={panel.title} />
+							<div class="page-end">
+								<div class="repo-note">
+									<span>Like my website? The code can be found </span>
+									<a class="repo-note__link" href={sourceCodeHref} target="_blank" rel="noreferrer">here</a><span>.</span>
+								</div>
+							</div>
 						{/if}
 					</div>
 				{/if}
@@ -510,13 +456,6 @@
 		{/each}
 		</div>
 	</main>
-
-	<SectionNav
-		bind:this={sectionNavCmp}
-		{panels}
-		scrollLocked={greetingScrollLocked}
-		onSelect={scrollToPanel}
-	/>
 </div>
 
 <style>
@@ -526,9 +465,11 @@
 		width: 100vw;
 		overflow: hidden;
 		overscroll-behavior: none;
-		/* Shared sizing vars for ContactFanout + panel padding */
+		/* Shared sizing vars for panel padding */
 		--menu-pad: 8px;
 		--menu-control-h: 34px;
+		/* 30% more than the previous 18px side inset. */
+		--slide-pad-x: calc(18px * 1.3);
 	}
 
 	.scroller {
@@ -552,6 +493,14 @@
 		position: relative;
 		flex: 0 0 auto;
 		height: 100vh;
+		/* Opening pose. Keep in sync with NAME_INTRO_SHIFT_PX. Inline style takes over. */
+		--intro-shift: 120px;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.scroll-track {
+			--intro-shift: 0px;
+		}
 	}
 
 	.scroller-wash {
@@ -585,7 +534,7 @@
 		height: 100vh;
 		display: grid;
 		place-items: start center;
-		padding: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 110px) 18px 24px;
+		padding: calc(18px + (var(--menu-control-h) + (var(--menu-pad) * 2)) + 110px) var(--slide-pad-x) 24px;
 		z-index: 3;
 	}
 
@@ -603,8 +552,14 @@
 	}
 
 	#projects.panel .panel-inner {
-		--projects-lift: 130px;
+		--projects-lift: 0px;
 		bottom: var(--projects-lift);
+		border: 0;
+		background: transparent;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		box-shadow: none;
+		overflow: visible;
 	}
 
 	@media (max-width: 900px) {
@@ -622,19 +577,22 @@
 	}
 
 	.panel-inner {
-		width: min(860px, 100%);
+		/* 30% wider than before, still inset by the larger side padding. */
+		--panel-max: calc(860px * 1.3);
+		width: min(100%, var(--panel-max));
 		border: 1px solid var(--card-border);
 		background: var(--card-strong);
 		backdrop-filter: blur(calc(var(--glass-blur) + 4px));
 		border-radius: 24px;
-		padding: 28px;
+		padding: 28px calc(28px * 1.3);
 		box-shadow: var(--shadow);
 		position: relative;
 		z-index: 4;
 	}
 
 	#experiences.panel .panel-inner {
-		width: min(1200px, 100%);
+		/* Fan is absolutely placed against this width; growing it shoves cards off the left. */
+		--panel-max: 1200px;
 		border: 0;
 		background: transparent;
 		backdrop-filter: none;
@@ -643,12 +601,12 @@
 	}
 
 	#education.panel .panel-inner {
-		width: min(980px, 100%);
+		--panel-max: calc(980px * 1.3);
 		border: 0;
 		background: transparent;
 		backdrop-filter: none;
 		box-shadow: none;
-		padding: 28px;
+		padding: 28px calc(28px * 1.3);
 		overflow: visible;
 	}
 
@@ -672,15 +630,22 @@
 		padding: 0;
 	}
 
+	#greeting.panel :global(.greeting-layout) {
+		width: min(100%, calc(980px * 1.3));
+	}
+
 	#interests.panel {
 		place-items: start end;
-		padding-right: 0;
+		padding-inline: var(--slide-pad-x);
 	}
 
 	#interests.panel .panel-inner {
 		position: absolute;
-		inset: 0;
-		width: 100%;
+		top: 0;
+		bottom: 0;
+		left: var(--slide-pad-x);
+		right: var(--slide-pad-x);
+		width: auto;
 		height: 100%;
 		padding: 0;
 		border: 0;
@@ -693,5 +658,38 @@
 	#awards.panel {
 		place-items: center;
 		padding: 0;
+	}
+
+	.page-end {
+		position: absolute;
+		right: 5px;
+		bottom: 5px;
+		z-index: 4;
+		pointer-events: none;
+	}
+
+	.repo-note {
+		font-size: 12px;
+		line-height: 1.25;
+		text-align: right;
+		white-space: nowrap;
+		color: rgba(11, 18, 32, 0.72);
+		pointer-events: auto;
+	}
+
+	.repo-note__link {
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 2px;
+	}
+
+	.repo-note__link:hover {
+		color: rgba(11, 18, 32, 0.9);
+	}
+
+	@media (max-width: 900px) {
+		.repo-note {
+			display: none;
+		}
 	}
 </style>

@@ -2,8 +2,7 @@
 	import InfoCard from '$lib/InfoCard.svelte';
 	import type { Project } from '$lib/projects/projects';
 	import { onDestroy, onMount, tick } from 'svelte';
-	import { fly } from 'svelte/transition';
-	import { cubicOut, cubicIn } from 'svelte/easing';
+	import type { TransitionConfig } from 'svelte/transition';
 	import confcapLogo from '$lib/assets/project/confcap_logo.png';
 	import kbkLogo from '$lib/assets/project/kbk_logo.png';
 	import raqiLogo from '$lib/assets/project/raqi_logo.png';
@@ -30,8 +29,103 @@
 	let isDraggingScrollbar = false;
 	let dragStartY = 0;
 	let dragStartScrollTop = 0;
-	let descDir: 1 | -1 = 1;
-	let lastActiveId: string | null = null;
+	let shownDir: 1 | -1 = 1;
+	/** Skip the deck pull on the first paint; viewport fade handles the entrance. */
+	let cardMotion = false;
+	/**
+	 * The card on screen. Reel ticks update `activeId` immediately, but the deck
+	 * follows only once the card already in flight has finished — a second scroll
+	 * must not cut the pull short or snap the card underneath out.
+	 */
+	let shownId: string | null = initialId ?? projects[0]?.id ?? null;
+	/** True while a pull/sink pair is playing. Further picks are held in `queuedId`. */
+	let cardBusy = false;
+	/** Latest project requested while a card was still animating. */
+	let queuedId: string | null = null;
+	/** Generation stamped onto the card that is currently leaving. */
+	let leavingGen = -1;
+	/** Generation of the card most recently introduced. */
+	let cardGen = 0;
+	let cardTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const CARD_PULL_MS = 680;
+
+	function linear(t: number) {
+		return t;
+	}
+
+	function easeOut(t: number) {
+		return 1 - Math.pow(1 - t, 3);
+	}
+
+	/**
+	 * Incoming card starts tucked behind the one on top, is drawn out to the open
+	 * side, then comes forward and settles into the front of the stack.
+	 * Vertical bias follows the reel direction but stays clear of the heading.
+	 *
+	 * z-index is applied by hand. Putting it in the keyframes makes the browser
+	 * interpolate it, so the new card pops forward for a frame while it still
+	 * overlaps the one on top.
+	 */
+	function pullFromBehind(
+		node: Element,
+		{ dir = 1, duration = CARD_PULL_MS }: { dir?: number; duration?: number } = {}
+	): TransitionConfig {
+		const peekX = 78;
+		const peekY = dir > 0 ? 5 : -8;
+		const el = node as HTMLElement;
+		// Behind the card already showing, before the first paint of this swap.
+		if (duration > 0) el.style.zIndex = '1';
+		return {
+			duration,
+			easing: linear,
+			css: (t) => {
+				const emerge = Math.min(t / 0.5, 1);
+				const settle = Math.max((t - 0.5) / 0.5, 0);
+				const emergeE = easeOut(emerge);
+				const settleE = easeOut(settle);
+				const slide = emergeE * (1 - settleE);
+				const shiftX = peekX * slide;
+				const shiftY = peekY * slide;
+				const tilt = dir * 3.4 * slide;
+				const scale = 0.965 + 0.035 * settleE;
+				const shade = 0.22 * slide;
+				// box-shadow, not filter. A filter on this shell flattens the card's
+				// 3D flip, and the face blanks for a frame when that filter starts or ends.
+				return `transform: translate3d(${shiftX}%, ${shiftY}%, 0) rotate(${tilt}deg) scale(${scale}); box-shadow: ${12 * slide}px ${14 * slide}px ${22 * slide}px rgba(11, 18, 32, ${shade});`;
+			},
+			tick: (t) => {
+				if (duration <= 0) return;
+				// Stay in front once settled. Clearing this as the outro ends lets the
+				// leaving card (still z-index 2) cover the new one for a frame.
+				el.style.zIndex = t < 0.5 ? '1' : '4';
+			}
+		};
+	}
+
+	/** Front card stays put while the next one is drawn out, then sinks back into the stack. */
+	function sinkBehind(
+		node: Element,
+		{ dir = 1, duration = CARD_PULL_MS }: { dir?: number; duration?: number } = {}
+	): TransitionConfig {
+		const el = node as HTMLElement;
+		if (duration > 0) el.style.zIndex = '2';
+		return {
+			duration,
+			easing: linear,
+			css: (t) => {
+				const u = 1 - t;
+				const reveal = Math.min(u / 0.5, 1);
+				const sink = Math.max((u - 0.52) / 0.48, 0);
+				const e = sink * sink;
+				const shiftX = -5 * easeOut(reveal) * (1 - e);
+				const shiftY = -3 * dir * e;
+				const scale = 1 - 0.04 * e;
+				// Fully opaque. Dropping opacity flattens the 3D card and flashes its back face.
+				return `transform: translate3d(${shiftX}%, ${shiftY}%, 0) scale(${scale});`;
+			}
+		};
+	}
 
 	let scrollbarThumbTop = 0;
 	let scrollbarThumbHeight = 16;
@@ -247,36 +341,96 @@
 		el?.scrollIntoView({ block: 'center', behavior });
 	}
 
+	function cardMotionDuration() {
+		return prefersReducedMotion() || !cardMotion ? 0 : CARD_PULL_MS;
+	}
+
+	function directionBetween(fromId: string | null, toId: string | null): 1 | -1 {
+		const prevIdx = fromId ? projects.findIndex((p) => p.id === fromId) : -1;
+		const nextIdx = toId ? projects.findIndex((p) => p.id === toId) : -1;
+		if (prevIdx === -1 || nextIdx === -1 || prevIdx === nextIdx) return shownDir;
+		return nextIdx > prevIdx ? 1 : -1;
+	}
+
+	function clearCardTimer() {
+		if (!cardTimer) return;
+		clearTimeout(cardTimer);
+		cardTimer = null;
+	}
+
+	/** The card underneath has been replaced. Play the next queued project, if any. */
+	function settleLeavingCard() {
+		if (!cardBusy) return;
+		cardBusy = false;
+		leavingGen = -1;
+		clearCardTimer();
+		const next = queuedId;
+		queuedId = null;
+		if (next && next !== shownId) showCard(next);
+	}
+
+	function showCard(id: string | null) {
+		if (!id || id === shownId) {
+			cardBusy = false;
+			return;
+		}
+		const duration = cardMotionDuration();
+		shownDir = directionBetween(shownId, id);
+		// The card on screen is the one that will leave. Stamp it before introducing the next.
+		leavingGen = cardGen;
+		cardGen += 1;
+		shownId = id;
+		if (duration === 0) {
+			cardBusy = false;
+			leavingGen = -1;
+			return;
+		}
+		cardBusy = true;
+		clearCardTimer();
+		const gen = leavingGen;
+		// Outro end is the real signal. This only covers a transition that never reports it.
+		cardTimer = setTimeout(() => {
+			cardTimer = null;
+			if (leavingGen !== gen) return;
+			settleLeavingCard();
+		}, duration + 70);
+	}
+
+	function onLeavingCardEnd(event: Event) {
+		const gen = Number((event.currentTarget as HTMLElement | null)?.dataset.gen);
+		if (!cardBusy || gen !== leavingGen) return;
+		settleLeavingCard();
+	}
+
 	$: {
 		// Keep selection valid if the list changes.
 		if (projects.length === 0) activeId = null;
 		else if (!activeId || !projects.some((p) => p.id === activeId)) activeId = projects[0]?.id ?? null;
 	}
 
-	$: {
-		// Make the description transition follow the direction the selection moved.
-		// Down the list: enter from below, exit upwards. Up the list: reverse it.
-		if (activeId !== lastActiveId) {
-			const prevIdx = lastActiveId ? projects.findIndex((p) => p.id === lastActiveId) : -1;
-			const nextIdx = activeId ? projects.findIndex((p) => p.id === activeId) : -1;
-			if (prevIdx !== -1 && nextIdx !== -1 && prevIdx !== nextIdx) {
-				descDir = nextIdx > prevIdx ? 1 : -1;
-			}
-			lastActiveId = activeId;
+	$: if (activeId !== shownId) {
+		// Before the deck is allowed to move, keep the shown card matched without a pull.
+		if (!cardMotion) {
+			shownId = activeId;
+			cardGen += 1;
+		} else if (cardBusy) {
+			// Let the current card finish. Remember only the latest destination.
+			if (queuedId !== activeId) queuedId = activeId;
+		} else {
+			showCard(activeId);
 		}
 	}
 
-	$: active = projects.find((p) => p.id === activeId) ?? null;
+	$: shown = projects.find((p) => p.id === shownId) ?? null;
 	$: motionOff = prefersReducedMotion();
-	$: descKey = active?.id ?? 'empty';
 	$: projectLogo =
-		!active
+		!shown
 			? null
-			: (active.name ?? '').trim().toLowerCase() === 'confcap'
+			: (shown.name ?? '').trim().toLowerCase() === 'confcap'
 				? { src: confcapLogo, alt: 'ConfCap logo' }
-				: (active.name ?? '').trim().toLowerCase() === 'kid by kid'
+				: (shown.name ?? '').trim().toLowerCase() === 'kid by kid'
 					? { src: kbkLogo, alt: 'Kid By Kid logo' }
-					: (active.name ?? '').trim().toLowerCase() === 'riseaqi'
+					: (shown.name ?? '').trim().toLowerCase() === 'riseaqi'
 						? { src: raqiLogo, alt: 'RiseAQI logo' }
 						: null;
 
@@ -310,6 +464,7 @@
 	}
 
 	onMount(() => {
+		cardMotion = true;
 		const fadeOk = !prefersReducedMotion() && typeof IntersectionObserver !== 'undefined';
 		if (fadeOk && wrapEl && reelEl && descEl) {
 			reelViewportRevealed = elIntersectsViewport(reelEl);
@@ -375,6 +530,7 @@
 		viewportFadeObs = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = null;
+		clearCardTimer();
 	});
 </script>
 
@@ -425,54 +581,60 @@
 		</div>
 	</div>
 
-	<div class="desc" class:viewport-revealed={descViewportRevealed} aria-live="polite" bind:this={descEl}>
-		{#key descKey}
+	<div
+		class="desc"
+		class:deck-moving={cardBusy}
+		class:viewport-revealed={descViewportRevealed}
+		aria-live="polite"
+		bind:this={descEl}
+	>
+		{#key shownId}
 			<div
 				class="desc-inner"
-				in:fly={{ y: 8 * descDir, duration: motionOff ? 0 : 170, easing: cubicOut }}
-				out:fly={{ y: -6 * descDir, duration: motionOff ? 0 : 130, easing: cubicIn }}
+				data-gen={cardGen}
+				in:pullFromBehind={{ dir: shownDir, duration: motionOff || !cardMotion ? 0 : CARD_PULL_MS }}
+				out:sinkBehind={{ dir: shownDir, duration: motionOff || !cardMotion ? 0 : CARD_PULL_MS }}
+				onoutroend={onLeavingCardEnd}
 			>
-				{#if active}
+				{#if shown}
 					<InfoCard
 						variant="project"
-						heading={active.name}
-						subheading={active.blurb}
-						body={active.description}
-						items={active.highlights ?? []}
-						backParagraphs={active.backParagraphs ?? []}
-						tech={active.tech ?? []}
-						links={active.links ?? []}
+						heading={shown.name}
+						items={[]}
+						tech={shown.tech ?? []}
+						links={shown.links ?? []}
 						logoSrc={projectLogo?.src ?? null}
 						logoAlt={projectLogo?.alt ?? null}
-						customBackBody={!!(active.backSections?.length || active.backImages?.length)}
+						customBackBody={!!(
+							shown.backLead ||
+							shown.backBullets?.length ||
+							shown.backImages?.length
+						)}
 					>
 						<div
 							slot="backBody"
 							class="project-back"
-							class:project-back--with-photos={!!active.backImages?.length}
-							aria-label="{active.name} details"
+							class:project-back--with-photos={!!shown.backImages?.length}
+							aria-label="{shown.name} details"
 						>
-							{#if active.backSections?.length}
-								<div
-									class="project-copy"
-									class:project-copy--grid={active.backSections.length === 4}
-								>
-									{#each active.backSections as section}
-										<div class="project-section">
-											<h2 class="project-section-heading">{section.heading}</h2>
-											<div class="project-section-body">
-												{#each section.items as item}
-													<p class="project-section-item">{item}</p>
-												{/each}
-											</div>
-										</div>
-									{/each}
+							{#if shown.backLead || shown.backBullets?.length}
+								<div class="project-copy">
+									{#if shown.backLead}
+										<p class="project-back-lead">{shown.backLead}</p>
+									{/if}
+									{#if shown.backBullets?.length}
+										<ul class="project-back-bullets">
+											{#each shown.backBullets as bullet}
+												<li>{bullet}</li>
+											{/each}
+										</ul>
+									{/if}
 								</div>
 							{/if}
 
-							{#if active.backImages?.length}
-								<div class="project-photos" aria-label="{active.name} photos">
-									{#each active.backImages as image (image.src)}
+							{#if shown.backImages?.length}
+								<div class="project-photos" aria-label="{shown.name} photos">
+									{#each shown.backImages as image (image.src)}
 										<figure class="project-photo">
 											<img
 												src={image.src}
@@ -502,9 +664,9 @@
 		align-items: stretch;
 		width: max-content;
 		max-width: none;
-		--project-reel-w: 280px;
-		--project-card-w: 508px;
-		--selector-h: 240px;
+		--project-reel-w: 240px;
+		--project-card-w: var(--playing-card-w, 220px);
+		--selector-h: var(--playing-card-h, 308px);
 		--slot-h: 56px;
 		/* aquamarine accents — matches InfoCard project theme */
 		--select-border: rgba(30, 110, 95, 0.42);
@@ -530,8 +692,10 @@
 
 	.desc {
 		position: relative;
+		z-index: 2;
 		width: var(--project-card-w);
 		height: var(--selector-h);
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
 		overflow: visible;
 	}
 
@@ -541,6 +705,50 @@
 		width: 100%;
 		height: 100%;
 		overflow: visible;
+		transform-origin: 50% 55%;
+		pointer-events: none;
+		/* Matches the card radius so the lift shadow follows the corners. */
+		border-radius: 5.5% / 3.94%;
+	}
+
+	/* The card being introduced is last. Keep it behind the one still on top
+	   for the first paint, before the pull transition assigns z-index. */
+	.desc-inner:last-child {
+		z-index: 1;
+		pointer-events: auto;
+	}
+
+	.desc-inner:not(:last-child) {
+		z-index: 2;
+	}
+
+	/* The open card is moved out of this shell. While it stays here, a parent
+	   transform would flatten the 3D flip and flash the back face or a blank front. */
+	.desc-inner :global(.info-card-face--back) {
+		visibility: hidden;
+	}
+
+	.desc-inner :global(.info-card-flip),
+	.desc-inner :global(.info-card-face) {
+		transform-style: flat;
+		backface-visibility: visible;
+		-webkit-backface-visibility: visible;
+	}
+
+	.desc-inner :global(.info-card-face--front) {
+		transform: none;
+	}
+
+	.desc-inner :global(.holo-layer) {
+		background-position: 120% 0;
+	}
+
+	.desc.deck-moving :global(.info-card-surface),
+	.desc.deck-moving :global(.info-card-surface::before),
+	.desc.deck-moving :global(.info-card-surface::after),
+	.desc.deck-moving :global(.holo-layer) {
+		transition: none;
+		animation-play-state: paused;
 	}
 
 	.desc-inner :global(.info-card) {
@@ -714,45 +922,53 @@
 	.project-copy {
 		flex: 1 1 auto;
 		min-height: 0;
-		overflow: hidden;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		display: flex;
+		flex-direction: column;
+		gap: var(--back-gap-sm, 1.1cqw);
+		padding-inline: calc(var(--copy-inset, 13cqw) - var(--back-pad, 2.6cqw));
 	}
 
-	.project-copy--grid {
+	.project-back-lead {
+		margin: 0;
+		color: #000;
+		font-size: var(--back-fs, 2.45cqw);
+		line-height: 1.35;
+	}
+
+	.project-back-bullets {
+		margin: 0;
+		padding-left: 1.15em;
+		color: #000;
+		font-size: var(--back-fs, 2.45cqw);
+		line-height: 1.35;
 		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		grid-template-rows: repeat(2, minmax(0, 1fr));
-		gap: calc(var(--back-gap-sm, 1.13cqw) * 0.7) calc(var(--back-gap, 1.8cqw) * 0.7);
-		align-content: stretch;
+		gap: 0.35em;
 	}
 
-	.project-copy--grid .project-section {
-		min-height: 0;
-		overflow: hidden;
-	}
-
-	.project-copy--grid .project-section-heading {
-		margin-top: 0;
-	}
-
-	.project-copy--grid .project-section-body {
-		margin-left: 0;
+	.project-back-bullets li::marker {
+		color: inherit;
 	}
 
 	.project-photos {
 		display: grid;
-		grid-template-columns: repeat(6, minmax(0, 1fr));
-		gap: calc(var(--back-gap-xs, 0.45cqw) * 0.7);
-		flex: 0 0 auto;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-rows: 1fr 1fr;
+		gap: var(--back-gap-xs, 0.6cqw);
+		flex: 0 0 42%;
 		width: 100%;
+		min-height: 0;
 		align-self: stretch;
 	}
 
 	.project-photo {
 		margin: 0;
-		aspect-ratio: 1 / 1;
+		height: 100%;
+		min-height: 0;
 		overflow: hidden;
-		border-radius: 2px;
-		border: 1px solid rgba(0, 0, 0, 0.12);
+		border-radius: 6px;
+		border: 1px solid rgba(0, 0, 0, 0.1);
 		background: rgba(0, 0, 0, 0.04);
 	}
 
@@ -764,30 +980,6 @@
 		object-position: center;
 	}
 
-	.project-section-heading {
-		margin: calc(var(--back-gap, 1.8cqw) * 0.7) 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7);
-		color: #000;
-		font-size: calc(var(--back-fs-md, 2.41cqw) * 0.7);
-		font-weight: 700;
-		line-height: 1.2;
-		overflow-wrap: anywhere;
-	}
-
-	.project-section:first-child .project-section-heading {
-		margin-top: 0;
-	}
-
-	.project-section-body {
-		margin: 0 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7) 1.54em;
-	}
-
-	.project-section-item {
-		margin: 0 0 calc(var(--back-gap-xs, 0.45cqw) * 0.7);
-		color: #000;
-		font-size: calc(var(--back-fs-sm, 2.02cqw) * 0.7);
-		line-height: 1.35;
-		overflow-wrap: anywhere;
-	}
 
 </style>
 

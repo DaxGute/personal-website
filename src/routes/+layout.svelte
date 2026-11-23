@@ -99,7 +99,12 @@
 	:global(:root) {
 		color-scheme: light;
 		--bg: #ffffff;
+		/* Standard poker card, 2.5in × 3.5in. One size for every card. */
+		--playing-card-ratio: 5 / 7;
+		--playing-card-w: 220px;
+		--playing-card-h: calc(var(--playing-card-w) * 7 / 5);
 		--fg: #0b1220;
+		--heading-size: clamp(40px, 5vw, 68px);
 		--muted: rgba(11, 18, 32, 0.68);
 		/* Glassy surfaces */
 		--glass-blur: 14px;
@@ -114,7 +119,6 @@
 		--stage-scale: 1;
 		--stage-origin-x: 0px;
 		--stage-origin-y: 0px;
-		--track-scroll-compensate: 0px;
 	}
 
 	:global(html, body) {
@@ -140,42 +144,15 @@
 		box-sizing: border-box;
 	}
 
-	@property --vignette-rx {
-		syntax: '<length>';
-		inherits: false;
-		initial-value: 120vmax;
-	}
-
-	@property --vignette-ry {
-		syntax: '<length>';
-		inherits: false;
-		initial-value: 120vmax;
-	}
-
-	@property --vignette-cx {
-		syntax: '<length-percentage>';
-		inherits: false;
-		initial-value: 50%;
-	}
-
-	@property --vignette-cy {
-		syntax: '<length-percentage>';
-		inherits: false;
-		initial-value: 50%;
-	}
-
 	:global(.card-modal-backdrop) {
 		position: fixed;
 		inset: 0;
 		z-index: 9998;
 		pointer-events: none;
-		--vignette-rx: 120vmax;
-		--vignette-ry: 120vmax;
-		--vignette-cx: 50%;
-		--vignette-cy: 50%;
-		transition:
-			--vignette-rx var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1)),
-			--vignette-ry var(--card-modal-ms, 760ms) var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		opacity: 0;
+		/* Opacity only — an animated mask-image redraws this full-screen layer every frame. */
+		transition: opacity var(--card-modal-ms, 760ms)
+			var(--vignette-size-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		background: radial-gradient(
 			ellipse 120vmax 120vmax at 50% 50%,
 			rgba(11, 18, 32, 0.28) 0%,
@@ -183,38 +160,18 @@
 			rgba(11, 18, 32, 0.68) 78%,
 			rgba(7, 12, 22, 0.82) 100%
 		);
-		-webkit-mask-image:
-			linear-gradient(#fff, #fff),
-			radial-gradient(
-				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
-				#000 0%,
-				#000 100%,
-				transparent 100%
-			);
-		-webkit-mask-composite: xor;
-		mask-image:
-			linear-gradient(#fff, #fff),
-			radial-gradient(
-				ellipse var(--vignette-rx) var(--vignette-ry) at var(--vignette-cx) var(--vignette-cy),
-				#000 0%,
-				#000 100%,
-				transparent 100%
-			);
-		mask-composite: exclude;
 	}
 
 	:global(.card-modal-backdrop.is-visible) {
+		opacity: 1;
 		pointer-events: auto;
 		cursor: pointer;
 	}
 
-	/* Mobile: solid black fade instead of oval vignette cutout. */
+	/* Mobile: solid black fade. */
 	@media (max-width: 900px) {
 		:global(.card-modal-backdrop) {
 			background: #000;
-			opacity: 0;
-			-webkit-mask-image: none;
-			mask-image: none;
 			transition: opacity var(--card-modal-ms, 760ms)
 				var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
 		}
@@ -250,11 +207,6 @@
 		transform-style: preserve-3d;
 	}
 
-	:global(.card-modal-layer .info-card--modal .hover-polaroid-tilt) {
-		/* Inline style may temporarily enable a short ease on open/close settle. */
-		transition: none;
-	}
-
 	:global(.card-modal-layer .info-card--animating .info-card-flip) {
 		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
@@ -273,31 +225,62 @@
 		transition: transform var(--card-modal-ms, 760ms) var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1)) !important;
 	}
 
-	/* Real scroll-track zooms around the active card; vignette sits below the pinned card.
-	   Transform stays applied at identity when idle so toggling modal doesn't layer-promote
-	   (that was shimmering the ribbon/signature strokes on open/close). */
+	/* Intro pan only. The modal zoom must NOT live here: the track is ~10000px wide and
+	   cannot be cached as one GPU texture, so scaling it repaints every frame. */
 	:global(.desktop-app > .stage .scroll-track) {
-		transform-origin: var(--stage-origin-x, 0px) var(--stage-origin-y, 0px);
-		transform: translateX(var(--track-scroll-compensate, 0px))
-			translate(var(--stage-tx, 0px), var(--stage-ty, 0px)) scale(var(--stage-scale, 1));
+		transform: translateX(var(--intro-shift, 0px));
 	}
 
+	/* Zoom the viewport-sized stage (overflow hidden) so the animated layer stays
+	   within the GPU texture limit. Drop transforms that would promote the full-width
+	   track or ribbon into their own textures. */
 	:global(html.card-modal-open .desktop-app > .stage) {
-		overflow: visible;
+		overflow: hidden;
 		pointer-events: none;
+		transform-origin: var(--stage-origin-x, 0px) var(--stage-origin-y, 0px);
+		transform: translate(var(--stage-tx, 0px), var(--stage-ty, 0px)) scale(var(--stage-scale, 1));
+		transition: transform var(--card-modal-ms, 760ms)
+			var(--stage-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		will-change: transform;
 	}
 
 	:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
-		transition: transform var(--card-modal-ms, 760ms)
-			var(--stage-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
+		transform: none;
+		left: var(--intro-shift, 0px);
 	}
 
-	/* Backdrop-filter re-samples the ribbon every zoom frame → stroke wiggle.
-	   Leave projects glass alone so the panel doesn't lose frost mid-open. */
-	:global(html.card-modal-open .desktop-app > .stage .scroll-track)
-		:global(*:not(.panel-inner):not(.listbox)) {
+	:global(html.card-modal-open .ribbon-layer) {
+		transform: none;
+		backface-visibility: visible;
+	}
+
+	/* Backdrop-filter and the looping sheen both invalidate the stage layer every zoom frame. */
+	:global(html.card-modal-open .desktop-app > .stage),
+	:global(html.card-modal-open .desktop-app > .stage *) {
 		backdrop-filter: none !important;
 		-webkit-backdrop-filter: none !important;
+	}
+
+	:global(html.card-modal-open #projects .listbox) {
+		background: rgba(255, 255, 255, 0.94) !important;
+	}
+
+	:global(html.card-modal-open #projects .panel-inner),
+	:global(.card-modal-stage-clone #projects .panel-inner) {
+		background: transparent !important;
+		box-shadow: none !important;
+	}
+
+	:global(html.card-modal-open .desktop-app > .stage .holo-layer) {
+		animation-play-state: paused !important;
+	}
+
+	:global(html.card-modal-open .desktop-app > .stage .info-card-tilt),
+	:global(html.card-modal-open .desktop-app > .stage .info-card-flip-stage),
+	:global(html.card-modal-open .desktop-app > .stage .info-card-flip),
+	:global(html.card-modal-open .desktop-app > .stage .info-card-face),
+	:global(html.card-modal-open .desktop-app > .stage .hover-polaroid-tilt) {
+		transform-style: flat !important;
 	}
 
 	:global(html.card-modal-open .desktop-app > .stage .scroll-track),
@@ -365,14 +348,9 @@
 		overscroll-behavior: none;
 	}
 
-	/* Shared polaroid card transforms
-	   - grid: CSS :hover surface chrome
-	   - modal: JS cursor tilt + dots only
-	*/
+	/* Grid cards brighten on hover. The open card stays flat. */
 	:global(.hover-polaroid-tilt) {
-		transform: perspective(900px) rotateX(0deg) rotateY(0deg);
 		transform-style: preserve-3d;
-		transition: transform 120ms linear;
 	}
 
 	:global(.hover-polaroid-surface) {
@@ -415,7 +393,7 @@
 		}
 
 		:global(.desktop-app > .stage .scroll-track),
-		:global(html.card-modal-open .desktop-app > .stage .scroll-track) {
+		:global(html.card-modal-open .desktop-app > .stage) {
 			transition: none;
 		}
 
@@ -427,6 +405,12 @@
 		:global(.hover-polaroid-surface) {
 			transition: none;
 			transform: none;
+		}
+	}
+
+	@media (max-width: 900px) {
+		:global(:root) {
+			--playing-card-w: 168px;
 		}
 	}
 

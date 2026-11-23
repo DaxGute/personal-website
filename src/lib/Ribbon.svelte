@@ -5,10 +5,10 @@
 		RIBBON_MOBILE_HEIGHT_PX,
 		RIBBON_PATH_D,
 		RIBBON_RENDER_HEIGHT_PX,
-		RIBBON_RENDER_WIDTH_PX,
 		RIBBON_SIDE_BLEED_PX,
 		RIBBON_VIEWBOX_H,
-		RIBBON_VIEWBOX_W,
+		RIBBON_VISIBLE_RENDER_WIDTH_PX,
+		RIBBON_VISIBLE_VIEWBOX_W,
 		buildRibbonDistanceAtNormalizedTime,
 		prefersReducedMotionRibbon,
 		ribbonLayerWidthPx
@@ -26,7 +26,7 @@
 	let ribbonLayerEl: HTMLDivElement | null = null;
 	let ribbonEl: SVGSVGElement | null = null;
 	let ribbonRevealMaskEl: SVGPathElement | null = null;
-	let ribbonPaintW = ribbonLayerWidthPx(RIBBON_RENDER_WIDTH_PX);
+	let ribbonPaintW = ribbonLayerWidthPx(RIBBON_VISIBLE_RENDER_WIDTH_PX);
 	let revealIdleRaf: number | null = null;
 	let revealFinalized = false;
 
@@ -154,7 +154,7 @@
 		focusable="false"
 		width={ribbonPaintW}
 		height={RIBBON_RENDER_HEIGHT_PX}
-		viewBox={`0 0 ${RIBBON_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
+		viewBox={`0 0 ${RIBBON_VISIBLE_VIEWBOX_W} ${RIBBON_VIEWBOX_H}`}
 		preserveAspectRatio="none"
 	>
 		<defs>
@@ -177,7 +177,7 @@
 				maskContentUnits="userSpaceOnUse"
 				x="0"
 				y="0"
-				width={RIBBON_VIEWBOX_W}
+				width={RIBBON_VISIBLE_VIEWBOX_W}
 				height={RIBBON_VIEWBOX_H}
 			>
 				<path

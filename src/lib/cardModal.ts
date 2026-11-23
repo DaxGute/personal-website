@@ -109,7 +109,7 @@ function findScrollTrackEl() {
 }
 
 function findStageZoomEl() {
-	return findScrollTrackEl() ?? findStageEl();
+	return findStageEl();
 }
 
 const STAGE_CLONE_ID_SUFFIX = '-stage-clone';
@@ -245,17 +245,6 @@ function clearStageZoomVars() {
 	document.documentElement.style.removeProperty('--stage-origin-y');
 }
 
-function applyScrollCompensate(scrollLeft: number) {
-	document.documentElement.style.setProperty(
-		'--track-scroll-compensate',
-		`${-scrollLeft}px`
-	);
-}
-
-function clearScrollCompensate() {
-	document.documentElement.style.removeProperty('--track-scroll-compensate');
-}
-
 /** Track-local zoom origin — stable across scroll reset + compensate translate. */
 export function computeTrackZoomOrigin(
 	cardCenterX: number,
@@ -283,7 +272,10 @@ export function computeTrackZoomOrigin(
 	return { originX: cardCenterX, originY: cardCenterY };
 }
 
-/** Zoom scroll-track around card center, then translate so the card lands on viewport center. */
+/**
+ * Zoom the viewport stage around the card, then translate so the card lands on the viewport center.
+ * Origin is stage-local (not the full scroll-track) so the animated layer stays viewport-sized.
+ */
 export function computeStageZoomTransform(
 	cardCenterX: number,
 	cardCenterY: number,
@@ -291,7 +283,7 @@ export function computeStageZoomTransform(
 	cardVisualHeight: number,
 	targetVisualWidth: number,
 	targetVisualHeight: number,
-	scrollLeft = readScrollLeft()
+	_scrollLeft = readScrollLeft()
 ): StageZoomTransform {
 	if (cardVisualWidth <= 0 || cardVisualHeight <= 0) {
 		return { tx: 0, ty: 0, scale: 1, originX: 0, originY: 0 };
@@ -301,13 +293,25 @@ export function computeStageZoomTransform(
 		targetVisualHeight / cardVisualHeight
 	);
 	const center = viewportCenter();
-	const { originX, originY } = computeTrackZoomOrigin(cardCenterX, cardCenterY, scrollLeft);
+	const stage = findStageEl();
+	if (stage instanceof HTMLElement) {
+		const stageRect = stage.getBoundingClientRect();
+		const originX = cardCenterX - stageRect.left;
+		const originY = cardCenterY - stageRect.top;
+		return {
+			tx: center.x - stageRect.left - originX,
+			ty: center.y - stageRect.top - originY,
+			scale,
+			originX,
+			originY
+		};
+	}
 	return {
 		tx: center.x - cardCenterX,
 		ty: center.y - cardCenterY,
 		scale,
-		originX,
-		originY
+		originX: cardCenterX,
+		originY: cardCenterY
 	};
 }
 
@@ -578,6 +582,9 @@ export function dismissBackdrop() {
 export function mountInModalLayer(el: HTMLElement) {
 	ensureModalRoot();
 	modalLayerEl?.appendChild(el);
+	// Pulling the card out of the scroller can anchor-shift scrollLeft. Pin it back
+	// before the next paint so the stage zoom origin still matches the card.
+	if (lockCount > 0) pinScrollLeft(savedScrollLeft);
 }
 
 export function removeFromModalLayer(el: HTMLElement) {
@@ -586,12 +593,10 @@ export function removeFromModalLayer(el: HTMLElement) {
 
 function beginStageZoomScrollCompensate() {
 	if (document.documentElement.classList.contains('card-modal-open')) return;
-	applyScrollCompensate(savedScrollLeft);
 	document.documentElement.classList.add('card-modal-open');
-	// Freeze compensate offset before animating zoom (avoids sliding in from scroll origin).
+	// Identity first, with transitions suppressed, so the zoom eases from the current pixels.
 	snapStageZoom(0, 0, 1, 0, 0);
-	writeScrollLeft(0);
-	pinScrollLeft(0);
+	pinScrollLeft(savedScrollLeft);
 }
 
 export function lockCardModal(preScrollLeft?: number) {
@@ -611,7 +616,6 @@ export function unlockCardModal() {
 		dismissBackdrop();
 		snapVignetteClosed();
 		resetStageZoom();
-		clearScrollCompensate();
 		removeStageClone();
 		restoreSavedScroll();
 	}
