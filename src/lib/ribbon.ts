@@ -7,7 +7,7 @@ export const RIBBON_RENDER_WIDTH_PX = 12000;
 export const RIBBON_RENDER_HEIGHT_PX = 1200;
 
 /** Mobile / short viewports: absolute painted height (px). Desktop stays `RIBBON_RENDER_HEIGHT_PX`. */
-export const RIBBON_MOBILE_HEIGHT_PX = 90;
+export const RIBBON_MOBILE_HEIGHT_PX = 52;
 
 /** Slots drawn in `static/background.svg`. Panel anchors stay on this grid. */
 export const RIBBON_SECTION_COUNT = 6;

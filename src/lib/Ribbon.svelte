@@ -147,6 +147,8 @@
 	aria-hidden="true"
 	style:left={`-${RIBBON_SIDE_BLEED_PX}px`}
 	style:width={`${ribbonPaintW}px`}
+	style:--ribbon-mobile-h={ribbonMobileHeightPx}
+	style:--ribbon-mobile-stroke={ribbonMobileStrokeWidth}
 >
 	<svg
 		bind:this={ribbonEl}
@@ -245,17 +247,18 @@
 	}
 
 	/*
-	  Narrow / phone landscape: force a flat ribbon (90px).
+	  Narrow / phone landscape: force a flat ribbon (52px).
 	  Broad max-width so large phones in landscape still match.
 	*/
 	@media (max-width: 1100px) {
 		.ribbon {
-			height: v-bind(ribbonMobileHeightPx) !important;
+			/* v-bind inside @media is dropped by the compiler, so the size lives in a variable. */
+			height: var(--ribbon-mobile-h) !important;
 		}
 
 		.ribbon-path,
 		.ribbon-reveal-mask {
-			stroke-width: v-bind(ribbonMobileStrokeWidth);
+			stroke-width: var(--ribbon-mobile-stroke);
 		}
 	}
 </style>

@@ -47,6 +47,10 @@
 	$: sidePhotoLinkOverlay = sidePhotoOnBack && !!backImageHref;
 	$: hasHeaderLogo = (variant === 'education' || variant === 'award') && !!logoSrc;
 	$: showHeaderSide = (dates && variant !== 'award') || hasHeaderLogo;
+	/** Front of experience cards drops date and location so the image can use the height. */
+	$: showFrontLocation = !!location && variant !== 'experience' && variant !== 'education';
+	$: showFrontDates = !!dates && variant !== 'award' && variant !== 'experience';
+	$: showFrontHeaderSide = showFrontDates || (hasHeaderLogo && variant !== 'education');
 	$: primaryLink =
 		links.find((l) => {
 			const label = (l.label ?? '').trim().toLowerCase();
@@ -87,12 +91,12 @@
 			<div class="card-header experience-header" class:experience-header--award={variant === 'award'}>
 				<div class="experience-meta">
 					<p class="experience-company">{heading}</p>
-					{#if variant !== 'award' && (subheading || location)}
+					{#if variant !== 'award' && (subheading || showFrontLocation)}
 						<p
 							class="experience-sub"
 							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
 						>
-							{subheading}{#if location}<span class="experience-location">{location}</span>{/if}
+							{subheading}{#if showFrontLocation}<span class="experience-location">{location}</span>{/if}
 						</p>
 					{:else if dates}
 						<div class="award-date-slot">
@@ -101,9 +105,9 @@
 						</div>
 					{/if}
 				</div>
-				{#if showHeaderSide}
+				{#if showFrontHeaderSide}
 					<div class="experience-side">
-						{#if dates && variant !== 'award'}
+						{#if showFrontDates}
 							<p class="experience-dates">{dates}</p>
 						{/if}
 						{#if hasHeaderLogo && logoSrc && variant !== 'education'}
@@ -264,7 +268,7 @@
 							class="experience-sub"
 							class:wrap-sub={variant !== 'experience' && variant !== 'education'}
 						>
-							{subheading}{#if location}<span class="experience-location"> · {location}</span>{/if}
+							{subheading}{#if location && variant !== 'education'}<span class="experience-location"> · {location}</span>{/if}
 						</p>
 					</div>
 					{#if showBackHeaderSide}
@@ -1316,12 +1320,33 @@
 		align-items: center;
 	}
 
+	/* Short landscape: the caption is only the role, so the logo keeps most of the card. */
+	@media (max-height: 520px) and (min-aspect-ratio: 1) {
+		:global(.info-card--experience) .card-row:not(.card-row--back) .card-logo {
+			padding: 8px 8px 2px;
+			min-height: 46%;
+		}
+
+		:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .card-content {
+			padding: 4px 6px 6px;
+		}
+
+		:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-company {
+			font-size: 11px;
+		}
+
+		:global(.info-card.info-card--experience) .card-row:not(.card-row--back) .experience-sub {
+			font-size: 9px;
+			line-height: 1.2;
+		}
+	}
+
 	:global(.info-card.info-card--award .info-card-face--front .info-card-surface) {
 		padding: 0;
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .card-content {
-		padding: 10px 12px;
+		padding: 6px 8px 4px;
 		height: 100%;
 		box-sizing: border-box;
 	}
@@ -1344,8 +1369,8 @@
 		text-align: center;
 		height: 100%;
 		margin: 0;
-		gap: 6px;
-		padding-bottom: 6px;
+		gap: 2px;
+		padding-bottom: 2px;
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-side {
@@ -1356,17 +1381,19 @@
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
-		width: 128px;
-		height: 128px;
+		width: min(148px, 86%);
+		height: auto;
+		aspect-ratio: 1;
+		max-height: 100%;
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-meta {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 3px;
+		gap: 0;
 		width: 100%;
-		padding: 10px 12px 2px;
+		padding: 3px 6px 1px;
 		background: color-mix(in srgb, var(--hp-surface, #d7e6e2) 90%, white);
 	}
 
@@ -1383,14 +1410,22 @@
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .experience-company {
-		font-size: 15px;
-		line-height: 1.25;
+		font-size: clamp(9px, 4.6cqw, 12px);
+		line-height: 1.1;
 		overflow-wrap: normal;
 	}
 
+	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .award-dates {
+		font-size: clamp(8px, 3.6cqw, 10px);
+		letter-spacing: 0.02em;
+		line-height: 1.1;
+	}
+
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
-		width: 128px;
-		height: 128px;
+		width: min(148px, 86%);
+		height: auto;
+		aspect-ratio: 1;
+		max-height: 100%;
 	}
 
 	:global(.info-card.info-card--award.info-card--modal) .card-row--back .experience-header {
@@ -1514,8 +1549,10 @@
 	}
 
 	:global(.info-card.info-card--award) .card-row:not(.card-row--back) .education-logo {
-		width: 128px;
-		height: 128px;
+		width: min(148px, 86%);
+		height: auto;
+		aspect-ratio: 1;
+		max-height: 100%;
 		padding: 0;
 		border: 0;
 		border-radius: 0;

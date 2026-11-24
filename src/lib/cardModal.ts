@@ -449,8 +449,10 @@ function setVignetteOval(rx: string, ry: string) {
 
 function setVignetteCenter(x: number, y: number) {
 	if (!backdropEl) return;
-	backdropEl.style.setProperty('--vignette-cx', `${x}px`);
-	backdropEl.style.setProperty('--vignette-cy', `${y}px`);
+	// Backdrop bleeds past the viewport; mask coords are relative to that box.
+	const rect = backdropEl.getBoundingClientRect();
+	backdropEl.style.setProperty('--vignette-cx', `${x - rect.left}px`);
+	backdropEl.style.setProperty('--vignette-cy', `${y - rect.top}px`);
 }
 
 function resetVignetteCenter() {

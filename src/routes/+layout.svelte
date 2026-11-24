@@ -134,6 +134,21 @@
 		overflow: hidden; /* horizontal site: prevent accidental page vertical scrolling */
 	}
 
+	/* Stays put while the stage zooms, so the open card never leaves a bare edge. */
+	:global(body::before) {
+		content: '';
+		position: fixed;
+		z-index: -1;
+		pointer-events: none;
+		inset: 0;
+		background:
+			radial-gradient(70vmax 42vmax at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
+			radial-gradient(62vmax 40vmax at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
+			radial-gradient(62vmax 52vmax at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
+			var(--bg);
+		background-repeat: no-repeat;
+	}
+
 	:global(a) {
 		color: inherit;
 	}
@@ -170,7 +185,8 @@
 
 	:global(.card-modal-backdrop) {
 		position: fixed;
-		inset: 0;
+		/* Bleed past the layout viewport so phone browser chrome doesn't leave a gap. */
+		inset: -8vmax;
 		z-index: 9998;
 		pointer-events: none;
 		--vignette-rx: 120vmax;
@@ -215,21 +231,7 @@
 		cursor: pointer;
 	}
 
-	/* Mobile: solid black fade. */
 	@media (max-width: 900px) {
-		:global(.card-modal-backdrop) {
-			background: #000;
-			opacity: 0;
-			-webkit-mask-image: none;
-			mask-image: none;
-			transition: opacity var(--card-modal-ms, 760ms)
-				var(--card-modal-easing, cubic-bezier(0.6, 0.5, 0.36, 1));
-		}
-
-		:global(.card-modal-backdrop.is-visible) {
-			opacity: 1;
-		}
-
 		:global(.card-modal-layer .info-card--animating .info-card-flip),
 		:global(.card-modal-layer .info-card--animating.info-card--flip-dismiss .info-card-flip),
 		:global(html.card-modal-open .info-card--zoom-active .info-card-flip) {

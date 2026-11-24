@@ -533,6 +533,8 @@
 
 		const onPointerDown = (e: PointerEvent) => {
 			if (!shouldAnimate()) return;
+			// Touch scrolls the page. Drag-to-spin stays on mouse and pen.
+			if (e.pointerType === 'touch') return;
 			const target = e.target as HTMLElement | null;
 			if (target?.closest?.('.info-card')) return;
 			if (hoverCapable && !allowManual) return;
@@ -701,6 +703,13 @@
 		cursor: default;
 	}
 
+	/* Horizontal site: a touch on the arc must still pan the page. */
+	@media (pointer: coarse) {
+		.awards-orbit {
+			touch-action: pan-x;
+		}
+	}
+
 	@media (hover: hover) and (pointer: fine) {
 		.awards-orbit:hover {
 			cursor: grab;
@@ -862,11 +871,12 @@
 			left: 50%;
 			top: 50%;
 			transform: translate(-50%, -50%);
-			width: calc(100% - 8px);
-			height: 100%;
+			/* Leave a gutter so a sideways swipe can start off the cards. */
+			width: min(72%, 520px);
+			height: 68%;
 			padding: 0;
-			--award-card-w: clamp(100px, calc((100vh - 214px) * 5 / 7), var(--playing-card-w, 148px));
-			--award-card-w: clamp(100px, calc((100dvh - 214px) * 5 / 7), var(--playing-card-w, 148px));
+			--award-card-w: clamp(72px, calc((100vh - 268px) * 5 / 7), 100px);
+			--award-card-w: clamp(72px, calc((100dvh - 268px) * 5 / 7), 100px);
 			--award-card-h: calc(var(--award-card-w) * 7 / 5);
 		}
 
