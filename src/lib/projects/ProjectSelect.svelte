@@ -444,7 +444,7 @@
 		}
 
 		const slots = dest.step > 0 ? Math.max(1, Math.round(Math.abs(dest.top - from) / dest.step)) : 1;
-		const dur = Math.min(640, 360 + (slots - 1) * 80);
+		const dur = Math.min(640, 380 + (slots - 1) * 80);
 		reelEl.style.setProperty('--reel-ms', `${dur}ms`);
 		reelGliding = true;
 		const id = projects[dest.index]?.id;
@@ -1139,8 +1139,8 @@
 	.reel {
 		position: relative;
 		height: var(--selector-h);
-		--reel-ms: 360ms;
-		--reel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+		--reel-ms: 380ms;
+		--reel-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
 	}
 
 	.reel.is-reeling .reel-track,
