@@ -186,7 +186,20 @@
 				aria-expanded={moreShown}
 				on:click={showMore}
 			>
-				Show more
+				<svg class="show-more-lines" focusable="false" aria-hidden="true">
+					<rect class="show-more-perimeter" />
+				</svg>
+				<span class="show-more-photo" aria-hidden="true">
+					<span class="show-more-square-wrap">
+						<svg class="show-more-lines" focusable="false">
+							<rect class="show-more-square" />
+						</svg>
+						<svg class="show-more-plus" viewBox="0 0 24 24" focusable="false">
+							<path d="M12 5v14M5 12h14" />
+						</svg>
+					</span>
+				</span>
+				<span class="show-more-label">Show more</span>
 			</button>
 		</li>
 	</ul>
@@ -255,18 +268,23 @@
 		transition: none;
 	}
 
-	/* Show-more cards. Each one travels a different path into the checkerboard. */
-	:global(#experiences) .experience-item--more:nth-child(5) {
+	/* Show-more cards. The first one replaces the dotted placeholder in place.
+	   The other two travel their own paths into the checkerboard. */
+	:global(#experiences) .experience-item--more:nth-child(5),
+	.show-more-slot {
 		--clump-start: 0.04;
 		--clump-rot: -6deg;
 		--spread-x: 70px;
 		--spread-y: 230px;
-		--enter-x: 180px;
-		--enter-y: 300px;
-		--enter-rot: 9deg;
-		--enter-dur: 1.08s;
-		--enter-delay: 30ms;
-		--fade-dur: 0.72s;
+	}
+
+	:global(#experiences) .experience-item--more:nth-child(5) {
+		--enter-x: 0px;
+		--enter-y: 0px;
+		--enter-rot: 0deg;
+		--enter-dur: 0.45s;
+		--enter-delay: 0ms;
+		--fade-dur: 0.45s;
 		--enter-ease: cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
@@ -311,24 +329,25 @@
 	}
 
 	.show-more-slot {
-		--t: var(--exp-t, 1);
-		--spread-x: -70px;
-		--spread-y: 90px;
-		--show-more-w: 132px;
-		--show-more-h: 36px;
+		/* Same scroll float as the first extra card, so that card can take this pose. */
+		--t: clamp(0, (var(--exp-t, 1) - var(--clump-start, 0)) / (1 - var(--clump-start, 0)), 1);
+		--show-more-w: var(--playing-card-w, 220px);
+		--show-more-h: var(--playing-card-h, 308px);
 		position: absolute;
-		z-index: 30;
-		top: 512px;
-		left: 230px;
+		z-index: 15;
+		top: 176px;
+		left: 904px;
 		width: var(--show-more-w);
 		height: var(--show-more-h);
+		aspect-ratio: var(--playing-card-ratio, 5 / 7);
 		margin: 0;
 		transform: translate3d(
-			calc(var(--spread-x) * (1 - var(--t))),
-			calc(var(--spread-y) * (1 - var(--t))),
-			0
-		);
-		transition: opacity 0.4s ease;
+				calc(var(--spread-x) * (1 - var(--t))),
+				calc(var(--spread-y) * (1 - var(--t))),
+				0
+			)
+			rotate(calc(var(--clump-rot) * (1 - var(--t))));
+		transition: opacity 0.45s ease;
 	}
 
 	.show-more-slot.is-gone {
@@ -337,39 +356,134 @@
 	}
 
 	.show-more {
-		display: grid;
-		place-items: center;
+		container-type: inline-size;
+		--show-more-line: 1px;
+		/* Inside edge of the inner stripe: 2px border + the band + 1px inner stroke. */
+		--show-more-frame: calc(2px + 2.4cqw + 1px);
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
 		width: 100%;
 		height: 100%;
 		margin: 0;
-		padding: 0 12px;
-		border: 1.5px solid rgba(11, 18, 32, 0.5);
-		border-radius: 6px;
-		background: rgba(255, 255, 255, 0.28);
+		padding: 0;
+		border: 0;
+		border-radius: 5.5% / 3.94%;
+		background: transparent;
 		box-shadow: none;
-		color: rgba(11, 18, 32, 0.78);
+		color: #3e4d72;
 		font: inherit;
-		font-size: 13px;
-		font-weight: 650;
-		letter-spacing: 0.02em;
 		cursor: pointer;
-		opacity: 0.55;
-		transition:
-			opacity 0.22s ease,
-			background-color 0.22s ease,
-			border-color 0.22s ease;
+		transition: background-color 0.22s ease;
+	}
+
+	.show-more-lines {
+		display: block;
+		width: 100%;
+		height: 100%;
+		overflow: visible;
+		pointer-events: none;
+	}
+
+	.show-more > .show-more-lines {
+		position: absolute;
+		inset: 0;
+	}
+
+	.show-more-lines rect {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: var(--show-more-line);
+		stroke-linejoin: round;
+	}
+
+	.show-more-perimeter {
+		x: calc(var(--show-more-line) / 2);
+		y: calc(var(--show-more-line) / 2);
+		width: calc(100% - var(--show-more-line));
+		height: calc(100% - var(--show-more-line));
+		rx: calc(5.5cqw - var(--show-more-line) / 2);
+		ry: calc(5.5cqw - var(--show-more-line) / 2);
+	}
+
+	/* Square photo, as wide as the card between the inner border stripes. */
+	.show-more-photo {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding-inline: var(--show-more-frame);
+	}
+
+	.show-more-photo .show-more-square-wrap {
+		position: relative;
+		width: 100%;
+		aspect-ratio: 1;
+	}
+
+	.show-more-photo .show-more-lines {
+		width: 100%;
+		height: 100%;
+	}
+
+	.show-more-plus {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 22%;
+		height: 22%;
+		transform: translate(-50%, -50%);
+		overflow: visible;
+	}
+
+	.show-more-plus path {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1px;
+		stroke-linecap: square;
+		vector-effect: non-scaling-stroke;
+	}
+
+	.show-more-square {
+		x: calc(var(--show-more-line) / 2);
+		y: calc(var(--show-more-line) / 2);
+		width: calc(100% - var(--show-more-line));
+		height: calc(100% - var(--show-more-line));
+		rx: 3.2cqw;
+		ry: 3.2cqw;
+	}
+
+	.show-more-label {
+		position: relative;
+		z-index: 1;
+		flex: 0 0 auto;
+		margin-top: auto;
+		padding: 8px 12px calc(12px + 2px + 11px * 1.35);
+		text-align: center;
+		font-size: 14px;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+		line-height: 1.15;
+		color: #181e2a;
+		text-shadow:
+			0 1px 0 rgba(255, 255, 255, 0.75),
+			0 1px 3px rgba(75, 85, 120, 0.18);
 	}
 
 	.show-more:hover {
-		opacity: 1;
-		background: rgba(255, 255, 255, 0.92);
-		border-color: rgba(11, 18, 32, 0.72);
-		color: rgba(11, 18, 32, 0.94);
+		background: rgba(168, 178, 208, 0.34);
+		color: #3e4d72;
+	}
+
+	.show-more:hover .show-more-label {
+		color: #121820;
 	}
 
 	.show-more:focus-visible {
-		outline: 2px solid rgba(11, 18, 32, 0.72);
-		outline-offset: 3px;
+		outline: 2px solid rgba(62, 77, 114, 0.72);
+		outline-offset: 4px;
 	}
 
 	.exp-click-hint {
@@ -581,8 +695,9 @@
 		}
 
 		.show-more-slot {
-			top: calc(var(--exp-card-h) * 1.2);
-			left: calc(var(--exp-card-w) * 1.45);
+			/* Same cell the first extra card uses once it drops in. */
+			top: calc(var(--playing-card-h) + 28px);
+			left: 0;
 			transform: none;
 		}
 	}
@@ -643,11 +758,20 @@
 			z-index: 14;
 		}
 
-		/* Continue the checkerboard past Benevolent: down-right, up-right, then right. */
-		:global(#experiences) .experience-item:nth-child(5) {
+		/* Continue the checkerboard past Benevolent: down-right, up-right, then right.
+		   Show more holds the first of those cells until the extra cards drop in. */
+		:global(#experiences) .experience-item:nth-child(5),
+		:global(#experiences) .show-more-slot {
 			top: 176px;
 			left: 904px;
+		}
+
+		:global(#experiences) .experience-item:nth-child(5) {
 			z-index: 16;
+		}
+
+		:global(#experiences) .experience-item--more:nth-child(5).is-in {
+			z-index: 19;
 		}
 
 		:global(#experiences) .experience-item:nth-child(6) {
@@ -666,7 +790,7 @@
 	/*
 	  Flipped phone. The desktop fan and the wide 2×2 grid both leave cards
 	  off-screen in a short landscape viewport. One centered row instead;
-	  Show more joins the same row at a smaller size.
+	  Show more is a card in the slot the first extra card takes.
 	*/
 	@media (max-height: 520px) and (min-aspect-ratio: 1) {
 		.experiences-panel {
@@ -688,10 +812,9 @@
 
 		:global(#experiences) .experience-list {
 			--ls-gap: 8px;
-			--ls-more: 112px;
 			--ls-card: min(
 				var(--playing-card-w),
-				calc((100vw - 40px - var(--ls-more) - 3 * var(--ls-gap)) / 4)
+				calc((100vw - 40px - 4 * var(--ls-gap)) / 5)
 			);
 			position: relative;
 			top: auto;
@@ -762,9 +885,14 @@
 			position: relative;
 			top: auto;
 			left: auto;
-			width: var(--show-more-w);
-			height: var(--show-more-h);
+			width: var(--ls-card);
+			height: calc(var(--ls-card) * 7 / 5);
 			transform: none;
+		}
+
+		.show-more-label {
+			padding: 4px 6px calc(6px + 9px * 1.2);
+			font-size: 11px;
 		}
 
 		.show-more-slot.is-gone {
@@ -773,10 +901,6 @@
 			height: 0;
 			overflow: hidden;
 			opacity: 0;
-		}
-
-		.show-more {
-			opacity: 0.92;
 		}
 
 		.exp-click-hint {

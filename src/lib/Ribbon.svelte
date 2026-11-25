@@ -2,7 +2,6 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import {
 		GREETING_SCROLL_UNLOCK_MS,
-		RIBBON_MOBILE_HEIGHT_PX,
 		RIBBON_PATH_D,
 		RIBBON_RENDER_HEIGHT_PX,
 		RIBBON_SIDE_BLEED_PX,
@@ -16,12 +15,7 @@
 
 	/** Only the first 1/5 of normalized `t` passed to `buildRibbonDistanceAtNormalizedTime`. */
 	const REVEAL_FIRST_FIFTH = 0.25;
-	const ribbonMobileHeightPx = `${RIBBON_MOBILE_HEIGHT_PX}px`;
 	const ribbonDesktopHeightPx = `${RIBBON_RENDER_HEIGHT_PX}px`;
-	/** Keep on-screen stroke ~8px when the SVG is squashed to `RIBBON_MOBILE_HEIGHT_PX`. */
-	const ribbonMobileStrokeWidth = String(
-		(2 * RIBBON_RENDER_HEIGHT_PX) / RIBBON_MOBILE_HEIGHT_PX
-	);
 
 	let ribbonLayerEl: HTMLDivElement | null = null;
 	let ribbonEl: SVGSVGElement | null = null;
@@ -147,8 +141,6 @@
 	aria-hidden="true"
 	style:left={`-${RIBBON_SIDE_BLEED_PX}px`}
 	style:width={`${ribbonPaintW}px`}
-	style:--ribbon-mobile-h={ribbonMobileHeightPx}
-	style:--ribbon-mobile-stroke={ribbonMobileStrokeWidth}
 >
 	<svg
 		bind:this={ribbonEl}
@@ -247,18 +239,22 @@
 	}
 
 	/*
-	  Narrow / phone landscape: force a flat ribbon (52px).
-	  Broad max-width so large phones in landscape still match.
+	  Narrow / phone landscape. The path's waves sit in most of the viewBox, so
+	  painting near the viewport height keeps those features on screen instead of
+	  flattening them into a hairline. Cap it so a tall narrow window doesn't
+	  grow back to the desktop ribbon.
 	*/
 	@media (max-width: 1100px) {
 		.ribbon {
-			/* v-bind inside @media is dropped by the compiler, so the size lives in a variable. */
-			height: var(--ribbon-mobile-h) !important;
+			height: min(82vh, 680px) !important;
+			height: min(82dvh, 680px) !important;
 		}
 
 		.ribbon-path,
 		.ribbon-reveal-mask {
-			stroke-width: var(--ribbon-mobile-stroke);
+			/* Screen pixels, so tight loops stay open as the painted height changes. */
+			stroke-width: 3.5px;
+			vector-effect: non-scaling-stroke;
 		}
 	}
 </style>

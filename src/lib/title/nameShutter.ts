@@ -18,6 +18,12 @@ function inverseSmoothstep(s: number) {
 	return 0.5 - Math.sin(Math.asin(arg) / 3);
 }
 
+/**
+ * Close finishes this far through the trip from the open pose to the letters
+ * leaving the screen, so the shutter completes while they are still visible.
+ */
+export const SHUTTER_EXIT_FRACTION = 0.62;
+
 /** Share of the close spent bringing the left edge in, then the right. */
 const CLOSE_LEFT_PHASE = 0.42;
 const CLOSE_LEFT_INSET = 0.48;

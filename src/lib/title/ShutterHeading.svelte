@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { headerDisplayInsets } from '$lib/title/nameShutter';
+	import { headerDisplayInsets, nameShutterInsets, SHUTTER_EXIT_FRACTION } from '$lib/title/nameShutter';
 	import { bindSectionShutter } from '$lib/title/sectionShutter';
 
 	export let title: string;
@@ -8,6 +8,8 @@
 	export let flush = false;
 
 	let titleEl: HTMLHeadingElement | null = null;
+	/** Scroll distance over which the leave shutter runs. Measured from the docked pose. */
+	let cachedExitSpan = 0;
 
 	function charsOf(text: string): string[] {
 		return [...(text ?? '')];
@@ -33,6 +35,31 @@
 		return (scrollLeft - introShiftPx - start) / span;
 	}
 
+	function applyClip(left: number, right: number) {
+		if (!titleEl) return;
+		if (left < 0.004 && right < 0.004) {
+			titleEl.style.setProperty('--char-clip', 'none');
+			return;
+		}
+		titleEl.style.setProperty(
+			'--char-clip',
+			`inset(0 ${(right * 100).toFixed(2)}% 0 ${(left * 100).toFixed(2)}%)`
+		);
+	}
+
+	/**
+	 * Distance from the docked section to the scroll position where this heading's
+	 * right edge hits the left of the viewport. `pastDock + box.right` stays constant
+	 * as the page scrolls.
+	 */
+	function exitTravel(pastDock: number) {
+		if (!titleEl) return 0;
+		if (document.documentElement.classList.contains('card-modal-open')) return 0;
+		const box = titleEl.getBoundingClientRect();
+		if (!(box.width > 40)) return 0;
+		return pastDock + box.right;
+	}
+
 	function syncShutter(scrollLeft: number, introShiftPx: number) {
 		if (!titleEl) return;
 		if (prefersReducedMotion()) {
@@ -42,15 +69,19 @@
 		const section = titleEl.closest('section') as HTMLElement | null;
 		if (!section) return;
 
-		const { left, right } = headerDisplayInsets(displayProgress(section, scrollLeft, introShiftPx));
-		if (left < 0.004 && right < 0.004) {
-			titleEl.style.setProperty('--char-clip', 'none');
-			return;
+		const pastDock = scrollLeft - introShiftPx - section.offsetLeft;
+		if (pastDock > 0) {
+			const travel = exitTravel(pastDock);
+			if (travel > 80) cachedExitSpan = Math.round(travel * SHUTTER_EXIT_FRACTION);
+			if (cachedExitSpan > 0) {
+				const { left, right } = nameShutterInsets(pastDock, cachedExitSpan);
+				applyClip(left, right);
+				return;
+			}
 		}
-		titleEl.style.setProperty(
-			'--char-clip',
-			`inset(0 ${(right * 100).toFixed(2)}% 0 ${(left * 100).toFixed(2)}%)`
-		);
+
+		const { left, right } = headerDisplayInsets(displayProgress(section, scrollLeft, introShiftPx));
+		applyClip(left, right);
 	}
 
 	onMount(() => bindSectionShutter(syncShutter));

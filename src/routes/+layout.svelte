@@ -121,32 +121,26 @@
 		--stage-origin-y: 0px;
 	}
 
-	:global(html, body) {
+	:global(html) {
 		height: 100%;
-	}
-
-	:global(body) {
-		margin: 0;
-		background: var(--bg);
-		color: var(--fg);
-		font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-			'Apple Color Emoji', 'Segoe UI Emoji';
-		overflow: hidden; /* horizontal site: prevent accidental page vertical scrolling */
-	}
-
-	/* Stays put while the stage zooms, so the open card never leaves a bare edge. */
-	:global(body::before) {
-		content: '';
-		position: fixed;
-		z-index: -1;
-		pointer-events: none;
-		inset: 0;
+		/* Canvas wash. A negative z-index layer sits behind this and never shows
+		   once the stage zooms off the viewport edge. */
 		background:
 			radial-gradient(70vmax 42vmax at 20% 20%, rgba(124, 58, 237, 0.14), transparent 58%),
 			radial-gradient(62vmax 40vmax at 80% 30%, rgba(34, 211, 238, 0.12), transparent 60%),
 			radial-gradient(62vmax 52vmax at 50% 90%, rgba(16, 185, 129, 0.1), transparent 62%),
 			var(--bg);
 		background-repeat: no-repeat;
+	}
+
+	:global(body) {
+		height: 100%;
+		margin: 0;
+		background: transparent;
+		color: var(--fg);
+		font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+			'Apple Color Emoji', 'Segoe UI Emoji';
+		overflow: hidden; /* horizontal site: prevent accidental page vertical scrolling */
 	}
 
 	:global(a) {
@@ -398,6 +392,13 @@
 		touch-action: none;
 		overflow: hidden !important;
 		overscroll-behavior: none;
+	}
+
+	/* The in-stage wash is viewport-sized, so scaling it leaves a hard white
+	   slab beside and above cards near the edge. Drop it and let the canvas
+	   wash show through instead. */
+	:global(html.card-modal-open .scroller-wash) {
+		visibility: hidden;
 	}
 
 	/* Grid cards brighten on hover. The open card stays flat. */

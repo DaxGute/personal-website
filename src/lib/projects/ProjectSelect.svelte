@@ -25,8 +25,20 @@
 	let bookFlat = false;
 	let wheelAccum = 0;
 	let wheelResetTimer: ReturnType<typeof setTimeout> | null = null;
-	let wheelLockUntil = 0;
 	let wheelIntent: WheelIntent | null = null;
+	/** One wheel gesture, including trackpad inertia, may advance a single project. */
+	let reelGestureStepped = false;
+	let reelTargetIndex: number | null = null;
+	/** True while the names glide on a transform. Scroll position catches up when it lands. */
+	let reelGliding = false;
+	/** Scroll offset the glide started from. The track transform is relative to this. */
+	let reelScrollBase = 0;
+	let reelGen = 0;
+	let reelSettleTimer: ReturnType<typeof setTimeout> | null = null;
+	let reelTrackEl: HTMLDivElement | null = null;
+	let slotStepPx = 56;
+	/** scrollTop that centers the first project. Borders shift this off zero. */
+	let slotOriginPx = 0;
 	let isDraggingScrollbar = false;
 	let dragStartY = 0;
 	let dragStartScrollTop = 0;
@@ -177,52 +189,41 @@
 		wrapEl.style.setProperty('--book-open', open.toFixed(4));
 	}
 
-	function getOptionEls(): HTMLButtonElement[] {
-		if (!listboxEl) return [];
-		return Array.from(listboxEl.querySelectorAll<HTMLButtonElement>('button.opt[data-id]'));
-	}
-
-	function getOptionElById(id: string): HTMLButtonElement | undefined {
-		return getOptionEls().find((el) => el.dataset.id === id);
-	}
-
 	function updateActiveFromCenter() {
 		if (!listboxEl) return;
-		const opts = getOptionEls();
-		if (opts.length === 0) return;
+		const step = slotStepPx;
+		if (step <= 0 || projects.length === 0) return;
+		const index = Math.max(
+			0,
+			Math.min(projects.length - 1, Math.round((listboxEl.scrollTop - slotOriginPx) / step))
+		);
+		const id = projects[index]?.id ?? null;
+		if (id && id !== activeId) activeId = id;
+	}
 
-		const listRect = listboxEl.getBoundingClientRect();
-		const centerY = listRect.top + listRect.height / 2;
-
-		let bestId: string | null = null;
-		let bestDist = Number.POSITIVE_INFINITY;
-
-		for (const el of opts) {
-			const r = el.getBoundingClientRect();
-			const cy = r.top + r.height / 2;
-			const d = Math.abs(cy - centerY);
-			if (d < bestDist) {
-				bestDist = d;
-				bestId = el.dataset.id ?? null;
-			}
-		}
-
-		if (bestId && bestId !== activeId) activeId = bestId;
+	function onListScroll() {
+		// The glide moves the names with a transform. The real scroll offset is stale until it lands.
+		if (reelGliding) return;
+		requestUpdateActiveFromCenter();
 	}
 
 	function requestUpdateActiveFromCenter() {
+		if (reelGliding) return;
 		if (scrollRaf) cancelAnimationFrame(scrollRaf);
 		scrollRaf = requestAnimationFrame(() => {
 			scrollRaf = 0;
+			if (reelGliding) return;
+			readSlotStep();
 			updateActiveFromCenter();
 			updateScrollbarThumb();
 		});
 	}
 
-	function updateScrollbarThumb() {
+	function updateScrollbarThumb(at = listboxEl?.scrollTop ?? 0) {
 		if (!listboxEl) return;
 
-		const { scrollTop, scrollHeight, clientHeight } = listboxEl;
+		const { scrollHeight, clientHeight } = listboxEl;
+		const scrollTop = at;
 		if (scrollHeight <= clientHeight) {
 			scrollbarThumbHeight = 0;
 			scrollbarThumbTop = 0;
@@ -247,6 +248,8 @@
 	function onScrollbarPointerDown(e: PointerEvent) {
 		if (!listboxEl) return;
 		if (scrollbarThumbHeight <= 0) return;
+		// Dragging takes over from a glide, from the position the names are actually at.
+		if (reelGliding) haltReelGlide();
 
 		e.preventDefault();
 		e.stopPropagation();
@@ -303,11 +306,174 @@
 		}
 	}
 
-	function getSlotStepPx(): number {
-		if (!listboxEl) return 56;
+	function readSlotStep() {
+		if (!listboxEl) return slotStepPx;
 		const raw = getComputedStyle(listboxEl).getPropertyValue('--slot-h').trim();
 		const n = Number.parseFloat(raw);
-		return Number.isFinite(n) && n > 0 ? n : 56;
+		slotStepPx = Number.isFinite(n) && n > 0 ? n : 56;
+		if (reelTrackEl && listboxEl) {
+			slotOriginPx = reelTrackEl.offsetTop + slotStepPx / 2 - listboxEl.clientHeight / 2;
+		}
+		return slotStepPx;
+	}
+
+	function getSlotStepPx(): number {
+		return readSlotStep();
+	}
+
+	function reelLimits() {
+		const step = getSlotStepPx();
+		const maxTop =
+			listboxEl ? Math.max(0, listboxEl.scrollHeight - listboxEl.clientHeight) : 0;
+		const maxIndex = step > 0 ? Math.max(0, Math.round(maxTop / step)) : 0;
+		return { step, maxTop, maxIndex };
+	}
+
+	function maxReelIndex(): number {
+		return reelLimits().maxIndex;
+	}
+
+	function destForIndex(index: number) {
+		const { step, maxTop, maxIndex } = reelLimits();
+		const clamped = Math.max(0, Math.min(maxIndex, index));
+		let top = clamped * step;
+		const button = reelTrackEl?.querySelectorAll<HTMLElement>('.opt')[clamped];
+		// Borders make the centered scroll offset a couple of pixels past i * slot.
+		// Landing on the real center keeps scroll-snap from nudging after the glide.
+		if (button && listboxEl && reelTrackEl) {
+			const contentTop = reelTrackEl.offsetTop + button.offsetTop;
+			top = contentTop + button.offsetHeight / 2 - listboxEl.clientHeight / 2;
+		}
+		return { index: clamped, top: Math.max(0, Math.min(maxTop, top)), step };
+	}
+
+	function readTrackShift(el: HTMLElement) {
+		const tr = getComputedStyle(el).transform;
+		if (!tr || tr === 'none') return 0;
+		return new DOMMatrix(tr).m42;
+	}
+
+	function clearTrackMotionSoon(track: HTMLElement) {
+		requestAnimationFrame(() => {
+			if (reelGliding) return;
+			track.style.transition = '';
+			track.style.transform = '';
+		});
+	}
+
+	function cancelReelTimer() {
+		if (!reelSettleTimer) return;
+		clearTimeout(reelSettleTimer);
+		reelSettleTimer = null;
+	}
+
+	/** Drop a glide at the position currently on screen and hand scroll back to the list. */
+	function haltReelGlide() {
+		if (!reelGliding || !listboxEl || !reelTrackEl) return;
+		const pos = reelScrollBase - readTrackShift(reelTrackEl);
+		// Clear the target first so cancelling the transition cannot commit the old slot.
+		reelTargetIndex = null;
+		reelGliding = false;
+		cancelReelTimer();
+		reelGen += 1;
+		reelTrackEl.style.transition = 'none';
+		reelTrackEl.style.transform = 'none';
+		listboxEl.scrollTop = pos;
+		reelScrollBase = listboxEl.scrollTop;
+		reelTargetIndex = null;
+		reelGliding = false;
+		updateActiveFromCenter();
+		updateScrollbarThumb();
+		clearTrackMotionSoon(reelTrackEl);
+	}
+
+	function commitReelScroll(index: number) {
+		if (!reelGliding || !listboxEl || !reelTrackEl) return;
+		// Drop the flag before clearing the shift so a sync transitionend cannot re-enter.
+		// The snap class stays through this turn; Svelte removes it before paint.
+		reelGliding = false;
+		cancelReelTimer();
+		reelGen += 1;
+		const dest = destForIndex(index).top;
+		const track = reelTrackEl;
+		track.style.transition = 'none';
+		track.style.transform = 'none';
+		listboxEl.scrollTop = dest;
+		reelScrollBase = dest;
+		reelTargetIndex = null;
+		updateScrollbarThumb();
+		clearTrackMotionSoon(track);
+	}
+
+	function onTrackTransitionEnd(e: TransitionEvent) {
+		if (e.target !== reelTrackEl || e.propertyName !== 'transform') return;
+		if (!reelGliding || reelTargetIndex === null) return;
+		commitReelScroll(reelTargetIndex);
+	}
+
+	/**
+	 * Glide the names to a slot on the compositor. Scroll-snap stays off until the
+	 * transform lands, then the list jumps to that exact slot with the shift removed.
+	 */
+	function glideReelToIndex(index: number) {
+		if (!listboxEl || !reelTrackEl || !reelEl) return;
+		const startTop = reelGliding ? reelScrollBase - readTrackShift(reelTrackEl) : listboxEl.scrollTop;
+		if (reelGliding) {
+			reelTargetIndex = null;
+			reelTrackEl.style.transition = 'none';
+			reelTrackEl.style.transform = 'none';
+			listboxEl.scrollTop = startTop;
+		}
+		const dest = destForIndex(index);
+		const from = listboxEl.scrollTop;
+		cancelReelTimer();
+		const gen = (reelGen += 1);
+		reelTargetIndex = dest.index;
+		reelScrollBase = from;
+
+		if (prefersReducedMotion() || Math.abs(dest.top - from) < 0.5) {
+			reelGliding = false;
+			listboxEl.scrollTop = dest.top;
+			reelScrollBase = dest.top;
+			reelTargetIndex = null;
+			const id = projects[dest.index]?.id;
+			if (id) activeId = id;
+			updateScrollbarThumb();
+			clearTrackMotionSoon(reelTrackEl);
+			return;
+		}
+
+		const slots = dest.step > 0 ? Math.max(1, Math.round(Math.abs(dest.top - from) / dest.step)) : 1;
+		const dur = Math.min(640, 360 + (slots - 1) * 80);
+		reelEl.style.setProperty('--reel-ms', `${dur}ms`);
+		reelGliding = true;
+		const id = projects[dest.index]?.id;
+		if (id) activeId = id;
+		const shift = from - dest.top;
+		const track = reelTrackEl;
+
+		void tick().then(() => {
+			requestAnimationFrame(() => {
+				if (gen !== reelGen || !reelGliding) return;
+				const arm = () => {
+					if (gen !== reelGen || !reelGliding) return;
+					track.style.transform = `translate3d(0, ${shift}px, 0)`;
+					updateScrollbarThumb(dest.top);
+					reelSettleTimer = setTimeout(() => {
+						if (gen !== reelGen) return;
+						commitReelScroll(dest.index);
+					}, dur + 90);
+				};
+				// An inline transition:none from the previous landing has to clear
+				// for a frame, or the next glide skips the CSS transition.
+				if (track.style.transition === 'none') {
+					track.style.transition = '';
+					requestAnimationFrame(arm);
+					return;
+				}
+				arm();
+			});
+		});
 	}
 
 	function wheelDominantPx(e: WheelEvent): number {
@@ -342,36 +508,56 @@
 		e.preventDefault();
 		e.stopPropagation();
 
-		const now = typeof window !== 'undefined' ? performance.now() : Date.now();
-		if (now < wheelLockUntil) return;
+		if (wheelResetTimer) clearTimeout(wheelResetTimer);
+		// Trackpad inertia keeps firing without a gap. Hold the step until that stops.
+		wheelResetTimer = setTimeout(() => {
+			wheelAccum = 0;
+			reelGestureStepped = false;
+		}, 120);
+
+		if (reelGestureStepped) return;
 
 		const dominantPx = wheelDominantPx(e);
 		wheelAccum += dominantPx;
 
-		// Higher threshold reduces accidental "ticks" from tiny trackpad noise.
-		// Keep mouse wheels responsive by using a lower threshold for non-pixel delta modes.
-		const threshold = e.deltaMode === 0 ? 90 : 48;
+		const threshold = e.deltaMode === 0 ? 36 : 16;
 		if (Math.abs(wheelAccum) < threshold) return;
 
 		const dir = wheelAccum > 0 ? 1 : -1;
 		wheelAccum = 0;
-		wheelLockUntil = now + 220;
+		reelGestureStepped = true;
 
 		const step = getSlotStepPx();
-		listboxEl.scrollBy({ top: dir * step, behavior: 'smooth' });
-		requestUpdateActiveFromCenter();
-
-		if (wheelResetTimer) clearTimeout(wheelResetTimer);
-		wheelResetTimer = setTimeout(() => {
-			wheelAccum = 0;
-		}, 180);
+		const current =
+			reelTargetIndex ?? (step > 0 ? Math.round(listboxEl.scrollTop / step) : 0);
+		const next = Math.max(0, Math.min(maxReelIndex(), current + dir));
+		glideReelToIndex(next);
 	}
 
 	async function scrollIdToCenter(id: string, behavior: ScrollBehavior = 'smooth') {
-		// Wait for DOM to exist/layout to settle.
 		await tick();
-		const el = getOptionElById(id);
-		el?.scrollIntoView({ block: 'center', behavior });
+		const idx = projects.findIndex((p) => p.id === id);
+		if (idx < 0) return;
+		if (behavior === 'auto') {
+			const dest = destForIndex(idx);
+			if (reelTrackEl) {
+				reelTrackEl.style.transition = 'none';
+				reelTrackEl.style.transform = 'none';
+			}
+			cancelReelTimer();
+			reelGen += 1;
+			reelGliding = false;
+			reelTargetIndex = null;
+			if (listboxEl) {
+				listboxEl.scrollTop = dest.top;
+				reelScrollBase = dest.top;
+			}
+			activeId = id;
+			updateScrollbarThumb();
+			if (reelTrackEl) clearTrackMotionSoon(reelTrackEl);
+			return;
+		}
+		glideReelToIndex(idx);
 	}
 
 	function cardMotionDuration() {
@@ -536,10 +722,12 @@
 			});
 			reelEl.addEventListener('wheel', onReelWheel, { capture: true, passive: false });
 		}
+		reelTrackEl?.addEventListener('transitionend', onTrackTransitionEnd);
 
 		return () => {
 			window.removeEventListener('resize', onWinResize);
 			reelEl?.removeEventListener('wheel', onReelWheel, true);
+			reelTrackEl?.removeEventListener('transitionend', onTrackTransitionEnd);
 			wheelIntent?.destroy();
 			wheelIntent = null;
 		};
@@ -555,6 +743,7 @@
 		unbindBook = null;
 		if (wheelResetTimer) clearTimeout(wheelResetTimer);
 		wheelResetTimer = null;
+		cancelReelTimer();
 		clearCardTimer();
 	});
 </script>
@@ -565,32 +754,36 @@
 	aria-label="Project selector"
 	bind:this={wrapEl}
 >
-	<div class="reel" aria-label="Project slot reel" bind:this={reelEl}>
+	<div class="reel" class:is-reeling={reelGliding} aria-label="Project slot reel" bind:this={reelEl}>
 		<div class="reel-window" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--top" aria-hidden="true"></div>
 		<div class="reel-shade reel-shade--bottom" aria-hidden="true"></div>
+		<div class="reel-glass" aria-hidden="true"></div>
 
 		<div
 			class="listbox"
+			class:is-reeling={reelGliding}
 			bind:this={listboxEl}
 			role="listbox"
 			aria-label="Project list"
 			tabindex="0"
 			onkeydown={onListKeyDown}
-			onscroll={requestUpdateActiveFromCenter}
+			onscroll={onListScroll}
 		>
-			{#each projects as p (p.id)}
-				<button
-					type="button"
-					class="opt"
-					data-id={p.id}
-					role="option"
-					aria-selected={p.id === activeId ? 'true' : 'false'}
-					onclick={() => void scrollIdToCenter(p.id)}
-				>
-					<span class="opt-title">{p.name}</span>
-				</button>
-			{/each}
+			<div class="reel-track" bind:this={reelTrackEl}>
+				{#each projects as p (p.id)}
+					<button
+						type="button"
+						class="opt"
+						data-id={p.id}
+						role="option"
+						aria-selected={p.id === activeId ? 'true' : 'false'}
+						onclick={() => void scrollIdToCenter(p.id)}
+					>
+						<span class="opt-title">{p.name}</span>
+					</button>
+				{/each}
+			</div>
 		</div>
 
 		<!-- Always-visible overlay scrollbar (native scrollbars can be auto-hidden on macOS) -->
@@ -828,21 +1021,35 @@
 		height: 100%;
 	}
 
-	.listbox {
-		position: relative;
+	.reel-glass {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
 		border-radius: 16px;
-		border: 2px solid var(--select-border);
 		background: rgba(255, 255, 255, 0.22);
 		backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
 		-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
 		box-shadow:
 			0 18px 50px rgba(11, 18, 32, 0.1),
 			0 0 16px rgba(var(--select-shadow), 0.1);
+		pointer-events: none;
+	}
+
+	.listbox {
+		position: relative;
+		z-index: 1;
+		border-radius: 16px;
+		border: 2px solid var(--select-border);
+		background: transparent;
 		padding: calc(var(--selector-h) / 2 - var(--slot-h) / 2) 22px  calc(var(--selector-h) / 2 - var(--slot-h) / 2) 10px;
 		height: var(--selector-h);
 		overflow-y: scroll;
 		scroll-snap-type: y mandatory;
 		scroll-snap-stop: always;
+
+		&.is-reeling {
+			scroll-snap-type: none;
+		}
 		overscroll-behavior: contain;
 		overscroll-behavior-x: contain;
 		scrollbar-gutter: stable;
@@ -932,6 +1139,18 @@
 	.reel {
 		position: relative;
 		height: var(--selector-h);
+		--reel-ms: 360ms;
+		--reel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.reel.is-reeling .reel-track,
+	.reel.is-reeling .scrollbar-thumb {
+		transition: transform var(--reel-ms) var(--reel-ease);
+	}
+
+	.reel-track {
+		position: relative;
+		z-index: 1;
 	}
 
 	.reel-window {

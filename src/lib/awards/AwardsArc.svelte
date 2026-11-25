@@ -315,18 +315,19 @@
 		return clamp(1 / (1 + lead * 0.95), 0.3, 1);
 	}
 
-	/** Avoid translucent award surfaces during modal open/close (backdrop-filter / clip toggles flash them). */
+	/**
+	 * Hide only ghosts that are already gone. Preview cards top out around 0.46,
+	 * so a 0.5 cutoff was wiping the whole arc when a card opened.
+	 */
 	function snapAwardOpacitiesForModal(els: HTMLElement[]) {
 		for (const el of els) {
 			const surface = el.querySelector('.award-card-surface');
 			if (!(surface instanceof HTMLElement)) continue;
 			const raw = Number.parseFloat(surface.style.opacity || '1');
-			const snapped = Number.isFinite(raw) && raw >= 0.5 ? 1 : 0;
-			surface.style.opacity = String(snapped);
-			if (snapped === 0) {
-				el.style.visibility = 'hidden';
-				el.style.pointerEvents = 'none';
-			}
+			if (Number.isFinite(raw) && raw >= 0.04) continue;
+			surface.style.opacity = '0';
+			el.style.visibility = 'hidden';
+			el.style.pointerEvents = 'none';
 		}
 	}
 

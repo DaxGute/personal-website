@@ -99,10 +99,7 @@
 							{subheading}{#if showFrontLocation}<span class="experience-location">{location}</span>{/if}
 						</p>
 					{:else if dates}
-						<div class="award-date-slot">
-							<p class="experience-dates award-dates">{dates}</p>
-							<p class="award-hover-hint" aria-hidden="true">Click to learn more &gt;</p>
-						</div>
+						<p class="experience-dates award-dates">{dates}</p>
 					{/if}
 				</div>
 				{#if showFrontHeaderSide}
@@ -1451,55 +1448,10 @@
 		font-size: calc(var(--award-back-fs, 1.51cqw) * var(--award-back-text-scale, 1));
 	}
 
-	:global(.info-card.info-card--award) .award-date-slot,
 	:global(.info-card.info-card--award) .experience-meta > .award-dates {
 		grid-column: 1;
 		grid-row: 2;
 		min-width: 0;
-	}
-
-	:global(.info-card.info-card--award) .award-date-slot {
-		position: relative;
-		width: 100%;
-		min-height: 1.2em;
-	}
-
-	:global(.info-card.info-card--award) .award-dates {
-		transition: opacity 0.28s ease;
-	}
-
-	.award-hover-hint {
-		position: absolute;
-		top: 0;
-		left: 50%;
-		width: max-content;
-		margin: 0;
-		transform: translateX(-50%);
-		opacity: 0;
-		color: #e8f2ff;
-		/* 13px label is ~12em wide; shrink only when the card is narrower than that. */
-		font-size: min(13px, calc((100cqw - 32px) / 12));
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-align: center;
-		white-space: nowrap;
-		text-shadow:
-			0 1px 2px rgba(11, 18, 32, 0.85),
-			0 0 12px rgba(170, 210, 255, 0.4);
-		transition: opacity 0.28s ease;
-		pointer-events: none;
-	}
-
-	:global(.hover-polaroid-scale.info-card--award:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
-		.award-date-slot
-		.award-dates {
-		opacity: 0;
-	}
-
-	:global(.hover-polaroid-scale.info-card--award:hover:not(.info-card--modal):not(.info-card--animating):not(.info-card--dismissing))
-		.award-date-slot
-		.award-hover-hint {
-		opacity: 1;
 	}
 
 	:global(.info-card.info-card--award) .experience-side {

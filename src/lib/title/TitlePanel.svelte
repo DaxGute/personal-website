@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { nameShutterInsets } from '$lib/title/nameShutter';
+	import { nameShutterInsets, SHUTTER_EXIT_FRACTION } from '$lib/title/nameShutter';
 
 	export let title: string;
 	export let linkedinHref = 'https://www.linkedin.com/in/daxton-gutekunst/';
@@ -36,7 +36,7 @@
 		if (box.width > 40 && vw !== cachedVw) {
 			cachedVw = vw;
 			const naturalRight = scrollLeft + box.right - introShiftPx;
-			if (naturalRight > 80) cachedSpan = Math.max(420, naturalRight * 0.62);
+			if (naturalRight > 80) cachedSpan = Math.max(420, naturalRight * SHUTTER_EXIT_FRACTION);
 		}
 		const signed = scrollLeft - introShiftPx;
 		const { left, right } = nameShutterInsets(signed, cachedSpan);
